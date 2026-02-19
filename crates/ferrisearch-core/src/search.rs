@@ -6,8 +6,10 @@ use tantivy::query::{
 use tantivy::schema::{IndexRecordOption, Value};
 use tantivy::{DocAddress, Searcher, Term};
 
+use unicode_normalization::UnicodeNormalization;
+
 use crate::index::{IndexError, IndexManager};
-use crate::types::{SearchOptions, SearchResult};
+use crate::types::{MatchInfo, SearchOptions, SearchResult};
 
 /// Parsed query: individual terms and quoted phrases.
 struct ParsedQuery {
@@ -116,6 +118,9 @@ impl IndexManager {
             .cloned()
             .collect();
 
+        // Pre-compile the match extractor once for all results
+        let matcher = MatchExtractor::new(&all_words, self.ignore_diacritics);
+
         // Phase 1: exact + prefix only (no fuzzy)
         let query = self.build_search_query(&parsed, options, 0.0);
         let mut results = searcher.search(&*query, &TopDocs::with_limit(options.limit))?;
@@ -142,7 +147,7 @@ impl IndexManager {
             .into_iter()
             .filter_map(|(score, addr)| {
                 let mut r = self
-                    .doc_to_result(&searcher, addr, score as f64, &all_words)
+                    .doc_to_result(&searcher, addr, score as f64, &all_words, &matcher)
                     .ok()?;
                 if let Some(decay) = recency_decay {
                     let days = (now - r.mtime as f64) / (24.0 * 3_600_000.0);
@@ -282,6 +287,7 @@ impl IndexManager {
         addr: DocAddress,
         score: f64,
         query_words: &[String],
+        matcher: &MatchExtractor,
     ) -> Result<SearchResult, IndexError> {
         let doc: tantivy::TantivyDocument = searcher.doc(addr)?;
         let f = &self.fields;
@@ -305,17 +311,151 @@ impl IndexManager {
             })
             .unwrap_or_default();
 
+        let content = text(f.content);
+        let matches = matcher.find_matches(&content);
+
         Ok(SearchResult {
             path: text(f.path),
             basename: text(f.basename),
             display_title: text(f.display_title),
-            content: text(f.content),
+            content,
             mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0),
             score,
             matched_terms: query_words.to_vec(),
             tags,
+            matches,
         })
     }
+}
+
+/// Maximum number of matches to extract per document.
+const MAX_MATCHES: usize = 100;
+
+/// Pre-compiled match extractor. Built once per search, reused across all results.
+struct MatchExtractor {
+    re: Option<regex::Regex>,
+    ignore_diacritics: bool,
+}
+
+impl MatchExtractor {
+    fn new(terms: &[String], ignore_diacritics: bool) -> Self {
+        if terms.is_empty() {
+            return Self {
+                re: None,
+                ignore_diacritics,
+            };
+        }
+
+        // Sort by length descending and dedup (longer matches take priority)
+        let mut sorted: Vec<&str> = terms.iter().map(|s| s.as_str()).collect();
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.len()));
+        sorted.dedup();
+
+        // Simple case-insensitive alternation — no \b needed for global find-all
+        let pattern = sorted
+            .iter()
+            .map(|t| regex::escape(t))
+            .collect::<Vec<_>>()
+            .join("|");
+
+        let re = regex::Regex::new(&format!("(?i){}", pattern)).ok();
+        Self {
+            re,
+            ignore_diacritics,
+        }
+    }
+
+    fn find_matches(&self, content: &str) -> Vec<MatchInfo> {
+        let re = match self.re.as_ref() {
+            Some(r) => r,
+            None => return Vec::new(),
+        };
+
+        if content.is_empty() {
+            return Vec::new();
+        }
+
+        // Fast path: skip diacritics stripping if content is ASCII
+        let needs_diacritics = self.ignore_diacritics && !content.is_ascii();
+
+        let (search_text, byte_map) = if needs_diacritics {
+            let (stripped, map) = strip_diacritics_with_mapping(content);
+            (stripped, Some(map))
+        } else {
+            (String::new(), None)
+        };
+        let search_content: &str = if needs_diacritics {
+            &search_text
+        } else {
+            content
+        };
+
+        let mut matches = Vec::new();
+        let mut utf16_pos: u32 = 0;
+        let mut last_orig_byte: usize = 0;
+
+        for m in re.find_iter(search_content) {
+            if matches.len() >= MAX_MATCHES {
+                break;
+            }
+
+            // Map byte offsets back to original content positions
+            let (orig_start, orig_end) = if let Some(ref map) = byte_map {
+                let start = map[m.start()];
+                let end = if m.end() < map.len() {
+                    map[m.end()]
+                } else {
+                    content.len()
+                };
+                (start, end)
+            } else {
+                (m.start(), m.end())
+            };
+
+            // Advance UTF-16 position counter through original content
+            utf16_pos += content[last_orig_byte..orig_start]
+                .chars()
+                .map(|c| c.len_utf16() as u32)
+                .sum::<u32>();
+            last_orig_byte = orig_start;
+
+            // Extract matched text from original content (preserves case and diacritics)
+            let match_text = content[orig_start..orig_end].trim();
+
+            if !match_text.is_empty() {
+                matches.push(MatchInfo {
+                    match_text: match_text.to_string(),
+                    offset: utf16_pos,
+                });
+            }
+        }
+
+        matches
+    }
+}
+
+/// Strip diacritics from text and return a byte offset mapping.
+/// `byte_map[i]` = the byte position in the original text corresponding to
+/// byte position `i` in the stripped text.
+fn strip_diacritics_with_mapping(text: &str) -> (String, Vec<usize>) {
+    let mut result = String::new();
+    let mut byte_map: Vec<usize> = Vec::new();
+
+    for (orig_start, orig_char) in text.char_indices() {
+        // NFD decompose this character, then filter combining marks
+        for nfd_char in orig_char.nfd() {
+            if unicode_normalization::char::is_combining_mark(nfd_char) {
+                continue;
+            }
+            // Each byte of this base character maps back to the original character
+            for _ in 0..nfd_char.len_utf8() {
+                byte_map.push(orig_start);
+            }
+            result.push(nfd_char);
+        }
+    }
+
+    (result, byte_map)
 }
 
 /// Determine fuzzy edit distance based on term length and fuzziness level.
@@ -821,5 +961,121 @@ mod tests {
         let p = parse_query("Hello \"FOO Bar\"");
         assert_eq!(p.terms, vec!["hello"]);
         assert_eq!(p.phrases, vec![vec!["foo", "bar"]]);
+    }
+
+    // ── find_matches tests ────────────────────────────────────────────
+
+    fn extract(content: &str, terms: &[String], ignore_diacritics: bool) -> Vec<MatchInfo> {
+        MatchExtractor::new(terms, ignore_diacritics).find_matches(content)
+    }
+
+    #[test]
+    fn find_matches_basic() {
+        let matches = extract("hello world hello", &["hello".into()], false);
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].match_text, "hello");
+        assert_eq!(matches[0].offset, 0);
+        assert_eq!(matches[1].match_text, "hello");
+        assert_eq!(matches[1].offset, 12);
+    }
+
+    #[test]
+    fn find_matches_case_insensitive() {
+        let matches = extract("Hello WORLD", &["hello".into(), "world".into()], false);
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].match_text, "Hello");
+        assert_eq!(matches[1].match_text, "WORLD");
+    }
+
+    #[test]
+    fn find_matches_cap_at_100() {
+        let content = "word ".repeat(200);
+        let matches = extract(&content, &["word".into()], false);
+        assert_eq!(matches.len(), MAX_MATCHES);
+    }
+
+    #[test]
+    fn find_matches_empty_terms() {
+        let matches = extract("hello world", &[], false);
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn find_matches_empty_content() {
+        let matches = extract("", &["hello".into()], false);
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn find_matches_no_match() {
+        let matches = extract("hello world", &["xyz".into()], false);
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn find_matches_diacritics() {
+        let matches = extract("café résumé", &["cafe".into(), "resume".into()], true);
+        assert_eq!(matches.len(), 2);
+        // Original text preserved (with diacritics)
+        assert_eq!(matches[0].match_text, "café");
+        assert_eq!(matches[1].match_text, "résumé");
+    }
+
+    #[test]
+    fn find_matches_ascii_skips_diacritics() {
+        // ASCII content with ignore_diacritics=true should still work (fast path)
+        let matches = extract("hello world", &["hello".into()], true);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].match_text, "hello");
+    }
+
+    #[test]
+    fn find_matches_utf16_offsets() {
+        // Each CJK character is 1 UTF-16 code unit but 3 UTF-8 bytes
+        let matches = extract("世界hello", &["hello".into()], false);
+        assert_eq!(matches.len(), 1);
+        // "世界" = 2 chars, 2 UTF-16 code units
+        assert_eq!(matches[0].offset, 2);
+    }
+
+    #[test]
+    fn find_matches_emoji_utf16_offsets() {
+        // 😀 is 4 UTF-8 bytes but 2 UTF-16 code units (surrogate pair)
+        let matches = extract("😀hello", &["hello".into()], false);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].offset, 2); // surrogate pair = 2 UTF-16 code units
+    }
+
+    #[test]
+    fn find_matches_multiple_terms() {
+        let matches = extract(
+            "the quick brown fox",
+            &["quick".into(), "fox".into()],
+            false,
+        );
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].match_text, "quick");
+        assert_eq!(matches[0].offset, 4);
+        assert_eq!(matches[1].match_text, "fox");
+        assert_eq!(matches[1].offset, 16);
+    }
+
+    #[test]
+    fn search_returns_matches() {
+        let mgr = setup_index(vec![make_doc(
+            "a.md",
+            "a",
+            "Hello world, this is a test document",
+        )]);
+        let results = mgr.search("hello test", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        assert!(!results[0].matches.is_empty());
+        let match_texts: Vec<&str> = results[0]
+            .matches
+            .iter()
+            .map(|m| m.match_text.as_str())
+            .collect();
+        assert!(match_texts.contains(&"Hello"));
+        assert!(match_texts.contains(&"test"));
     }
 }

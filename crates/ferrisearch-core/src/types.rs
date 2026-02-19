@@ -14,6 +14,13 @@ pub struct DocumentInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchInfo {
+    pub match_text: String,
+    /// UTF-16 code unit offset (for JavaScript string indexing)
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     pub path: String,
     pub score: f64,
@@ -23,6 +30,7 @@ pub struct SearchResult {
     pub content: String,
     pub mtime: u64,
     pub tags: Vec<String>,
+    pub matches: Vec<MatchInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

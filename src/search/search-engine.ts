@@ -5,7 +5,7 @@ import { logVerbose, removeDiacritics, stripMarkdownCharacters } from '../tools/
 import type { Query } from './query'
 
 // Must match NAPI_VERSION in napi/src/lib.rs
-const EXPECTED_NAPI_VERSION = 1
+const EXPECTED_NAPI_VERSION = 2
 
 // The napi binding types - loaded at runtime
 interface NativeModule {
@@ -54,6 +54,11 @@ interface NativeSearchOptions {
   recencyBoost?: string
 }
 
+interface NativeMatchInfo {
+  matchText: string
+  offset: number
+}
+
 interface NativeSearchResult {
   path: string
   score: number
@@ -63,6 +68,7 @@ interface NativeSearchResult {
   content: string
   mtime: number
   tags: string[]
+  matches: NativeMatchInfo[]
 }
 
 export class SearchEngine {
@@ -317,7 +323,8 @@ export class SearchEngine {
       const foundWords = [...result.matchedTerms, ...query.getExactTerms(), ...query.getTags()]
       logVerbose('Matching tokens:', foundWords)
 
-      const matches = this.plugin.textProcessor.getMatches(result.content, foundWords, query)
+      // Use matches computed by Rust (fast regex in native code)
+      const matches = result.matches.map(m => ({ match: m.matchText, offset: m.offset }))
       logVerbose(`Matches for note "${result.path}"`, matches)
 
       return {

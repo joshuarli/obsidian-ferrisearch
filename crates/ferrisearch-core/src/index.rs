@@ -15,6 +15,7 @@ pub struct IndexManager {
     writer: IndexWriter,
     pub(crate) reader: IndexReader,
     pub(crate) fields: FieldHandles,
+    pub(crate) ignore_diacritics: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +56,7 @@ impl IndexManager {
             writer,
             reader,
             fields,
+            ignore_diacritics: config.ignore_diacritics,
         })
     }
 
@@ -74,6 +76,7 @@ impl IndexManager {
             writer,
             reader,
             fields,
+            ignore_diacritics: config.ignore_diacritics,
         })
     }
 
