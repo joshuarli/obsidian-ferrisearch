@@ -110,7 +110,11 @@ impl IndexManager {
             .cloned()
             .collect();
 
-        // For each query term, build an OR across all text fields (exact + prefix + fuzzy).
+        // For each query term, build an OR across all text fields.
+        // - All fields get exact match (TermQuery)
+        // - All fields except directory get prefix match (PhrasePrefixQuery)
+        // - Only content gets fuzzy match (FuzzyTermQuery) — fuzzy on short
+        //   fields like title/headings/directory is noise
         // Then combine all term queries with AND (every term must match somewhere).
         let mut must_clauses: Vec<(Occur, Box<dyn Query>)> = parsed
             .terms
@@ -125,7 +129,7 @@ impl IndexManager {
                         let term = Term::from_field_text(*field, lower);
                         let mut queries: Vec<(Occur, Box<dyn Query>)> = Vec::with_capacity(3);
 
-                        // Exact match
+                        // Exact match (all fields)
                         queries.push((
                             Occur::Should,
                             Box::new(BoostQuery::new(
@@ -137,8 +141,8 @@ impl IndexManager {
                             )),
                         ));
 
-                        // Prefix match
-                        if lower.len() >= options.prefix_length {
+                        // Prefix match (skip directory — exact is sufficient for paths)
+                        if *name != "directory" && lower.len() >= options.prefix_length {
                             queries.push((
                                 Occur::Should,
                                 Box::new(BoostQuery::new(
@@ -148,8 +152,8 @@ impl IndexManager {
                             ));
                         }
 
-                        // Fuzzy match
-                        if fuzziness > 0.0 {
+                        // Fuzzy match (content only — typos in prose, not titles/paths)
+                        if *name == "content" && fuzziness > 0.0 {
                             let dist = fuzzy_distance(lower, fuzziness);
                             if dist > 0 {
                                 queries.push((
