@@ -28,7 +28,6 @@ export function renderVaultModal(
   let searchQuery = previousQuery ?? ''
   let resultNotes: ResultNote[] = []
   let searching = true
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null
   let cancelled = false
   let resultEls: HTMLElement[] = []
   let currentObserver: IntersectionObserver | null = null
@@ -101,39 +100,37 @@ export function renderVaultModal(
   })()
 
   // Input handling
-  const INPUT_DEBOUNCE_MS = 300
   input.addEventListener('input', () => {
     searchQuery = input.value
-    debouncedUpdate()
+    onQueryChange()
   })
   input.addEventListener('compositionstart', () => toggleInputComposition(true))
   input.addEventListener('compositionend', () => toggleInputComposition(false))
 
-  function debouncedUpdate() {
-    if (debounceTimer !== null) clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null
-      if (!searchQuery) {
-        searching = false
-        resultNotes = []
-        loadHistory()
-      } else if (searchQuery.length < plugin.settings.minQueryLength) {
-        searching = false
-        resultNotes = []
-        renderResults()
-      } else {
-        updateResults()
-      }
-    }, INPUT_DEBOUNCE_MS)
+  function onQueryChange() {
+    if (!searchQuery) {
+      searching = false
+      resultNotes = []
+      loadHistory()
+    } else if (searchQuery.length < plugin.settings.minQueryLength) {
+      searching = false
+      resultNotes = []
+      renderResults()
+    } else {
+      updateResults()
+    }
   }
+
+  // Search
+  let currentSearchId = 0
 
   // Indexing status
   const unsubIndexing = indexingStep.subscribe(step => {
     if (step === IndexingStepType.Done) {
-      debouncedUpdate()
+      onQueryChange()
       setStatusText('')
     } else if (step === IndexingStepType.WritingCache) {
-      debouncedUpdate()
+      onQueryChange()
       setStatusText('Updating cache...')
     } else {
       const labels = {
@@ -154,8 +151,6 @@ export function renderVaultModal(
     }
   }
 
-  // Search
-  let currentSearchId = 0
   async function updateResults() {
     searching = true
     renderStatusMessage()
@@ -467,7 +462,6 @@ export function renderVaultModal(
   return {
     destroy() {
       cancelled = true
-      if (debounceTimer !== null) clearTimeout(debounceTimer)
       eventBus.disable('vault')
       unsubIndexing()
       currentObserver?.disconnect()

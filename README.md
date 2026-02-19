@@ -15,3 +15,4 @@ key changes:
 - cut down on query granularity for maximum performance
 - cut down on unnecessary/useless queries
   - the first 2 search characters do not issue a query by default
+- search is so fast (<1ms) that input debouncing (300ms) has been completely removed

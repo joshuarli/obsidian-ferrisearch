@@ -30,8 +30,6 @@ export function renderInFileModal(
   let groupedOffsets: number[] = []
   let selectedIndex = 0
   let note: ResultNote | undefined
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null
-
   // Build DOM
 
   const inputContainer = document.createElement('div')
@@ -86,21 +84,12 @@ export function renderInFileModal(
   })()
 
   // Input handling
-  const INPUT_DEBOUNCE_MS = 300
   input.addEventListener('input', () => {
     searchQuery = input.value
-    debouncedUpdate()
+    updateResults()
   })
   input.addEventListener('compositionstart', () => toggleInputComposition(true))
   input.addEventListener('compositionend', () => toggleInputComposition(false))
-
-  function debouncedUpdate() {
-    if (debounceTimer !== null) clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null
-      updateResults()
-    }, INPUT_DEBOUNCE_MS)
-  }
 
   // Search
   async function updateResults() {
@@ -250,7 +239,6 @@ export function renderInFileModal(
 
   return {
     destroy() {
-      if (debounceTimer !== null) clearTimeout(debounceTimer)
       eventBus.disable('infile')
     },
   }
