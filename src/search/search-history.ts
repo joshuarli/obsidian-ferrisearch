@@ -1,7 +1,6 @@
 import type FerrisearchPlugin from '../main'
 
 export class SearchHistory {
-  private nextQueryIsEmpty = false
   private filePath: string
 
   constructor(private plugin: FerrisearchPlugin) {
@@ -10,11 +9,7 @@ export class SearchHistory {
   }
 
   public async addToHistory(query: string): Promise<void> {
-    if (!query) {
-      this.nextQueryIsEmpty = true
-      return
-    }
-    this.nextQueryIsEmpty = false
+    if (!query) return
     let lines = await this.readFile()
     lines = lines.filter(s => s !== query)
     lines.unshift(query)
@@ -23,11 +18,7 @@ export class SearchHistory {
   }
 
   public async getHistory(): Promise<ReadonlyArray<string>> {
-    const data = [...(await this.readFile())]
-    if (this.nextQueryIsEmpty) {
-      data.unshift('')
-    }
-    return data
+    return this.readFile()
   }
 
   private async readFile(): Promise<string[]> {

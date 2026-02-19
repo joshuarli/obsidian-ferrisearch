@@ -95,7 +95,6 @@ export function renderInFileModal(
   // Input handler (debounced)
   const INPUT_DEBOUNCE_MS = 300
   input.addEventListener('input', () => {
-    plugin.searchHistory.addToHistory('')
     searchQuery = input.value
     debouncedUpdate()
   })

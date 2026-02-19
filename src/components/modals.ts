@@ -88,16 +88,6 @@ abstract class FerrisearchModal extends Modal {
       e.preventDefault()
       eventBus.emit(Action.Tab)
     })
-
-    // Search history
-    this.scope.register(['Alt'], 'ArrowDown', e => {
-      e.preventDefault()
-      eventBus.emit(Action.NextSearchHistory)
-    })
-    this.scope.register(['Alt'], 'ArrowUp', e => {
-      e.preventDefault()
-      eventBus.emit(Action.PrevSearchHistory)
-    })
   }
 }
 

@@ -51,8 +51,6 @@ export enum Action {
   Tab = 'tab',
   ArrowUp = 'arrow-up',
   ArrowDown = 'arrow-down',
-  PrevSearchHistory = 'prev-search-history',
-  NextSearchHistory = 'next-search-history',
   OpenInNewLeaf = 'open-in-new-leaf',
 }
 

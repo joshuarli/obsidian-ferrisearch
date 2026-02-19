@@ -25,7 +25,6 @@ export function renderVaultModal(
   { plugin, modal, previousQuery }: VaultModalProps,
 ): { destroy(): void } {
   let selectedIndex = 0
-  let historySearchIndex = 0
   let searchQuery = previousQuery ?? ''
   let resultNotes: ResultNote[] = []
   let searching = true
@@ -79,7 +78,6 @@ export function renderVaultModal(
   instructions.className = 'prompt-instructions'
   const hints = [
     ['↑↓', 'to navigate'],
-    [`${altKey} ↑↓`, 'to cycle history'],
     ['↵', 'to open'],
     ['Tab', 'to switch to In-File Search'],
     [`${ctrlKey} ↵`, 'to open in a new pane'],
@@ -118,7 +116,6 @@ export function renderVaultModal(
   // Debounced input handler
   const INPUT_DEBOUNCE_MS = 300
   input.addEventListener('input', () => {
-    plugin.searchHistory.addToHistory('')
     searchQuery = input.value
     debouncedUpdate()
   })
@@ -480,26 +477,6 @@ export function renderVaultModal(
     }
   }
 
-  async function prevSearchHistory() {
-    const history = (await plugin.searchHistory.getHistory()).filter(s => s)
-    if (++historySearchIndex >= history.length) {
-      historySearchIndex = 0
-    }
-    searchQuery = history[historySearchIndex] ?? ''
-    input.value = searchQuery
-    debouncedUpdate()
-  }
-
-  async function nextSearchHistory() {
-    const history = (await plugin.searchHistory.getHistory()).filter(s => s)
-    if (--historySearchIndex < 0) {
-      historySearchIndex = history.length ? history.length - 1 : 0
-    }
-    searchQuery = history[historySearchIndex] ?? ''
-    input.value = searchQuery
-    debouncedUpdate()
-  }
-
   // Register event bus
   eventBus.enable('vault')
   eventBus.on('vault', Action.Enter, openNoteAndCloseModal)
@@ -509,8 +486,6 @@ export function renderVaultModal(
   eventBus.on('vault', Action.Tab, switchToInFileModal)
   eventBus.on('vault', Action.ArrowUp, () => moveIndex(-1))
   eventBus.on('vault', Action.ArrowDown, () => moveIndex(1))
-  eventBus.on('vault', Action.PrevSearchHistory, prevSearchHistory)
-  eventBus.on('vault', Action.NextSearchHistory, nextSearchHistory)
   eventBus.on('vault', Action.OpenInNewLeaf, openNoteInNewLeaf)
 
   // Initial load
