@@ -6,7 +6,7 @@ use tantivy::schema::IndexRecordOption;
 use tantivy::tokenizer::TokenFilter;
 use tantivy::{Index, IndexWriter, ReloadPolicy, Term};
 
-use crate::schema::{build_schema, FieldHandles};
+use crate::schema::{FieldHandles, build_schema};
 use crate::tokenizer::{DiacriticFilter, FerrisearchTokenizer};
 use crate::types::{DocumentInput, IndexConfig};
 
@@ -15,7 +15,7 @@ pub struct IndexManager {
     pub(crate) index: Index,
     writer: IndexWriter,
     pub(crate) fields: FieldHandles,
-    config: IndexConfig,
+    _config: IndexConfig,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -56,7 +56,7 @@ impl IndexManager {
             index,
             writer,
             fields,
-            config,
+            _config: config,
         })
     }
 
@@ -73,7 +73,7 @@ impl IndexManager {
             index,
             writer,
             fields,
-            config,
+            _config: config,
         })
     }
 
@@ -81,9 +81,7 @@ impl IndexManager {
         let base = FerrisearchTokenizer::new();
         if config.ignore_diacritics {
             let tokenizer = DiacriticFilter.transform(base);
-            index
-                .tokenizers()
-                .register("ferrisearch", tokenizer);
+            index.tokenizers().register("ferrisearch", tokenizer);
         } else {
             index.tokenizers().register("ferrisearch", base);
         }
@@ -111,8 +109,8 @@ impl IndexManager {
         tantivy_doc.add_text(self.fields.headings3, &doc.headings3);
 
         // Tags as space-separated text for full-text matching
-        tantivy_doc.add_text(self.fields.tags_text, &doc.tags.join(" "));
-        tantivy_doc.add_text(self.fields.unmarked_tags, &doc.unmarked_tags.join(" "));
+        tantivy_doc.add_text(self.fields.tags_text, doc.tags.join(" "));
+        tantivy_doc.add_text(self.fields.unmarked_tags, doc.unmarked_tags.join(" "));
 
         // Tags stored as JSON for post-search boost
         let tags_array: Vec<tantivy::schema::OwnedValue> = doc

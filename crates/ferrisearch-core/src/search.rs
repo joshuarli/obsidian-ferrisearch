@@ -63,14 +63,15 @@ impl IndexManager {
                 field_queries.push((Occur::Should, boosted_exact));
 
                 // Prefix query (if term is long enough)
-                if term_lower.len() >= options.prefix_length {
-                    if let Ok(regex_query) =
-                        RegexQuery::from_pattern(&format!("{}.*", regex::escape(&term_lower)), field)
-                    {
-                        let boosted_prefix: Box<dyn Query> =
-                            Box::new(BoostQuery::new(Box::new(regex_query), boost * 0.8));
-                        field_queries.push((Occur::Should, boosted_prefix));
-                    }
+                if term_lower.len() >= options.prefix_length
+                    && let Ok(regex_query) = RegexQuery::from_pattern(
+                        &format!("{}.*", regex::escape(&term_lower)),
+                        field,
+                    )
+                {
+                    let boosted_prefix: Box<dyn Query> =
+                        Box::new(BoostQuery::new(Box::new(regex_query), boost * 0.8));
+                    field_queries.push((Occur::Should, boosted_prefix));
                 }
 
                 // Fuzzy query
@@ -90,10 +91,8 @@ impl IndexManager {
         }
 
         // Combine all term queries with AND (all terms must match somewhere)
-        let must_clauses: Vec<(Occur, Box<dyn Query>)> = term_queries
-            .into_iter()
-            .map(|q| (Occur::Must, q))
-            .collect();
+        let must_clauses: Vec<(Occur, Box<dyn Query>)> =
+            term_queries.into_iter().map(|q| (Occur::Must, q)).collect();
 
         let mut final_query: Box<dyn Query> = Box::new(BooleanQuery::new(must_clauses));
 
@@ -114,9 +113,9 @@ impl IndexManager {
 
         // Convert to SearchResult structs, applying recency boost
         let recency_cutoff = match options.recency_boost.as_str() {
-            "1" => Some(-3.0_f64),   // Day
-            "2" => Some(-0.3_f64),   // Week
-            "3" => Some(-0.1_f64),   // Month
+            "1" => Some(-3.0_f64), // Day
+            "2" => Some(-0.3_f64), // Week
+            "3" => Some(-0.1_f64), // Month
             _ => None,
         };
         let now = std::time::SystemTime::now()
@@ -126,7 +125,8 @@ impl IndexManager {
 
         let mut search_results = Vec::new();
         for (score, doc_address) in results {
-            if let Ok(mut result) = self.doc_to_result(&searcher, doc_address, score as f64, &terms) {
+            if let Ok(mut result) = self.doc_to_result(&searcher, doc_address, score as f64, &terms)
+            {
                 // Apply recency boost
                 if let Some(cutoff) = recency_cutoff {
                     let days_elapsed = (now - result.mtime as f64) / (24.0 * 3_600_000.0);
@@ -138,7 +138,11 @@ impl IndexManager {
 
         // Re-sort after recency boost
         if recency_cutoff.is_some() {
-            search_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            search_results.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
         }
 
         Ok(search_results)
@@ -219,11 +223,7 @@ fn fuzzy_distance(term: &str, fuzziness: f32) -> u8 {
     if len <= 3 {
         0
     } else if len <= 5 {
-        if fuzziness >= 0.1 {
-            1
-        } else {
-            0
-        }
+        if fuzziness >= 0.1 { 1 } else { 0 }
     } else if fuzziness >= 0.2 {
         2
     } else if fuzziness >= 0.1 {
@@ -233,10 +233,7 @@ fn fuzzy_distance(term: &str, fuzziness: f32) -> u8 {
     }
 }
 
-fn get_boost_for_field(
-    field_name: &str,
-    boosts: &crate::types::FieldBoosts,
-) -> f32 {
+fn get_boost_for_field(field_name: &str, boosts: &crate::types::FieldBoosts) -> f32 {
     match field_name {
         "basename" => boosts.basename,
         "display_title" => boosts.display_title,
@@ -286,8 +283,16 @@ mod tests {
     #[test]
     fn test_basic_search() {
         let mgr = setup_index(vec![
-            make_doc("notes/hello.md", "hello", "Hello world, this is a test document"),
-            make_doc("notes/other.md", "other", "Completely unrelated content here"),
+            make_doc(
+                "notes/hello.md",
+                "hello",
+                "Hello world, this is a test document",
+            ),
+            make_doc(
+                "notes/other.md",
+                "other",
+                "Completely unrelated content here",
+            ),
         ]);
 
         let results = mgr.search("hello", &SearchOptions::default()).unwrap();
@@ -321,8 +326,10 @@ mod tests {
             make_doc("b.md", "b", "hello world"),
         ]);
 
-        let mut opts = SearchOptions::default();
-        opts.single_file_path = Some("a.md".to_string());
+        let opts = SearchOptions {
+            single_file_path: Some("a.md".to_string()),
+            ..Default::default()
+        };
 
         let results = mgr.search("hello", &opts).unwrap();
         assert_eq!(results.len(), 1);
@@ -332,12 +339,12 @@ mod tests {
     #[test]
     fn test_basename_boost() {
         let mgr = setup_index(vec![
-            make_doc("notes/rust.md", "rust", "This note is about python programming"),
             make_doc(
-                "notes/python.md",
-                "python",
-                "This note mentions rust once",
+                "notes/rust.md",
+                "rust",
+                "This note is about python programming",
             ),
+            make_doc("notes/python.md", "python", "This note mentions rust once"),
         ]);
 
         let results = mgr.search("rust", &SearchOptions::default()).unwrap();
@@ -354,8 +361,10 @@ mod tests {
             "The restaurant serves excellent cuisine",
         )]);
 
-        let mut opts = SearchOptions::default();
-        opts.fuzziness = "2".to_string();
+        let opts = SearchOptions {
+            fuzziness: "2".to_string(),
+            ..Default::default()
+        };
 
         let results = mgr.search("restaurnt", &opts).unwrap();
         assert!(!results.is_empty());

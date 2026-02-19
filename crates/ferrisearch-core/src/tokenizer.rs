@@ -14,7 +14,7 @@ fn build_separator_pattern() -> String {
 
     // ASCII separators (from the original JS regex character class)
     // | \t \n \r ^ " = space ! through various ASCII punct
-    chars.push_str(r#"|"#);
+    chars.push('|');
     chars.push('\t');
     chars.push('\n');
     chars.push('\r');
@@ -183,7 +183,7 @@ pub fn split_camel_case(text: &str) -> Vec<String> {
     for ch in text.chars() {
         if ch.is_uppercase() && !current.is_empty() {
             // Check if current ends with lowercase (camelCase boundary)
-            if current.chars().last().map_or(false, |c| c.is_lowercase()) {
+            if current.chars().last().is_some_and(|c| c.is_lowercase()) {
                 parts.push(current);
                 current = String::new();
             }
@@ -194,11 +194,7 @@ pub fn split_camel_case(text: &str) -> Vec<String> {
         parts.push(current);
     }
 
-    if parts.len() <= 1 {
-        Vec::new()
-    } else {
-        parts
-    }
+    if parts.len() <= 1 { Vec::new() } else { parts }
 }
 
 /// Split on hyphens: "foo-bar-baz" -> ["foo", "bar", "baz"]
@@ -280,7 +276,6 @@ pub fn remove_diacritics(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tantivy::tokenizer::Tokenizer as _;
 
     fn tokenize(text: &str) -> Vec<String> {
         let mut tokenizer = FerrisearchTokenizer::new();
