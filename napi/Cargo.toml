@@ -8,9 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ferrisearch-core = { path = "../crates/ferrisearch-core" }
-napi = { version = "3", features = ["serde-json"] }
+napi = "3"
 napi-derive = "3"
-serde = { version = "1", features = ["derive"] }
 
 [build-dependencies]
 napi-build = "2"

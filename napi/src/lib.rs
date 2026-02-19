@@ -1,12 +1,11 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use serde::{Deserialize, Serialize};
 
 use ferrisearch_core::index::IndexManager;
 use ferrisearch_core::types;
 
 #[napi(object)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DocumentInput {
     pub path: String,
     pub basename: String,
@@ -40,23 +39,21 @@ impl From<DocumentInput> for types::DocumentInput {
 }
 
 #[napi(object)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct IndexConfig {
     pub ignore_diacritics: Option<bool>,
-    pub ignore_arabic_diacritics: Option<bool>,
 }
 
 impl From<IndexConfig> for types::IndexConfig {
     fn from(c: IndexConfig) -> Self {
         types::IndexConfig {
             ignore_diacritics: c.ignore_diacritics.unwrap_or(true),
-            ignore_arabic_diacritics: c.ignore_arabic_diacritics.unwrap_or(false),
         }
     }
 }
 
 #[napi(object)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct FieldBoosts {
     pub basename: Option<f64>,
     pub display_title: Option<f64>,
@@ -88,7 +85,7 @@ impl From<FieldBoosts> for types::FieldBoosts {
 }
 
 #[napi(object)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SearchOptions {
     pub field_boosts: Option<FieldBoosts>,
     pub fuzziness: Option<String>,
@@ -112,7 +109,7 @@ impl From<SearchOptions> for types::SearchOptions {
 }
 
 #[napi(object)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SearchResult {
     pub path: String,
     pub score: f64,

@@ -34,22 +34,16 @@ pub struct SearchResult {
 pub struct IndexConfig {
     #[serde(default = "default_true")]
     pub ignore_diacritics: bool,
-    #[serde(default = "default_false")]
-    pub ignore_arabic_diacritics: bool,
 }
 
 fn default_true() -> bool {
     true
-}
-fn default_false() -> bool {
-    false
 }
 
 impl Default for IndexConfig {
     fn default() -> Self {
         Self {
             ignore_diacritics: true,
-            ignore_arabic_diacritics: false,
         }
     }
 }
@@ -177,10 +171,8 @@ mod tests {
     #[test]
     fn test_index_config_serde_override() {
         let config: IndexConfig =
-            serde_json::from_str(r#"{"ignore_diacritics": false, "ignore_arabic_diacritics": true}"#)
-                .unwrap();
+            serde_json::from_str(r#"{"ignore_diacritics": false}"#).unwrap();
         assert!(!config.ignore_diacritics);
-        assert!(config.ignore_arabic_diacritics);
     }
 
     #[test]

@@ -24,8 +24,6 @@ pub enum IndexError {
     Tantivy(#[from] tantivy::TantivyError),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("Query parser error: {0}")]
-    QueryParser(String),
     #[error("Directory open error: {0}")]
     DirectoryOpen(#[from] tantivy::directory::error::OpenDirectoryError),
     #[error("Directory read error: {0}")]
@@ -88,7 +86,7 @@ impl IndexManager {
     }
 
     /// Add a single document (upsert: removes existing document with same path first)
-    pub fn add_document(&mut self, doc: &DocumentInput) -> Result<(), IndexError> {
+    fn add_document(&mut self, doc: &DocumentInput) -> Result<(), IndexError> {
         // Delete existing document with same path
         self.delete_by_path(&doc.path);
 
@@ -137,11 +135,6 @@ impl IndexManager {
             self.add_document(doc)?;
         }
         Ok(())
-    }
-
-    /// Remove a document by path
-    pub fn remove_document(&mut self, path: &str) {
-        self.delete_by_path(path);
     }
 
     /// Remove multiple documents by path
@@ -263,7 +256,7 @@ mod tests {
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 1);
 
-        mgr.remove_document("notes/test.md");
+        mgr.remove_documents(&["notes/test.md".to_string()]);
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 0);
     }
@@ -336,7 +329,7 @@ mod tests {
         mgr.commit().unwrap();
 
         // Removing a document that doesn't exist should not error
-        mgr.remove_document("nonexistent.md");
+        mgr.remove_documents(&["nonexistent.md".to_string()]);
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 1);
     }
@@ -381,7 +374,6 @@ mod tests {
     fn test_diacritics_disabled() {
         let config = IndexConfig {
             ignore_diacritics: false,
-            ignore_arabic_diacritics: false,
         };
         let mut mgr = IndexManager::new_in_memory(config).unwrap();
         mgr.add_document(&make_doc("a.md", "hello")).unwrap();

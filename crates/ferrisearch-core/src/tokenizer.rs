@@ -166,7 +166,7 @@ impl TokenStream for FerrisearchTokenStream {
 
 /// Split camelCase: "fooBarBAZ" -> ["foo", "Bar", "BAZ"]
 /// Returns empty vec if no camelCase boundary found.
-pub fn split_camel_case(text: &str) -> Vec<String> {
+fn split_camel_case(text: &str) -> Vec<String> {
     // Check if there's at least one lowercase->uppercase boundary
     let has_camel = text
         .chars()
@@ -199,7 +199,7 @@ pub fn split_camel_case(text: &str) -> Vec<String> {
 
 /// Split on hyphens: "foo-bar-baz" -> ["foo", "bar", "baz"]
 /// Returns empty vec if no hyphens found.
-pub fn split_hyphens(text: &str) -> Vec<String> {
+fn split_hyphens(text: &str) -> Vec<String> {
     if !text.contains('-') {
         return Vec::new();
     }
@@ -265,14 +265,6 @@ impl<T: TokenStream> TokenStream for DiacriticFilterStream<T> {
     }
 }
 
-/// Standalone function to strip diacritics from a string (for query processing)
-pub fn remove_diacritics(text: &str) -> String {
-    text.nfd()
-        .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
-        .nfc()
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -331,15 +323,6 @@ mod tests {
     fn test_no_hyphens_for_plain_word() {
         let splits = split_hyphens("nohyphen");
         assert!(splits.is_empty());
-    }
-
-    #[test]
-    fn test_diacritics_removal() {
-        assert_eq!(remove_diacritics("br\u{00FB}l\u{00E9}e"), "brulee");
-        assert_eq!(
-            remove_diacritics("\u{017E}lu\u{0165}ou\u{010D}k\u{00FD}"),
-            "zlutoucky"
-        );
     }
 
     #[test]
@@ -458,11 +441,6 @@ mod tests {
         let tokens = tokenize("foo|bar");
         assert!(tokens.contains(&"foo".to_string()));
         assert!(tokens.contains(&"bar".to_string()));
-    }
-
-    #[test]
-    fn test_diacritics_removal_mixed() {
-        assert_eq!(remove_diacritics("café résumé"), "cafe resume");
     }
 
     #[test]
