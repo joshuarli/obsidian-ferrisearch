@@ -1,8 +1,6 @@
 import esbuild from 'esbuild'
 import process from 'process'
 import builtins from 'builtin-modules'
-import esbuildSvelte from 'esbuild-svelte'
-import { sveltePreprocess } from 'svelte-preprocess'
 import path from 'path'
 import { copy } from 'esbuild-plugin-copy'
 
@@ -40,10 +38,6 @@ const context = await esbuild.context({
   ],
   outfile: path.join('./dist', 'main.js'),
   plugins: [
-    esbuildSvelte({
-      compilerOptions: { css: 'injected' },
-      preprocess: sveltePreprocess(),
-    }),
     copy({
       assets: {
         from: ['manifest.json', './assets/styles.css'],

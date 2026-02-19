@@ -4,7 +4,7 @@ import {
   PluginSettingTab,
   Setting,
 } from 'obsidian'
-import { writable } from 'svelte/store'
+import { Observable } from '../globals'
 import { K_DISABLE_FERRISEARCH, RecencyCutoff } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { enableVerboseLogging } from '../tools/utils'
@@ -18,7 +18,7 @@ import { injectSettingsDanger } from './settings-danger'
 /**
  * A store to reactively toggle the `showExcerpt` setting on the fly
  */
-export const showExcerpt = writable(false)
+export const showExcerpt = new Observable(false)
 
 export class SettingsTab extends PluginSettingTab {
   plugin: FerrisearchPlugin

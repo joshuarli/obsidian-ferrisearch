@@ -1,10 +1,9 @@
 import { MarkdownView, Modal, TFile } from 'obsidian'
 import type { Modifier } from 'obsidian'
-import ModalVault from './ModalVault.svelte'
-import ModalInFile from './ModalInFile.svelte'
 import { Action, eventBus, EventNames, isInputComposition } from '../globals'
 import type FerrisearchPlugin from '../main'
-import { mount, unmount } from 'svelte'
+import { renderVaultModal } from './vault-modal'
+import { renderInFileModal } from './infile-modal'
 
 abstract class FerrisearchModal extends Modal {
   protected constructor(plugin: FerrisearchPlugin) {
@@ -154,17 +153,14 @@ export class FerrisearchVaultModal extends FerrisearchModal {
         ? history[0]
         : null
 
-      const cmp = mount(ModalVault, {
-        target: this.modalEl,
-        props: {
-          plugin,
-          modal: this,
-          previousQuery: query || selectedText || previous || '',
-        },
+      const handle = renderVaultModal(this.modalEl, {
+        plugin,
+        modal: this,
+        previousQuery: query || selectedText || previous || '',
       })
 
       this.onClose = () => {
-        unmount(cmp)
+        handle.destroy()
       }
     })
   }
@@ -179,15 +175,12 @@ export class FerrisearchInFileModal extends FerrisearchModal {
   ) {
     super(plugin)
 
-    const cmp = mount(ModalInFile, {
-      target: this.modalEl,
-      props: {
-        plugin,
-        modal: this,
-        singleFilePath: file.path,
-        parent: parent,
-        previousQuery: searchQuery,
-      },
+    const handle = renderInFileModal(this.modalEl, {
+      plugin,
+      modal: this,
+      singleFilePath: file.path,
+      parent: parent as FerrisearchVaultModal | null ?? null,
+      previousQuery: searchQuery,
     })
 
     if (parent) {
@@ -197,7 +190,7 @@ export class FerrisearchInFileModal extends FerrisearchModal {
       if (parent) {
         parent.containerEl.toggleVisibility(true)
       }
-      unmount(cmp)
+      handle.destroy()
     }
   }
 }

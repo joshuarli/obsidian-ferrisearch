@@ -1,5 +1,15 @@
 import { EventBus } from './tools/event-bus'
-import { writable } from 'svelte/store'
+
+export class Observable<T> {
+  private value: T
+  private listeners = new Set<(v: T) => void>()
+  constructor(initial: T) { this.value = initial }
+  get(): T { return this.value }
+  set(v: T) { this.value = v; this.listeners.forEach(fn => fn(v)) }
+  subscribe(fn: (v: T) => void): () => void {
+    fn(this.value); this.listeners.add(fn); return () => { this.listeners.delete(fn) }
+  }
+}
 
 export const regexLineSplit = /\r?\n|\r|((\.|\?|!)( |\r?\n|\r))/g
 export const regexYaml = /^---\s*\n(.*?)\n?^---\s?/ms
@@ -76,7 +86,7 @@ export const isSearchMatch = (o: { offset?: number }): o is SearchMatch => {
   return o.offset !== undefined
 }
 
-export const indexingStep = writable(IndexingStepType.Done)
+export const indexingStep = new Observable(IndexingStepType.Done)
 
 export type ResultNote = {
   score: number
