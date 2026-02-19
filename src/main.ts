@@ -192,5 +192,8 @@ export default class FerrisearchPlugin extends Plugin {
     }
     indexingStep.set(IndexingStepType.Done)
     notifyOnIndexed()
+
+    // Pre-warm term dictionaries so the first search is fast
+    this.searchEngine.warmUp()
   }
 }

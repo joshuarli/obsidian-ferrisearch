@@ -207,6 +207,11 @@ impl SearchIndex {
     }
 
     #[napi]
+    pub fn warm_up(&self) -> Result<()> {
+        self.inner()?.warm_up().map_err(map_err)
+    }
+
+    #[napi]
     pub fn has_document(&self, path: String) -> Result<bool> {
         self.inner()?.has_document(&path).map_err(map_err)
     }

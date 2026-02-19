@@ -11,6 +11,7 @@ use crate::tokenizer::{DiacriticFilter, FerrisearchTokenizer};
 use crate::types::{DocumentInput, IndexConfig};
 
 pub struct IndexManager {
+    index: Index,
     writer: IndexWriter,
     pub(crate) reader: IndexReader,
     pub(crate) fields: FieldHandles,
@@ -50,6 +51,7 @@ impl IndexManager {
         // indexing adds overhead without benefit.
         let writer = index.writer_with_num_threads(1, 50_000_000)?;
         Ok(Self {
+            index,
             writer,
             reader,
             fields,
@@ -68,6 +70,7 @@ impl IndexManager {
         // Single thread — see new() comment
         let writer = index.writer_with_num_threads(1, 15_000_000)?;
         Ok(Self {
+            index,
             writer,
             reader,
             fields,
@@ -137,10 +140,32 @@ impl IndexManager {
         }
     }
 
-    /// Commit pending changes and reload the reader so searches see new data.
+    /// Commit pending changes, merge to single segment, and reload the reader.
     pub fn commit(&mut self) -> Result<(), IndexError> {
         self.writer.commit()?;
+        // Force-merge to a single segment for optimal query performance.
+        // Multiple segments means multiple FST traversals per query.
+        // Best-effort: the background merge policy may have already consolidated
+        // these segments, in which case the merge will fail harmlessly.
+        let segment_ids = self.index.searchable_segment_ids()?;
+        if segment_ids.len() > 1 {
+            let _ = self.writer.merge(&segment_ids).wait();
+        }
         self.reader.reload()?;
+        Ok(())
+    }
+
+    /// Pre-warm term dictionaries by loading FSTs into the OS page cache.
+    /// Call once after initial indexing and when opening the search modal.
+    pub fn warm_up(&self) -> Result<(), IndexError> {
+        let searcher = self.reader.searcher();
+        for reader in searcher.segment_readers() {
+            for (_, field) in self.fields.text_fields() {
+                let inv = reader.inverted_index(field)?;
+                // Access the term dictionary to fault in the mmap'd FST pages
+                let _ = inv.terms().num_terms();
+            }
+        }
         Ok(())
     }
 

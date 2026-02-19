@@ -29,6 +29,7 @@ export function createMockPlugin(overrides?: {
     settings,
     searchEngine: {
       getSuggestions: mock(() => Promise.resolve(overrides?.searchResults ?? [])),
+      warmUp: mock(() => {}),
     },
     textProcessor: {
       highlightText: mock((text: string) => text),

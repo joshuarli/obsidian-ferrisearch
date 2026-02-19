@@ -9,6 +9,7 @@ interface NativeSearchIndex {
   addDocuments(docs: NativeDocumentInput[]): void
   removeDocuments(paths: string[]): void
   commit(): void
+  warmUp(): void
   hasDocument(path: string): boolean
   documentCount(): number
   search(query: string, options?: NativeSearchOptions): NativeSearchResult[]
@@ -77,6 +78,10 @@ export class SearchEngine {
         10000,
       )
     }
+  }
+
+  public warmUp(): void {
+    this.nativeIndex?.warmUp()
   }
 
   public close(): void {

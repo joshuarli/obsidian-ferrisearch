@@ -452,7 +452,8 @@ export function renderVaultModal(
   eventBus.on('vault', Action.ArrowDown, () => moveIndex(1))
   eventBus.on('vault', Action.OpenInNewLeaf, openNoteInNewLeaf)
 
-  // Initial load
+  // Initial load — warm up term dictionaries and refresh deferred changes
+  plugin.searchEngine.warmUp()
   plugin.notesIndexer.refreshIndex().then(() => {
     if (cancelled) return
     if (searchQuery) {
