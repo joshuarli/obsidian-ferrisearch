@@ -5,24 +5,14 @@ import {
   Platform,
   parseFrontMatterAliases,
 } from 'obsidian'
-import { isSearchMatch, type SearchMatch } from '../globals'
 
 export function pathWithoutFilename(path: string): string {
-  const split = path.split('/')
-  split.pop()
-  return split.join('/')
+  const i = path.lastIndexOf('/')
+  return i < 0 ? '' : path.slice(0, i)
 }
 
 export function wait(ms: number): Promise<void> {
-  return new Promise(resolve => {
-    setTimeout(resolve, ms)
-  })
-}
-
-export function getAllIndices(text: string, regex: RegExp): SearchMatch[] {
-  return [...text.matchAll(regex)]
-    .map(o => ({ match: o[0], offset: o.index }))
-    .filter(isSearchMatch)
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 export function extractHeadingsFromCache(cache: CachedMetadata, level: number): string[] {
@@ -42,33 +32,30 @@ export function getAliasesFromMetadata(metadata: CachedMetadata | null): string[
 }
 
 export function getTagsFromMetadata(metadata: CachedMetadata | null): string[] {
-  let tags = metadata ? (getAllTags(metadata) ?? []) : []
+  const raw = metadata ? (getAllTags(metadata) ?? []) : []
   const expanded: string[] = []
-  for (const tag of tags) {
-    for (const t of tag.split('/').filter(t => t)) {
-      expanded.push(t.startsWith('#') ? t : `#${t}`)
+  for (const tag of raw) {
+    for (const part of tag.split('/')) {
+      if (part) expanded.push(part.startsWith('#') ? part : `#${part}`)
     }
     expanded.push(tag)
   }
-  tags = [...new Set(expanded)]
-  return tags
+  return [...new Set(expanded)]
 }
 
-const japaneseDiacritics = ['\\u30FC', '\\u309A', '\\u3099']
-const regexpExclude = japaneseDiacritics.join('|')
-const diacriticsRegex = new RegExp(`(?!${regexpExclude})\\p{Diacritic}`, 'gu')
+const diacriticsRegex = /(?!\u30FC|\u309A|\u3099)\p{Diacritic}/gu
 
 export function removeDiacritics(str: string): string {
-  if (str === null || str === undefined) {
-    return ''
-  }
-
-  str = str.replaceAll('`', '[__ferrisearch__backtick__]')
-  str = str.replaceAll('^', '[__ferrisearch__caret__]')
-  str = str.normalize('NFD').replace(diacriticsRegex, '').normalize('NFC')
-  str = str.replaceAll('[__ferrisearch__backtick__]', '`')
-  str = str.replaceAll('[__ferrisearch__caret__]', '^')
+  if (!str) return ''
+  // Backtick and caret are mangled by NFD normalization — protect them
   return str
+    .replaceAll('`', '\x00B')
+    .replaceAll('^', '\x00C')
+    .normalize('NFD')
+    .replace(diacriticsRegex, '')
+    .normalize('NFC')
+    .replaceAll('\x00B', '`')
+    .replaceAll('\x00C', '^')
 }
 
 export function getCtrlKeyLabel(): 'Ctrl' | '⌘' {
@@ -80,47 +67,16 @@ export function getAltKeyLabel(): 'Alt' | '⌥' {
 }
 
 export function getExtension(path: string): string {
-  const split = path.split('.')
-  return split[split.length - 1] ?? ''
-}
-
-export function chunkArray<T>(arr: T[], len: number): T[][] {
-  const chunks = []
-  let i = 0
-  const n = arr.length
-
-  while (i < n) {
-    chunks.push(arr.slice(i, i + len))
-    i += len
-  }
-
-  return chunks
-}
-
-export function splitCamelCase(text: string): string[] {
-  if (!/[a-z][A-Z]/.test(text)) {
-    return []
-  }
-  const splittedText = text
-    .replace(/([a-z](?=[A-Z]))/g, '$1 ')
-    .split(' ')
-    .filter(t => t)
-  return splittedText
-}
-
-export function splitHyphens(text: string): string[] {
-  if (!text.includes('-')) {
-    return []
-  }
-  return text.split('-').filter(t => t)
+  const i = path.lastIndexOf('.')
+  return i < 0 ? '' : path.slice(i + 1)
 }
 
 export function logVerbose(...args: unknown[]): void {
-  printVerbose(console.debug, ...args)
+  if (verboseLoggingEnabled) console.debug(...args)
 }
 
 export function warnVerbose(...args: unknown[]): void {
-  printVerbose(console.warn, ...args)
+  if (verboseLoggingEnabled) console.warn(...args)
 }
 
 let verboseLoggingEnabled = false
@@ -128,19 +84,16 @@ export function enableVerboseLogging(enable: boolean): void {
   verboseLoggingEnabled = enable
 }
 
-function printVerbose(fn: (...args: unknown[]) => void, ...args: unknown[]): void {
-  if (verboseLoggingEnabled) {
-    fn(...args)
-  }
+/** Escapes special regex characters in a string */
+export function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export const countError = (() => {
   let counter = 0
   let alreadyWarned = false
   setTimeout(() => {
-    if (counter > 0) {
-      --counter
-    }
+    if (counter > 0) --counter
   }, 1000)
   return (immediate = false) => {
     if ((++counter >= 5 || immediate) && !alreadyWarned) {

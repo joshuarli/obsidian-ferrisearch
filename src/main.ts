@@ -15,7 +15,7 @@ import { TextProcessor } from './tools/text-processing'
 import { logVerbose } from './tools/utils'
 
 export default class FerrisearchPlugin extends Plugin {
-  public settings: FerrisearchSettings = getDefaultSettings(this.app)
+  public settings: FerrisearchSettings = getDefaultSettings()
 
   public readonly documentsRepository: DocumentsRepository
   public readonly embedsRepository = new EmbedsRepository(this)

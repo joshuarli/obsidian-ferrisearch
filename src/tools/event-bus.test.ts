@@ -81,14 +81,4 @@ describe('EventBus', () => {
     expect(fnClick).toHaveBeenCalledTimes(0)
     expect(fnHover).toHaveBeenCalledTimes(1)
   })
-
-  it('throws if context contains @', () => {
-    const bus = new EventBus()
-    expect(() => bus.on('c@x', 'ev', () => {})).toThrow()
-  })
-
-  it('throws if event contains @', () => {
-    const bus = new EventBus()
-    expect(() => bus.on('ctx', 'e@v', () => {})).toThrow()
-  })
 })

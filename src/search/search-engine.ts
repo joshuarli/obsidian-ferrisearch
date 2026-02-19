@@ -1,4 +1,3 @@
-import { sortBy } from 'lodash-es'
 import { Notice } from 'obsidian'
 import type { DocumentRef, IndexedDocument, ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
@@ -64,20 +63,14 @@ interface NativeSearchResult {
 
 export class SearchEngine {
   private nativeIndex: NativeSearchIndex | null = null
-  /** Map<path, mtime> - sidecar manifest for differential reindex */
-  private indexedDocuments: Map<string, number> = new Map()
+  private indexedDocuments = new Map<string, number>()
 
   constructor(protected plugin: FerrisearchPlugin) {}
 
-  /**
-   * Initialize the native search index
-   */
   public async initialize(): Promise<void> {
     try {
-      // Load the native module
-      const indexPath = this.getIndexPath()
       const { SearchIndex } = this.loadNativeModule()
-      this.nativeIndex = new SearchIndex(indexPath, {
+      this.nativeIndex = new SearchIndex(this.getIndexPath(), {
         ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
       })
       console.log('Ferrisearch - Native search index initialized')
@@ -90,30 +83,22 @@ export class SearchEngine {
     }
   }
 
-  /**
-   * Close the native index
-   */
   public close(): void {
-    if (this.nativeIndex) {
-      try {
-        this.nativeIndex.close()
-      } catch (e) {
-        console.error('Ferrisearch - Error closing index', e)
-      }
-      this.nativeIndex = null
+    if (!this.nativeIndex) return
+    try {
+      this.nativeIndex.close()
+    } catch (e) {
+      console.error('Ferrisearch - Error closing index', e)
     }
+    this.nativeIndex = null
   }
 
-  /**
-   * Load sidecar manifest for differential reindex
-   */
   async loadSidecar(): Promise<boolean> {
     try {
-      const sidecarPath = this.getSidecarPath()
       const adapter = this.plugin.app.vault.adapter
-      if (await adapter.exists(sidecarPath)) {
-        const data = await adapter.read(sidecarPath)
-        const manifest: { path: string; mtime: number }[] = JSON.parse(data)
+      const path = this.getSidecarPath()
+      if (await adapter.exists(path)) {
+        const manifest: { path: string; mtime: number }[] = JSON.parse(await adapter.read(path))
         this.indexedDocuments = new Map(manifest.map(o => [o.path, o.mtime]))
         return true
       }
@@ -123,83 +108,49 @@ export class SearchEngine {
     return false
   }
 
-  /**
-   * Save sidecar manifest
-   */
   async saveSidecar(): Promise<void> {
     try {
-      const sidecarPath = this.getSidecarPath()
-      const data = Array.from(this.indexedDocuments).map(([path, mtime]) => ({
-        path,
-        mtime,
-      }))
-      await this.plugin.app.vault.adapter.write(sidecarPath, JSON.stringify(data))
+      const data = [...this.indexedDocuments].map(([path, mtime]) => ({ path, mtime }))
+      await this.plugin.app.vault.adapter.write(this.getSidecarPath(), JSON.stringify(data))
     } catch (e) {
       console.error('Ferrisearch - Failed to save sidecar manifest', e)
     }
   }
 
-  /**
-   * Returns documents that need to be reindexed or removed
-   */
-  getDocumentsToReindex(docs: DocumentRef[]): {
-    toAdd: DocumentRef[]
-    toRemove: DocumentRef[]
-  } {
+  getDocumentsToReindex(docs: DocumentRef[]): { toAdd: DocumentRef[]; toRemove: DocumentRef[] } {
     const docsMap = new Map(docs.map(d => [d.path, d.mtime]))
-
-    const toAdd = docs.filter(
-      d => !this.indexedDocuments.has(d.path) || this.indexedDocuments.get(d.path) !== d.mtime,
-    )
-
-    const toRemove = [...this.indexedDocuments]
-      .filter(([path, mtime]) => !docsMap.has(path) || docsMap.get(path) !== mtime)
-      .map(o => ({ path: o[0], mtime: o[1] }))
-    return { toAdd, toRemove }
+    return {
+      toAdd: docs.filter(
+        d => !this.indexedDocuments.has(d.path) || this.indexedDocuments.get(d.path) !== d.mtime,
+      ),
+      toRemove: [...this.indexedDocuments]
+        .filter(([path, mtime]) => !docsMap.has(path) || docsMap.get(path) !== mtime)
+        .map(([path, mtime]) => ({ path, mtime })),
+    }
   }
 
-  /**
-   * Add documents to the search index
-   */
   public async addFromPaths(paths: string[]): Promise<void> {
     if (!this.nativeIndex) return
     logVerbose('Adding files', paths)
-    let documents = (
-      await Promise.all(
-        paths.map(async path => await this.plugin.documentsRepository.getDocument(path)),
-      )
-    ).filter(d => !!d?.path)
-    logVerbose('Sorting documents to first index markdown')
-    documents = sortBy(documents, d => (d.path.endsWith('.md') ? 0 : 1))
 
-    // Convert to native format
-    const nativeDocs: NativeDocumentInput[] = documents.map(d => ({
-      path: d.path,
-      basename: d.basename,
-      displayTitle: d.displayTitle,
-      aliases: d.aliases,
-      content: d.content,
-      headings1: d.headings1,
-      headings2: d.headings2,
-      headings3: d.headings3,
-      tags: d.tags,
-      unmarkedTags: d.unmarkedTags,
-      mtime: d.mtime,
-    }))
+    const documents = (
+      await Promise.all(paths.map(p => this.plugin.documentsRepository.getDocument(p)))
+    ).filter(d => !!d?.path)
+
+    logVerbose('Sorting documents to first index markdown')
+    documents.sort((a, b) =>
+      a.path.endsWith('.md') === b.path.endsWith('.md') ? 0 : a.path.endsWith('.md') ? -1 : 1,
+    )
 
     try {
-      this.nativeIndex.addDocuments(nativeDocs)
+      this.nativeIndex.addDocuments(documents)
       this.nativeIndex.commit()
-      // Update sidecar
       for (const doc of documents) this.indexedDocuments.set(doc.path, doc.mtime)
     } catch (e) {
       console.error('Ferrisearch - Error adding documents', e)
     }
   }
 
-  /**
-   * Remove documents from the index
-   */
   public removeFromPaths(paths: string[]): void {
     if (!this.nativeIndex) return
     for (const p of paths) this.indexedDocuments.delete(p)
@@ -211,18 +162,11 @@ export class SearchEngine {
     }
   }
 
-  /**
-   * Search the index and return raw results
-   */
   public async search(
     query: Query,
     options: { prefixLength: number; singleFilePath?: string },
   ): Promise<NativeSearchResult[]> {
-    if (!this.nativeIndex) return []
-    const settings = this.plugin.settings
-    if (query.isEmpty()) {
-      return []
-    }
+    if (!this.nativeIndex || query.isEmpty()) return []
 
     logVerbose('=== New search ===')
     logVerbose('Starting search for', query)
@@ -230,29 +174,29 @@ export class SearchEngine {
     const searchText = query.segmentsToStr()
     if (!searchText) return []
 
-    const nativeOptions: NativeSearchOptions = {
-      fieldBoosts: {
-        basename: settings.weightBasename,
-        displayTitle: settings.weightBasename,
-        aliases: settings.weightBasename,
-        directory: settings.weightDirectory,
-        headings1: settings.weightH1,
-        headings2: settings.weightH2,
-        headings3: settings.weightH3,
-        tagsText: settings.weightUnmarkedTags,
-        unmarkedTags: settings.weightUnmarkedTags,
-        content: 1,
-      },
-      fuzziness: settings.fuzziness,
-      prefixLength: options.prefixLength,
-      limit: 50,
-      singleFilePath: options.singleFilePath,
-      recencyBoost: settings.recencyBoost,
-    }
+    const { settings } = this.plugin
 
     let results: NativeSearchResult[]
     try {
-      results = this.nativeIndex.search(searchText, nativeOptions)
+      results = this.nativeIndex.search(searchText, {
+        fieldBoosts: {
+          basename: settings.weightBasename,
+          displayTitle: settings.weightBasename,
+          aliases: settings.weightBasename,
+          directory: settings.weightDirectory,
+          headings1: settings.weightH1,
+          headings2: settings.weightH2,
+          headings3: settings.weightH3,
+          tagsText: settings.weightUnmarkedTags,
+          unmarkedTags: settings.weightUnmarkedTags,
+          content: 1,
+        },
+        fuzziness: settings.fuzziness,
+        prefixLength: options.prefixLength,
+        limit: 50,
+        singleFilePath: options.singleFilePath,
+        recencyBoost: settings.recencyBoost,
+      })
     } catch (e) {
       console.error('Ferrisearch - Search error', e)
       return []
@@ -260,15 +204,15 @@ export class SearchEngine {
 
     logVerbose(`Found ${results.length} results`, results)
 
-    // Post-filter: extension filter
+    // Post-filter: extension
     if (query.query.ext?.length) {
       results = results.filter(r => {
-        const ext = `.${r.path.split('.').pop()}`
+        const ext = `.${r.path.slice(r.path.lastIndexOf('.') + 1)}`
         return query.query.ext?.some(e => ext.startsWith(e.startsWith('.') ? e : `.${e}`))
       })
     }
 
-    // Post-filter: path filter
+    // Post-filter: path include/exclude
     if (query.query.path) {
       results = results.filter(r =>
         query.query.path?.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
@@ -280,109 +224,87 @@ export class SearchEngine {
       )
     }
 
-    if (!results.length) {
-      return []
-    }
+    if (!results.length) return []
 
     if (options.singleFilePath) {
       return results.filter(r => r.path === options.singleFilePath)
     }
 
-    logVerbose('searching with downranked folders', settings.downrankedFoldersFilters)
-
     // Hide or downrank excluded files
     if (settings.hideExcluded) {
-      results = results.filter(
-        result => !this.plugin.app.metadataCache.isUserIgnored?.(result.path),
-      )
+      results = results.filter(r => !this.plugin.app.metadataCache.isUserIgnored?.(r.path))
     } else {
-      results.forEach(result => {
-        if (this.plugin.app.metadataCache.isUserIgnored?.(result.path)) {
-          result.score /= 10
-        }
-      })
+      for (const r of results) {
+        if (this.plugin.app.metadataCache.isUserIgnored?.(r.path)) r.score /= 10
+      }
     }
 
-    // Tag boost
+    // Downrank folders + tag boost
+    logVerbose('searching with downranked folders', settings.downrankedFoldersFilters)
     const tags = query.getTags()
-    for (const result of results) {
-      const path = result.path
-      if (settings.downrankedFoldersFilters.length > 0) {
-        let downrankingFolder = false
-        settings.downrankedFoldersFilters.forEach(filter => {
-          if (path.startsWith(filter)) {
-            if (path === filter || path.startsWith(`${filter}/`)) {
-              downrankingFolder = true
-            }
-          }
-        })
-        if (downrankingFolder) {
-          result.score /= 10
-        }
-        const pathParts = path.split('/')
-        for (let i = 0; i < pathParts.length; i++) {
-          if (settings.downrankedFoldersFilters.includes(pathParts[i])) {
-            result.score /= 10
-            break
-          }
-        }
-      }
+    const filters = settings.downrankedFoldersFilters
 
-      // Tag boost
+    for (const r of results) {
+      if (filters.length) {
+        const shouldDownrank =
+          filters.some(f => r.path === f || r.path.startsWith(`${f}/`)) ||
+          r.path.split('/').some(part => filters.includes(part))
+        if (shouldDownrank) r.score /= 10
+      }
       for (const tag of tags) {
-        if ((result.tags ?? []).includes(tag)) {
-          result.score *= 100
-        }
+        if (r.tags?.includes(tag)) r.score *= 100
       }
     }
 
-    // Sort and limit
-    results = results.sort((a, b) => b.score - a.score).slice(0, 50)
+    results.sort((a, b) => b.score - a.score)
+    results = results.slice(0, 50)
 
     logVerbose('Filtered results:', results)
 
-    // Exact term filter
+    // Fetch documents once for both exact-term and exclusion filters
     const exactTerms = query.getExactTerms()
-    if (exactTerms.length) {
-      logVerbose('Filtering with quoted terms: ', exactTerms)
-      const documents = await Promise.all(
-        results.map(async result => await this.plugin.documentsRepository.getDocument(result.path)),
-      )
-      results = results.filter(r => {
-        const document = documents.find(d => d.path === r.path)
-        const title = document?.path.toLowerCase() ?? ''
-        const content = (document?.cleanedContent ?? '').toLowerCase()
-        return exactTerms.every(q => content.includes(q) || removeDiacritics(title).includes(q))
-      })
-    }
-
-    // Exclusion filter
     const exclusions = query.query.exclude.text
-    if (exclusions.length) {
-      logVerbose('Filtering with exclusions')
-      const documents = await Promise.all(
-        results.map(async result => await this.plugin.documentsRepository.getDocument(result.path)),
+    if (exactTerms.length || exclusions.length) {
+      const docMap = new Map<string, IndexedDocument>()
+      await Promise.all(
+        results.map(async r => {
+          docMap.set(r.path, await this.plugin.documentsRepository.getDocument(r.path))
+        }),
       )
-      results = results.filter(r => {
-        const content = (documents.find(d => d.path === r.path)?.content ?? '').toLowerCase()
-        return exclusions.every(q => !content.includes(q))
-      })
+
+      if (exactTerms.length) {
+        logVerbose('Filtering with quoted terms:', exactTerms)
+        results = results.filter(r => {
+          const doc = docMap.get(r.path)
+          const title = removeDiacritics(doc?.path.toLowerCase() ?? '')
+          const content = (doc?.cleanedContent ?? '').toLowerCase()
+          return exactTerms.every(q => content.includes(q) || title.includes(q))
+        })
+      }
+
+      if (exclusions.length) {
+        logVerbose('Filtering with exclusions')
+        results = results.filter(r => {
+          const content = (docMap.get(r.path)?.content ?? '').toLowerCase()
+          return exclusions.every(q => !content.includes(q))
+        })
+      }
     }
 
     // Dedupe
-    results = results.filter(
-      (result, index, arr) => arr.findIndex(t => t.path === result.path) === index,
-    )
+    const seen = new Set<string>()
+    results = results.filter(r => {
+      if (seen.has(r.path)) return false
+      seen.add(r.path)
+      return true
+    })
 
     return results
   }
 
-  /**
-   * Search and return ResultNote[] for display
-   */
   public async getSuggestions(
     query: Query,
-    options?: Partial<{ singleFilePath?: string }>,
+    options?: { singleFilePath?: string },
   ): Promise<ResultNote[]> {
     const results = await this.search(query, {
       prefixLength: 1,
@@ -390,21 +312,17 @@ export class SearchEngine {
     })
 
     const documents = await Promise.all(
-      results.map(async result => await this.plugin.documentsRepository.getDocument(result.path)),
+      results.map(r => this.plugin.documentsRepository.getDocument(r.path)),
     )
 
     // Inject embeds
-    let total = documents.length
-    for (let i = 0; i < total; i++) {
+    const maxEmbeds = this.plugin.settings.maxEmbeds
+    for (let i = 0; i < documents.length; i++) {
       const doc = documents[i]
       if (!doc) continue
 
-      const embeds = this.plugin.embedsRepository
-        .getEmbeds(doc.path)
-        .slice(0, this.plugin.settings.maxEmbeds)
-
+      const embeds = this.plugin.embedsRepository.getEmbeds(doc.path).slice(0, maxEmbeds)
       for (const embed of embeds) {
-        total++
         const newDoc = await this.plugin.documentsRepository.getDocument(embed)
         documents.splice(i + 1, 0, newDoc)
         results.splice(i + 1, 0, {
@@ -422,17 +340,18 @@ export class SearchEngine {
       }
     }
 
-    // Map to ResultNote
-    const resultNotes = results.map(result => {
+    return results.map(result => {
       logVerbose('Locating matches for', result.path)
-      let note = documents.find(d => d.path === result.path)
-      if (!note) {
-        console.warn(`Ferrisearch - Note "${result.path}" not in the live cache`)
-        note = {
+      const note =
+        documents.find(d => d.path === result.path) ??
+        ({
           content: '',
           basename: result.path,
           path: result.path,
-        } as IndexedDocument
+        } as IndexedDocument)
+
+      if (!documents.find(d => d.path === result.path)) {
+        console.warn(`Ferrisearch - Note "${result.path}" not in the live cache`)
       }
 
       const foundWords = [...result.matchedTerms, ...query.getExactTerms(), ...query.getTags()]
@@ -440,18 +359,9 @@ export class SearchEngine {
 
       const matches = this.plugin.textProcessor.getMatches(note.content, foundWords, query)
       logVerbose(`Matches for note "${note.path}"`, matches)
-      const resultNote: ResultNote = {
-        score: result.score,
-        foundWords,
-        matches,
-        isEmbed: result.isEmbed ?? false,
-        ...note,
-      }
-      return resultNote
-    })
 
-    logVerbose('Suggestions:', resultNotes)
-    return resultNotes
+      return { score: result.score, foundWords, matches, isEmbed: result.isEmbed ?? false, ...note }
+    })
   }
 
   private getIndexPath(): string {
@@ -460,12 +370,10 @@ export class SearchEngine {
   }
 
   private getSidecarPath(): string {
-    const configDir = this.plugin.app.vault.configDir
-    return `${configDir}/plugins/ferrisearch/index-manifest.json`
+    return `${this.plugin.app.vault.configDir}/plugins/ferrisearch/index-manifest.json`
   }
 
   private loadNativeModule(): NativeSearchIndex {
-    // Try to load the native module for the current platform
     const path = require('node:path')
     const pluginDir = path.join(
       this.plugin.app.vault.adapter.basePath,
@@ -474,10 +382,9 @@ export class SearchEngine {
       'ferrisearch',
     )
 
-    // Try platform-specific names
     const platform = process.platform
     const arch = process.arch
-    const candidates = [`ferrisearch.${platform}-${arch}.node`, `ferrisearch.node`]
+    const candidates = [`ferrisearch.${platform}-${arch}.node`, 'ferrisearch.node']
 
     for (const candidate of candidates) {
       try {
@@ -486,7 +393,6 @@ export class SearchEngine {
         logVerbose(`Failed to load ${candidate}:`, e)
       }
     }
-
     throw new Error(`Failed to load native module. Tried: ${candidates.join(', ')}`)
   }
 }

@@ -8,30 +8,29 @@ export async function openNote(
   newPane = false,
   newLeaf = false,
 ): Promise<void> {
-  let alreadyOpenAndPinned = false
-  app.workspace.iterateAllLeaves(leaf => {
-    if (leaf.view instanceof MarkdownView) {
+  let handled = false
+  if (!newPane) {
+    app.workspace.iterateAllLeaves(leaf => {
+      if (handled) return
       if (
-        !newPane &&
+        leaf.view instanceof MarkdownView &&
         leaf.getViewState().state?.file === item.path &&
         leaf.getViewState()?.pinned
       ) {
         app.workspace.setActiveLeaf(leaf, { focus: true })
-        alreadyOpenAndPinned = true
+        handled = true
       }
-    }
-  })
+    })
+  }
 
-  if (!alreadyOpenAndPinned) {
+  if (!handled) {
     await app.workspace.openLinkText(item.path, '', newLeaf ? 'split' : newPane)
   }
 
   const view = app.workspace.getActiveViewOfType(MarkdownView)
-  if (!view) {
-    return
-  }
-  const pos = view.editor.offsetToPos(offset)
+  if (!view) return
 
+  const pos = view.editor.offsetToPos(offset)
   view.editor.setCursor(pos)
   view.editor.scrollIntoView({
     from: { line: pos.line - 10, ch: 0 },

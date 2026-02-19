@@ -3,15 +3,17 @@ import type FerrisearchPlugin from '../main'
 import { logVerbose } from '../tools/utils'
 
 export class EmbedsRepository {
-  private embeds: Map<string, Set<string>> = new Map()
+  private embeds = new Map<string, Set<string>>()
 
   constructor(private plugin: FerrisearchPlugin) {}
 
   public addEmbed(embed: string, notePath: string): void {
-    if (!this.embeds.has(embed)) {
-      this.embeds.set(embed, new Set())
+    let set = this.embeds.get(embed)
+    if (!set) {
+      set = new Set()
+      this.embeds.set(embed, set)
     }
-    this.embeds.get(embed)?.add(notePath)
+    set.add(notePath)
   }
 
   public removeFile(filePath: string): void {
@@ -20,38 +22,33 @@ export class EmbedsRepository {
   }
 
   public renameFile(oldPath: string, newPath: string): void {
-    if (this.embeds.has(oldPath)) {
-      this.embeds.set(newPath, this.embeds.get(oldPath) ?? new Set())
+    const refs = this.embeds.get(oldPath)
+    if (refs) {
+      this.embeds.set(newPath, refs)
       this.embeds.delete(oldPath)
     }
-    this.embeds.forEach((referencedBy, _key) => {
-      if (referencedBy.has(oldPath)) {
-        referencedBy.delete(oldPath)
-        referencedBy.add(newPath)
-      }
-    })
+    for (const referencedBy of this.embeds.values()) {
+      if (referencedBy.delete(oldPath)) referencedBy.add(newPath)
+    }
   }
 
   public refreshEmbedsForNote(filePath: string): void {
-    this.embeds.forEach((referencedBy, _key) => {
-      if (referencedBy.has(filePath)) {
-        referencedBy.delete(filePath)
-      }
-    })
+    for (const referencedBy of this.embeds.values()) {
+      referencedBy.delete(filePath)
+    }
     this.addEmbedsForNote(filePath)
   }
 
   public getEmbeds(pathEmbedded: string): string[] {
-    const embeds = this.embeds.has(pathEmbedded) ? [...(this.embeds.get(pathEmbedded) ?? [])] : []
-    return embeds
+    return [...(this.embeds.get(pathEmbedded) ?? [])]
   }
 
   public async writeToCache(): Promise<void> {
     logVerbose('Writing embeds to cache')
-    const data: { embedded: string; referencedBy: string[] }[] = []
-    for (const [path, embedsList] of this.embeds) {
-      data.push({ embedded: path, referencedBy: [...embedsList] })
-    }
+    const data = [...this.embeds].map(([embedded, refs]) => ({
+      embedded,
+      referencedBy: [...refs],
+    }))
     await this.plugin.database.saveEmbeds(data)
   }
 
@@ -63,12 +60,10 @@ export class EmbedsRepository {
         logVerbose('No embeds in cache')
         return
       }
-      for (const { embedded: path, referencedBy: embeds } of embedsArr) {
-        for (const embed of embeds) {
-          this.addEmbed(path, embed)
-        }
+      for (const { embedded, referencedBy } of embedsArr) {
+        for (const ref of referencedBy) this.addEmbed(embedded, ref)
       }
-    } catch (_e) {
+    } catch {
       this.plugin.database.clearCache()
       console.error('Ferrisearch - Error while loading embeds cache')
     }
@@ -76,12 +71,10 @@ export class EmbedsRepository {
 
   private addEmbedsForNote(notePath: string): void {
     const embeds = (this.plugin.app.metadataCache.getCache(notePath)?.embeds ?? [])
-      .map(embed =>
-        this.plugin.app.metadataCache.getFirstLinkpathDest(getLinkpath(embed.link), notePath),
-      )
-      .filter(o => !!o)
+      .map(e => this.plugin.app.metadataCache.getFirstLinkpathDest(getLinkpath(e.link), notePath))
+      .filter(Boolean)
     for (const embed of embeds) {
-      this.addEmbed(embed?.path, notePath)
+      if (embed) this.addEmbed(embed.path, notePath)
     }
   }
 }

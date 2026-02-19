@@ -1,4 +1,4 @@
-import { type App, type Plugin, PluginSettingTab, Setting } from 'obsidian'
+import { type Plugin, PluginSettingTab, Setting } from 'obsidian'
 import { K_DISABLE_FERRISEARCH, Observable, RecencyCutoff } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { enableVerboseLogging } from '../tools/utils'
@@ -69,7 +69,7 @@ export class SettingsTab extends PluginSettingTab {
   }
 }
 
-export function getDefaultSettings(_app?: App): FerrisearchSettings {
+export function getDefaultSettings(): FerrisearchSettings {
   return {
     hideExcluded: false,
     recencyBoost: RecencyCutoff.Disabled,
@@ -98,7 +98,7 @@ export function getDefaultSettings(_app?: App): FerrisearchSettings {
 export let settings: FerrisearchSettings
 
 export async function loadSettings(plugin: Plugin): Promise<FerrisearchSettings> {
-  settings = Object.assign({}, getDefaultSettings(plugin.app), await plugin.loadData())
+  settings = Object.assign({}, getDefaultSettings(), await plugin.loadData())
   showExcerpt.set(settings.showExcerpt)
   enableVerboseLogging(settings.verboseLogging)
   return settings

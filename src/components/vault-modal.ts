@@ -36,7 +36,6 @@ export function renderVaultModal(
 
   // Build DOM
 
-  // Input container
   const inputContainer = document.createElement('div')
   inputContainer.className = 'ferrisearch-input-container'
   const inputField = document.createElement('div')
@@ -48,7 +47,6 @@ export function renderVaultModal(
   input.spellcheck = false
   inputField.appendChild(input)
   inputContainer.appendChild(inputField)
-
   container.appendChild(inputContainer)
 
   // Indexing status
@@ -59,24 +57,18 @@ export function renderVaultModal(
   statusDiv.style.display = 'none'
   container.appendChild(statusDiv)
 
-  // Results container
+  // Results
   const resultsDiv = document.createElement('div')
   resultsDiv.className = 'prompt-results'
   resultsDiv.addEventListener('mousedown', e => e.preventDefault())
   container.appendChild(resultsDiv)
 
-  // Status message (no results / searching)
-  const statusMsgDiv = document.createElement('div')
-  statusMsgDiv.style.textAlign = 'center'
-  resultsDiv.appendChild(statusMsgDiv)
-
-  // Instructions footer
+  // Instructions
   const ctrlKey = getCtrlKeyLabel()
   const altKey = getAltKeyLabel()
-
   const instructions = document.createElement('div')
   instructions.className = 'prompt-instructions'
-  const hints = [
+  for (const [cmd, desc] of [
     ['↑↓', 'to navigate'],
     ['↵', 'to open'],
     ['Tab', 'to switch to In-File Search'],
@@ -85,8 +77,7 @@ export function renderVaultModal(
     [`${ctrlKey} o`, 'to open in the background'],
     [`${altKey} ↵`, 'to insert a link'],
     ['Esc', 'to close'],
-  ]
-  for (const [cmd, desc] of hints) {
+  ] as const) {
     const inst = document.createElement('div')
     inst.className = 'prompt-instruction'
     const cmdSpan = document.createElement('span')
@@ -100,20 +91,16 @@ export function renderVaultModal(
   }
   container.appendChild(instructions)
 
-  // Set initial value & focus
-  if (previousQuery) {
-    input.value = previousQuery
-  }
-  // Focus/select after mount
-  const focusAsync = async () => {
+  // Focus
+  if (previousQuery) input.value = previousQuery
+  ;(async () => {
     if (Platform.isMobileApp) await wait(200)
     input.focus()
     if (Platform.isMobileApp) await wait(200)
     input.select()
-  }
-  focusAsync()
+  })()
 
-  // Debounced input handler
+  // Input handling
   const INPUT_DEBOUNCE_MS = 300
   input.addEventListener('input', () => {
     searchQuery = input.value
@@ -136,26 +123,21 @@ export function renderVaultModal(
     }, INPUT_DEBOUNCE_MS)
   }
 
-  // Indexing step subscription
+  // Indexing status
   const unsubIndexing = indexingStep.subscribe(step => {
-    switch (step) {
-      case IndexingStepType.LoadingCache:
-        setStatusText('Loading cache...')
-        break
-      case IndexingStepType.ReadingFiles:
-        setStatusText('Reading files...')
-        break
-      case IndexingStepType.IndexingFiles:
-        setStatusText('Indexing files...')
-        break
-      case IndexingStepType.WritingCache:
-        debouncedUpdate()
-        setStatusText('Updating cache...')
-        break
-      default:
-        debouncedUpdate()
-        setStatusText('')
-        break
+    if (step === IndexingStepType.Done) {
+      debouncedUpdate()
+      setStatusText('')
+    } else if (step === IndexingStepType.WritingCache) {
+      debouncedUpdate()
+      setStatusText('Updating cache...')
+    } else {
+      const labels = {
+        [IndexingStepType.LoadingCache]: 'Loading cache...',
+        [IndexingStepType.ReadingFiles]: 'Reading files...',
+        [IndexingStepType.IndexingFiles]: 'Indexing files...',
+      }
+      setStatusText(labels[step] ?? '')
     }
   })
 
@@ -174,12 +156,10 @@ export function renderVaultModal(
     searching = true
     renderStatusMessage()
     const searchId = ++currentSearchId
-    const query = new Query(searchQuery, {
-      ignoreDiacritics: plugin.settings.ignoreDiacritics,
-    })
+    const query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
     try {
       const results = await plugin.searchEngine.getSuggestions(query)
-      if (searchId !== currentSearchId) return // cancelled
+      if (searchId !== currentSearchId) return
       resultNotes = results
       selectedIndex = 0
       searching = false
@@ -201,8 +181,7 @@ export function renderVaultModal(
   }
 
   async function loadHistory() {
-    const history = (await plugin.searchHistory.getHistory()).filter(s => s)
-    historyItems = history.slice(0, 10)
+    historyItems = (await plugin.searchHistory.getHistory()).filter(Boolean).slice(0, 10)
     selectedIndex = 0
     renderResults()
   }
@@ -216,16 +195,12 @@ export function renderVaultModal(
     updateResults()
   }
 
-  // Render results
+  // Rendering
   function renderResults() {
-    // Cleanup old items
     for (const el of resultEls) cleanupResultItem(el)
     resultEls = []
-
-    // Clear container (keep statusMsgDiv)
     resultsDiv.innerHTML = ''
 
-    // Show history when search is empty
     if (isShowingHistory()) {
       for (let i = 0; i < historyItems.length; i++) {
         const wrapper = document.createElement('div')
@@ -244,7 +219,6 @@ export function renderVaultModal(
         item.appendChild(text)
 
         updateSelection(item, i === selectedIndex)
-
         item.addEventListener('mousemove', () => setSelectedIndex(i))
         item.addEventListener('click', () => {
           setSelectedIndex(i)
@@ -257,37 +231,34 @@ export function renderVaultModal(
       return
     }
 
-    // Intersection observer for lazy loading
+    // Lazy-loading results
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const wrapper = entry.target as HTMLElement
-            const idx = parseInt(wrapper.dataset.lazyIdx ?? '0', 10)
-            const note = resultNotes[idx]
-            if (note && !wrapper.dataset.loaded) {
-              wrapper.dataset.loaded = '1'
-              wrapper.style.height = 'auto'
-              const item = createVaultResultItem(note, plugin)
-              updateSelection(item, idx === selectedIndex)
-              item.addEventListener('mousemove', () => {
+          if (!entry.isIntersecting) continue
+          const wrapper = entry.target as HTMLElement
+          const idx = parseInt(wrapper.dataset.lazyIdx ?? '0', 10)
+          const note = resultNotes[idx]
+          if (note && !wrapper.dataset.loaded) {
+            wrapper.dataset.loaded = '1'
+            wrapper.style.height = 'auto'
+            const item = createVaultResultItem(note, plugin)
+            updateSelection(item, idx === selectedIndex)
+            item.addEventListener('mousemove', () => setSelectedIndex(idx))
+            item.addEventListener('click', evt => {
+              setSelectedIndex(idx)
+              onClick(evt)
+            })
+            item.addEventListener('auxclick', evt => {
+              if (evt.button === 1) {
                 setSelectedIndex(idx)
-              })
-              item.addEventListener('click', evt => {
-                setSelectedIndex(idx)
-                onClick(evt)
-              })
-              item.addEventListener('auxclick', evt => {
-                if (evt.button === 1) {
-                  setSelectedIndex(idx)
-                  openNoteInNewPane()
-                }
-              })
-              wrapper.appendChild(item)
-              resultEls.push(item)
-            }
-            observer.unobserve(wrapper)
+                openNoteInNewPane()
+              }
+            })
+            wrapper.appendChild(item)
+            resultEls.push(item)
           }
+          observer.unobserve(wrapper)
         }
       },
       { root: resultsDiv, rootMargin: '500px' },
@@ -303,21 +274,18 @@ export function renderVaultModal(
     }
     currentObserver = observer
 
-    // Status message
     renderStatusMessage()
   }
 
   function renderStatusMessage() {
-    // Remove existing status message if present
-    const existing = resultsDiv.querySelector('.ferrisearch-status-msg')
-    if (existing) existing.remove()
+    resultsDiv.querySelector('.ferrisearch-status-msg')?.remove()
 
-    let msg = ''
-    if (!resultNotes.length && searchQuery && !searching) {
-      msg = 'We found 0 results for your search here.'
-    } else if (searching) {
-      msg = 'Searching...'
-    }
+    const msg =
+      !resultNotes.length && searchQuery && !searching
+        ? 'We found 0 results for your search here.'
+        : searching
+          ? 'Searching...'
+          : ''
 
     if (msg) {
       const msgDiv = document.createElement('div')
@@ -335,56 +303,45 @@ export function renderVaultModal(
   }
 
   function updateSelectionUI(prevIdx: number, newIdx: number) {
-    // Update old
     const prevEl = getResultElByIndex(prevIdx)
     if (prevEl) updateSelection(prevEl, false)
-    // Update new
     const newEl = getResultElByIndex(newIdx)
     if (newEl) updateSelection(newEl, true)
   }
 
   function getResultElByIndex(idx: number): HTMLElement | null {
-    const wrapper = resultsDiv.querySelector(`[data-lazy-idx="${idx}"]`) as HTMLElement | null
-    if (!wrapper) return null
-    return wrapper.querySelector('.ferrisearch-result') as HTMLElement | null
+    return resultsDiv
+      .querySelector(`[data-lazy-idx="${idx}"]`)
+      ?.querySelector('.ferrisearch-result') as HTMLElement | null
   }
 
   function scrollIntoView() {
     const note = getSelectedNote()
     if (note) {
-      const el = resultsDiv.querySelector(`[data-result-id="${CSS.escape(note.path)}"]`)
-      el?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
+      resultsDiv
+        .querySelector(`[data-result-id="${CSS.escape(note.path)}"]`)
+        ?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
     }
   }
 
   // Actions
   function saveCurrentQuery() {
-    if (searchQuery) {
-      plugin.searchHistory.addToHistory(searchQuery)
-    }
+    if (searchQuery) plugin.searchHistory.addToHistory(searchQuery)
   }
 
   function openSearchResult(note: ResultNote, newPane = false, newLeaf = false) {
     saveCurrentQuery()
-    const offset = note.matches?.[0]?.offset ?? 0
-    openNote(plugin.app, note, offset, newPane, newLeaf)
+    openNote(plugin.app, note, note.matches?.[0]?.offset ?? 0, newPane, newLeaf)
   }
 
   function onClick(evt?: MouseEvent) {
     const note = getSelectedNote()
     if (!note) return
-    if (evt?.ctrlKey) {
-      openNoteInNewPane()
-    } else {
-      openNoteAndCloseModal()
-    }
+    evt?.ctrlKey ? openNoteInNewPane() : openNoteAndCloseModal()
   }
 
   function openNoteAndCloseModal() {
-    if (isShowingHistory()) {
-      selectHistoryItem(selectedIndex)
-      return
-    }
+    if (isShowingHistory()) return selectHistoryItem(selectedIndex)
     const note = getSelectedNote()
     if (!note) return
     openSearchResult(note)
@@ -393,8 +350,7 @@ export function renderVaultModal(
 
   function openNoteInBackground() {
     const note = getSelectedNote()
-    if (!note) return
-    openSearchResult(note, true)
+    if (note) openSearchResult(note, true)
   }
 
   function openNoteInNewPane() {
@@ -431,9 +387,8 @@ export function renderVaultModal(
         selectedNote.displayTitle,
       )
     } else {
-      const maybeDisplayTitle =
-        selectedNote.displayTitle === '' ? '' : `|${selectedNote.displayTitle}`
-      link = `[[${selectedNote.basename}.${getExtension(selectedNote.path)}${maybeDisplayTitle}]]`
+      const suffix = selectedNote.displayTitle ? `|${selectedNote.displayTitle}` : ''
+      link = `[[${selectedNote.basename}.${getExtension(selectedNote.path)}${suffix}]]`
     }
 
     const cursor = view.editor.getCursor()
@@ -452,7 +407,7 @@ export function renderVaultModal(
 
     if (selectedNote) {
       const file = plugin.app.vault.getAbstractFileByPath(selectedNote.path)
-      if (file && file instanceof TFile) {
+      if (file instanceof TFile) {
         new FerrisearchInFileModal(plugin, file, searchQuery).open()
       }
     } else {
@@ -469,15 +424,18 @@ export function renderVaultModal(
     const prev = selectedIndex
     selectedIndex = loopIndex(selectedIndex + dir, total)
     updateSelectionUI(prev, selectedIndex)
-    if (isShowingHistory()) {
-      const wrapper = resultsDiv.querySelector(`[data-lazy-idx="${selectedIndex}"]`)
-      wrapper?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
+
+    const wrapper = isShowingHistory()
+      ? resultsDiv.querySelector(`[data-lazy-idx="${selectedIndex}"]`)
+      : null
+    if (wrapper) {
+      wrapper.scrollIntoView({ behavior: 'auto', block: 'nearest' })
     } else {
       scrollIntoView()
     }
   }
 
-  // Register event bus
+  // Event bus
   eventBus.enable('vault')
   eventBus.on('vault', Action.Enter, openNoteAndCloseModal)
   eventBus.on('vault', Action.OpenInBackground, openNoteInBackground)
@@ -490,13 +448,12 @@ export function renderVaultModal(
 
   // Initial load
   plugin.notesIndexer.refreshIndex().then(() => {
-    if (!cancelled) {
-      if (searchQuery) {
-        updateResults()
-      } else {
-        searching = false
-        loadHistory()
-      }
+    if (cancelled) return
+    if (searchQuery) {
+      updateResults()
+    } else {
+      searching = false
+      loadHistory()
     }
   })
 
@@ -506,7 +463,7 @@ export function renderVaultModal(
       if (debounceTimer !== null) clearTimeout(debounceTimer)
       eventBus.disable('vault')
       unsubIndexing()
-      if (currentObserver) currentObserver.disconnect()
+      currentObserver?.disconnect()
       for (const el of resultEls) cleanupResultItem(el)
     },
   }

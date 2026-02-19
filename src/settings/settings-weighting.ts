@@ -20,7 +20,7 @@ export function injectSettingsWeighting(
       })
   }
 
-  const defaultSettings = getDefaultSettings(plugin.app)
+  const defaultSettings = getDefaultSettings()
 
   new Setting(containerEl).setName('Results weighting').setHeading()
 

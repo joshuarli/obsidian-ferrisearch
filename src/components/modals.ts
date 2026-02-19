@@ -13,8 +13,7 @@ abstract class FerrisearchModal extends Modal {
     this.modalEl.removeClass('modal')
     this.modalEl.tabIndex = -1
 
-    // #region Up/Down navigation
-
+    // Arrow key navigation
     this.scope.register([], 'ArrowDown', e => {
       e.preventDefault()
       eventBus.emit(Action.ArrowDown)
@@ -24,31 +23,17 @@ abstract class FerrisearchModal extends Modal {
       eventBus.emit(Action.ArrowUp)
     })
 
-    // Ctrl+j/k (vim-like)
-    for (const key of [
+    // Vim-like navigation (Ctrl/Cmd + j/k/n/p)
+    for (const { k, dir } of [
       { k: 'J', dir: 'down' },
       { k: 'K', dir: 'up' },
-    ] as const) {
-      for (const modifier of ['Ctrl', 'Mod'] as const) {
-        this.scope.register([modifier], key.k, _e => {
-          eventBus.emit(`arrow-${key.dir}`)
-        })
-      }
-    }
-
-    // Ctrl+n/p (vim-like)
-    for (const key of [
       { k: 'N', dir: 'down' },
       { k: 'P', dir: 'up' },
     ] as const) {
-      for (const modifier of ['Ctrl', 'Mod'] as const) {
-        this.scope.register([modifier], key.k, _e => {
-          eventBus.emit(`arrow-${key.dir}`)
-        })
+      for (const mod of ['Ctrl', 'Mod'] as const) {
+        this.scope.register([mod], k, () => eventBus.emit(`arrow-${dir}`))
       }
     }
-
-    // #endregion Up/Down navigation
 
     // Open in new pane
     this.scope.register(['Mod'], 'Enter', e => {
@@ -95,7 +80,6 @@ export class FerrisearchVaultModal extends FerrisearchModal {
   constructor(plugin: FerrisearchPlugin, query?: string) {
     super(plugin)
 
-    // Selected text in the editor
     const selectedText = plugin.app.workspace
       .getActiveViewOfType(MarkdownView)
       ?.editor.getSelection()
@@ -106,19 +90,12 @@ export class FerrisearchVaultModal extends FerrisearchModal {
       previousQuery: query || selectedText || '',
     })
 
-    this.onClose = () => {
-      handle.destroy()
-    }
+    this.onClose = () => handle.destroy()
   }
 }
 
 export class FerrisearchInFileModal extends FerrisearchModal {
-  constructor(
-    plugin: FerrisearchPlugin,
-    file: TFile,
-    searchQuery: string = '',
-    parent?: FerrisearchModal,
-  ) {
+  constructor(plugin: FerrisearchPlugin, file: TFile, searchQuery = '', parent?: FerrisearchModal) {
     super(plugin)
 
     const handle = renderInFileModal(this.modalEl, {
@@ -129,13 +106,10 @@ export class FerrisearchInFileModal extends FerrisearchModal {
       previousQuery: searchQuery,
     })
 
-    if (parent) {
-      parent.containerEl.toggleVisibility(false)
-    }
+    if (parent) parent.containerEl.toggleVisibility(false)
+
     this.onClose = () => {
-      if (parent) {
-        parent.containerEl.toggleVisibility(true)
-      }
+      if (parent) parent.containerEl.toggleVisibility(true)
       handle.destroy()
     }
   }

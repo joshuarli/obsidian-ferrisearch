@@ -1,26 +1,20 @@
-import { escapeRegExp } from 'lodash-es'
 import { Notice } from 'obsidian'
 import { excerptAfter, excerptBefore, type SearchMatch } from '../globals'
 import type FerrisearchPlugin from '../main'
 import type { Query } from '../search/query'
-import { removeDiacritics, warnVerbose } from './utils'
+import { escapeRegExp, removeDiacritics, warnVerbose } from './utils'
 
 export class TextProcessor {
   constructor(private plugin: FerrisearchPlugin) {}
 
   public highlightText(text: string, matches: SearchMatch[]): string {
-    const highlightClass = `suggestion-highlight ferrisearch-highlight ${
+    if (!matches.length) return text
+    const cls = `suggestion-highlight ferrisearch-highlight ${
       this.plugin.settings.highlight ? 'ferrisearch-default-highlight' : ''
     }`
-
-    if (!matches.length) {
-      return text
-    }
     try {
-      return text.replace(
-        new RegExp(`(${matches.map(item => escapeRegExp(item.match)).join('|')})`, 'giu'),
-        `<span class="${highlightClass}">$1</span>`,
-      )
+      const pattern = matches.map(m => escapeRegExp(m.match)).join('|')
+      return text.replace(new RegExp(`(${pattern})`, 'giu'), `<span class="${cls}">$1</span>`)
     } catch (e) {
       console.error('Ferrisearch - Error in highlightText()', e)
       return text
@@ -29,12 +23,9 @@ export class TextProcessor {
 
   public stringsToRegex(strings: string[]): RegExp {
     if (!strings.length) return /^$/g
-
     strings.sort((a, b) => b.length - a.length)
-
-    const joined = `(${strings.map(s => `\\b${escapeRegExp(s)}\\b|${escapeRegExp(s)}`).join('|')})`
-
-    return new RegExp(`${joined}`, 'gui')
+    const joined = strings.map(s => `\\b${escapeRegExp(s)}\\b|${escapeRegExp(s)}`).join('|')
+    return new RegExp(`(${joined})`, 'gui')
   }
 
   public getMatches(text: string, words: string[], query?: Query): SearchMatch[] {
@@ -44,20 +35,18 @@ export class TextProcessor {
     if (this.plugin.settings.ignoreDiacritics) {
       text = removeDiacritics(text)
     }
+
     const startTime = Date.now()
-    let match: RegExpExecArray | null = null
     const matches: SearchMatch[] = []
     let count = 0
-    while (true) {
-      match = reg.exec(text)
-      if (match === null) break
+    for (let match = reg.exec(text); match; match = reg.exec(text)) {
       if (++count >= 100 || Date.now() - startTime > 50) {
         warnVerbose('Stopped getMatches at', count, 'results')
         break
       }
-      const matchStartIndex = match.index
-      const matchEndIndex = matchStartIndex + match[0].length
-      const originalMatch = originalText.substring(matchStartIndex, matchEndIndex).trim()
+      const originalMatch = originalText
+        .substring(match.index, match.index + match[0].length)
+        .trim()
       if (originalMatch && match.index >= 0) {
         matches.push({ match: originalMatch, offset: match.index })
       }
@@ -66,22 +55,18 @@ export class TextProcessor {
     if (query && (query.query.text.length > 1 || query.getExactTerms().length > 0)) {
       const best = text.indexOf(query.getBestStringForExcerpt())
       if (best > -1 && matches.find(m => m.offset === best)) {
-        matches.unshift({
-          offset: best,
-          match: query.getBestStringForExcerpt(),
-        })
+        matches.unshift({ offset: best, match: query.getBestStringForExcerpt() })
       }
     }
     return matches
   }
 
   public makeExcerpt(content: string, offset: number): string {
-    const settings = this.plugin.settings
     try {
-      const pos = offset ?? -1
-      const from = Math.max(0, pos - excerptBefore)
-      const to = Math.min(content.length, pos + excerptAfter)
-      if (pos > -1) {
+      const from = Math.max(0, offset - excerptBefore)
+      const to = Math.min(content.length, offset + excerptAfter)
+
+      if (offset > -1) {
         content =
           (from > 0 ? '…' : '') +
           content.slice(from, to).trim() +
@@ -89,31 +74,27 @@ export class TextProcessor {
       } else {
         content = content.slice(0, excerptAfter)
       }
-      if (settings.renderLineReturnInExcerpts) {
-        const lineReturn = new RegExp(/(?:\r\n|\r|\n)/g)
+
+      if (this.plugin.settings.renderLineReturnInExcerpts) {
         content = content
-          .split(lineReturn)
-          .filter(l => l)
+          .split(/\r\n|\r|\n/)
+          .filter(Boolean)
           .join('\n')
 
-        const last = content.lastIndexOf('\n', pos - from)
-
-        if (last > 0) {
-          content = content.slice(last)
-        }
+        const last = content.lastIndexOf('\n', offset - from)
+        if (last > 0) content = content.slice(last)
       }
 
       content = escapeHTML(content)
 
-      if (settings.renderLineReturnInExcerpts) {
+      if (this.plugin.settings.renderLineReturnInExcerpts) {
         content = content.trim().replaceAll('\n', '<br>')
       }
 
       return content
     } catch (e) {
       new Notice('Ferrisearch - Error while creating excerpt, see developer console')
-      console.error(`Ferrisearch - Error while creating excerpt`)
-      console.error(e)
+      console.error('Ferrisearch - Error while creating excerpt', e)
       return ''
     }
   }

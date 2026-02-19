@@ -12,7 +12,7 @@ import {
 } from '../tools/utils'
 
 export class DocumentsRepository {
-  private documents: Map<string, IndexedDocument> = new Map()
+  private documents = new Map<string, IndexedDocument>()
 
   constructor(private plugin: FerrisearchPlugin) {}
 
@@ -38,9 +38,8 @@ export class DocumentsRepository {
 
   public async getDocument(path: string): Promise<IndexedDocument> {
     const cached = this.documents.get(path)
-    if (cached) {
-      return cached
-    }
+    if (cached) return cached
+
     logVerbose('Generating IndexedDocument from', path)
     await this.addDocument(path)
     const document = this.documents.get(path)
@@ -63,26 +62,23 @@ export class DocumentsRepository {
 
   private async getAndMapIndexedDocument(path: string): Promise<IndexedDocument> {
     path = normalizePath(path)
-    const app = this.plugin.app
+    const { app } = this.plugin
     const file = app.vault.getAbstractFileByPath(path)
     if (!file) throw new Error(`Invalid file path: "${path}"`)
     if (!(file instanceof TFile)) throw new Error(`Not a TFile: "${path}"`)
 
-    const content: string = await app.vault.cachedRead(file)
-
+    const content = await app.vault.cachedRead(file)
     const metadata = app.metadataCache.getFileCache(file)
-
-    const displayTitle = metadata?.headings?.find(h => h.level === 1)?.heading ?? ''
     const tags = getTagsFromMetadata(metadata)
+
     return {
       basename: file.basename,
-      displayTitle,
+      displayTitle: metadata?.headings?.find(h => h.level === 1)?.heading ?? '',
       content,
       cleanedContent: stripMarkdownCharacters(removeDiacritics(content)),
       path: file.path,
       mtime: file.stat.mtime,
-
-      tags: tags,
+      tags,
       unmarkedTags: tags.map(t => t.replace('#', '')),
       aliases: getAliasesFromMetadata(metadata).join(''),
       headings1: metadata ? extractHeadingsFromCache(metadata, 1).join(' ') : '',

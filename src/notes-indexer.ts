@@ -7,10 +7,6 @@ export class NotesIndexer {
 
   constructor(private plugin: FerrisearchPlugin) {}
 
-  /**
-   * Updated notes are not reindexed immediately for performance reasons.
-   * They're added to a list, and reindex is done the next time we open Ferrisearch.
-   */
   public flagNoteForReindex(note: TAbstractFile): void {
     this.notesToReindex.add(note)
   }
@@ -30,10 +26,6 @@ export class NotesIndexer {
   }
 
   public isFileIndexable(path: string): boolean {
-    return this.isFilePlaintext(path)
-  }
-
-  public isFilePlaintext(path: string): boolean {
     return path.endsWith('.md')
   }
 }

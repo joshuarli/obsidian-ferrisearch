@@ -34,7 +34,6 @@ export function renderInFileModal(
 
   // Build DOM
 
-  // Input
   const inputContainer = document.createElement('div')
   inputContainer.className = 'ferrisearch-input-container'
   const inputField = document.createElement('div')
@@ -48,25 +47,22 @@ export function renderInFileModal(
   inputContainer.appendChild(inputField)
   container.appendChild(inputContainer)
 
-  // Results container
   const resultsDiv = document.createElement('div')
   resultsDiv.className = 'prompt-results'
   resultsDiv.addEventListener('mousedown', e => e.preventDefault())
   container.appendChild(resultsDiv)
 
-  // Instructions footer
+  // Instructions
   const ctrlKey = getCtrlKeyLabel()
   const instructions = document.createElement('div')
   instructions.className = 'prompt-instructions'
-
-  const hints: [string, string][] = [
+  for (const [cmd, desc] of [
     ['↑↓', 'to navigate'],
     ['↵', 'to open'],
     ['tab', 'to switch to Vault Search'],
     ['esc', parent ? 'to go back to Vault Search' : 'to close'],
     [`${ctrlKey} ↵`, 'to open in a new pane'],
-  ]
-  for (const [cmd, desc] of hints) {
+  ] as const) {
     const inst = document.createElement('div')
     inst.className = 'prompt-instruction'
     const cmdSpan = document.createElement('span')
@@ -80,19 +76,16 @@ export function renderInFileModal(
   }
   container.appendChild(instructions)
 
-  // Set initial value & focus
-  if (previousQuery) {
-    input.value = previousQuery
-  }
-  const focusAsync = async () => {
+  // Focus
+  if (previousQuery) input.value = previousQuery
+  ;(async () => {
     if (Platform.isMobileApp) await wait(200)
     input.focus()
     if (Platform.isMobileApp) await wait(200)
     input.select()
-  }
-  focusAsync()
+  })()
 
-  // Input handler (debounced)
+  // Input handling
   const INPUT_DEBOUNCE_MS = 300
   input.addEventListener('input', () => {
     searchQuery = input.value
@@ -119,23 +112,19 @@ export function renderInFileModal(
       return
     }
 
-    const query = new Query(searchQuery, {
-      ignoreDiacritics: plugin.settings.ignoreDiacritics,
-    })
-    const results = await plugin.searchEngine.getSuggestions(query, {
-      singleFilePath,
-    })
-    note = results[0] ?? undefined
+    const query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
+    const results = await plugin.searchEngine.getSuggestions(query, { singleFilePath })
+    note = results[0]
 
     if (note) {
       let groups = getGroups(note.matches)
       const exactTerms = query.getExactTerms()
       if (exactTerms.length) {
         groups = groups.filter(group =>
-          exactTerms.every(exact => group.some(match => match.match.includes(exact))),
+          exactTerms.every(exact => group.some(m => m.match.includes(exact))),
         )
       }
-      groupedOffsets = groups.map(group => Math.round(group[0]?.offset))
+      groupedOffsets = groups.map(g => Math.round(g[0]?.offset))
     } else {
       groupedOffsets = []
     }
@@ -148,38 +137,27 @@ export function renderInFileModal(
   function getGroups(matches: SearchMatch[]): SearchMatch[][] {
     const groups: SearchMatch[][] = []
     let lastOffset = -1
-    let count = 0
-    while (++count < 100) {
-      const group = getGroupedMatches(matches, lastOffset, excerptAfter)
-      if (!group.length) break
+    for (let i = 0; i < 100; i++) {
+      const first = matches.find(m => m.offset > lastOffset)
+      if (!first) break
+      const group = matches.filter(
+        m => m.offset > lastOffset && m.offset <= first.offset + excerptAfter,
+      )
       lastOffset = group[group.length - 1]?.offset
       groups.push(group)
     }
     return groups
   }
 
-  function getGroupedMatches(
-    matches: SearchMatch[],
-    offsetFrom: number,
-    maxLen: number,
-  ): SearchMatch[] {
-    const first = matches.find(m => m.offset > offsetFrom)
-    if (!first) return []
-    return matches.filter(m => m.offset > offsetFrom && m.offset <= first.offset + maxLen)
-  }
-
-  // Render
+  // Rendering
   function renderResults() {
     resultsDiv.innerHTML = ''
 
     if (groupedOffsets.length && note) {
       for (let i = 0; i < groupedOffsets.length; i++) {
-        const offset = groupedOffsets[i]
-        const item = createInFileResultItem(note, plugin, offset, i)
+        const item = createInFileResultItem(note, plugin, groupedOffsets[i], i)
         updateSelection(item, i === selectedIndex)
-        item.addEventListener('mousemove', () => {
-          setSelectedIndex(i)
-        })
+        item.addEventListener('mousemove', () => setSelectedIndex(i))
         item.addEventListener('click', evt => {
           setSelectedIndex(i)
           openSelection(evt.ctrlKey)
@@ -201,56 +179,50 @@ export function renderInFileModal(
   }
 
   function setSelectedIndex(idx: number) {
-    const prev = selectedIndex
+    updateSelectionForIndex(selectedIndex, false)
     selectedIndex = idx
-    // Update old
-    const prevEl = resultsDiv.querySelector(`[data-result-id="${prev}"]`) as HTMLElement | null
-    if (prevEl) updateSelection(prevEl, false)
-    // Update new
-    const newEl = resultsDiv.querySelector(`[data-result-id="${idx}"]`) as HTMLElement | null
-    if (newEl) updateSelection(newEl, true)
+    updateSelectionForIndex(idx, true)
+  }
+
+  function updateSelectionForIndex(idx: number, selected: boolean) {
+    const el = resultsDiv.querySelector(`[data-result-id="${idx}"]`) as HTMLElement | null
+    if (el) updateSelection(el, selected)
   }
 
   function scrollIntoView() {
-    const el = resultsDiv.querySelector(`[data-result-id="${selectedIndex}"]`)
-    el?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
+    resultsDiv
+      .querySelector(`[data-result-id="${selectedIndex}"]`)
+      ?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
   }
 
   function moveIndex(dir: 1 | -1) {
     const prev = selectedIndex
     selectedIndex = loopIndex(selectedIndex + dir, groupedOffsets.length)
-    // Update old
-    const prevEl = resultsDiv.querySelector(`[data-result-id="${prev}"]`) as HTMLElement | null
-    if (prevEl) updateSelection(prevEl, false)
-    // Update new
-    const newEl = resultsDiv.querySelector(
-      `[data-result-id="${selectedIndex}"]`,
-    ) as HTMLElement | null
-    if (newEl) updateSelection(newEl, true)
+    updateSelectionForIndex(prev, false)
+    updateSelectionForIndex(selectedIndex, true)
     scrollIntoView()
   }
 
   async function openSelection(newTab = false) {
-    if (note) {
-      modal.close()
-      if (parent) parent.close()
+    if (!note) return
+    modal.close()
+    if (parent) parent.close()
 
-      const reg = plugin.textProcessor.stringsToRegex(note.foundWords)
-      reg.exec(note.content)
-      await openNote(plugin.app, note, reg.lastIndex, newTab)
+    const reg = plugin.textProcessor.stringsToRegex(note.foundWords)
+    reg.exec(note.content)
+    await openNote(plugin.app, note, reg.lastIndex, newTab)
 
-      const view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
-      if (!view) return
+    const view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
+    if (!view) return
 
-      const offset = groupedOffsets[selectedIndex] ?? 0
-      const pos = view.editor.offsetToPos(offset)
-      pos.ch = 0
-      view.editor.setCursor(pos)
-      view.editor.scrollIntoView({
-        from: { line: pos.line - 10, ch: 0 },
-        to: { line: pos.line + 10, ch: 0 },
-      })
-    }
+    const offset = groupedOffsets[selectedIndex] ?? 0
+    const pos = view.editor.offsetToPos(offset)
+    pos.ch = 0
+    view.editor.setCursor(pos)
+    view.editor.scrollIntoView({
+      from: { line: pos.line - 10, ch: 0 },
+      to: { line: pos.line + 10, ch: 0 },
+    })
   }
 
   function switchToVaultModal() {

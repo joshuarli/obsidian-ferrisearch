@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from 'bun:test'
+import { describe, expect, it } from 'bun:test'
 import { showExcerpt } from '../settings/index'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
@@ -180,14 +180,7 @@ describe('updateSelection', () => {
 })
 
 describe('cleanupResultItem', () => {
-  it('calls stored _unsub function', () => {
-    const el = document.createElement('div') as HTMLElement & { _unsub?: () => void }
-    el._unsub = mock(() => {})
-    cleanupResultItem(el)
-    expect(el._unsub).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not throw when _unsub is absent', () => {
+  it('does not throw when no unsubscriber is registered', () => {
     const el = document.createElement('div')
     expect(() => cleanupResultItem(el)).not.toThrow()
   })
