@@ -22,7 +22,7 @@ pub struct DocumentInput {
 
 impl From<DocumentInput> for types::DocumentInput {
     fn from(d: DocumentInput) -> Self {
-        types::DocumentInput {
+        Self {
             path: d.path,
             basename: d.basename,
             display_title: d.display_title,
@@ -46,9 +46,7 @@ pub struct IndexConfig {
 
 impl From<IndexConfig> for types::IndexConfig {
     fn from(c: IndexConfig) -> Self {
-        types::IndexConfig {
-            ignore_diacritics: c.ignore_diacritics.unwrap_or(true),
-        }
+        Self { ignore_diacritics: c.ignore_diacritics.unwrap_or(true) }
     }
 }
 
@@ -69,17 +67,18 @@ pub struct FieldBoosts {
 
 impl From<FieldBoosts> for types::FieldBoosts {
     fn from(b: FieldBoosts) -> Self {
-        types::FieldBoosts {
-            basename: b.basename.unwrap_or(10.0) as f32,
-            display_title: b.display_title.unwrap_or(10.0) as f32,
-            aliases: b.aliases.unwrap_or(10.0) as f32,
-            directory: b.directory.unwrap_or(7.0) as f32,
-            headings1: b.headings1.unwrap_or(6.0) as f32,
-            headings2: b.headings2.unwrap_or(5.0) as f32,
-            headings3: b.headings3.unwrap_or(4.0) as f32,
-            tags_text: b.tags_text.unwrap_or(2.0) as f32,
-            unmarked_tags: b.unmarked_tags.unwrap_or(2.0) as f32,
-            content: b.content.unwrap_or(1.0) as f32,
+        let d = types::FieldBoosts::default();
+        Self {
+            basename: b.basename.map_or(d.basename, |v| v as f32),
+            display_title: b.display_title.map_or(d.display_title, |v| v as f32),
+            aliases: b.aliases.map_or(d.aliases, |v| v as f32),
+            directory: b.directory.map_or(d.directory, |v| v as f32),
+            headings1: b.headings1.map_or(d.headings1, |v| v as f32),
+            headings2: b.headings2.map_or(d.headings2, |v| v as f32),
+            headings3: b.headings3.map_or(d.headings3, |v| v as f32),
+            tags_text: b.tags_text.map_or(d.tags_text, |v| v as f32),
+            unmarked_tags: b.unmarked_tags.map_or(d.unmarked_tags, |v| v as f32),
+            content: b.content.map_or(d.content, |v| v as f32),
         }
     }
 }
@@ -97,13 +96,13 @@ pub struct SearchOptions {
 
 impl From<SearchOptions> for types::SearchOptions {
     fn from(o: SearchOptions) -> Self {
-        types::SearchOptions {
-            field_boosts: o.field_boosts.map(|b| b.into()).unwrap_or_default(),
-            fuzziness: o.fuzziness.unwrap_or_else(|| "1".to_string()),
+        Self {
+            field_boosts: o.field_boosts.map(Into::into).unwrap_or_default(),
+            fuzziness: o.fuzziness.unwrap_or_else(|| "1".into()),
             prefix_length: o.prefix_length.unwrap_or(1) as usize,
             limit: o.limit.unwrap_or(50) as usize,
             single_file_path: o.single_file_path,
-            recency_boost: o.recency_boost.unwrap_or_else(|| "0".to_string()),
+            recency_boost: o.recency_boost.unwrap_or_else(|| "0".into()),
         }
     }
 }
@@ -123,7 +122,7 @@ pub struct SearchResult {
 
 impl From<types::SearchResult> for SearchResult {
     fn from(r: types::SearchResult) -> Self {
-        SearchResult {
+        Self {
             path: r.path,
             score: r.score,
             matched_terms: r.matched_terms,
@@ -141,13 +140,26 @@ pub struct SearchIndex {
     inner: Option<IndexManager>,
 }
 
+impl SearchIndex {
+    fn inner(&self) -> Result<&IndexManager> {
+        self.inner.as_ref().ok_or_else(|| Error::from_reason("Index is closed"))
+    }
+
+    fn inner_mut(&mut self) -> Result<&mut IndexManager> {
+        self.inner.as_mut().ok_or_else(|| Error::from_reason("Index is closed"))
+    }
+}
+
+fn map_err(e: ferrisearch_core::index::IndexError) -> Error {
+    Error::from_reason(e.to_string())
+}
+
 #[napi]
 impl SearchIndex {
     #[napi(constructor)]
     pub fn new(index_path: String, config: Option<IndexConfig>) -> Result<Self> {
-        let cfg = config.map(|c| c.into()).unwrap_or_default();
-        let inner = IndexManager::new(&index_path, cfg)
-            .map_err(|e| Error::from_reason(format!("Failed to create index: {}", e)))?;
+        let cfg = config.map(Into::into).unwrap_or_default();
+        let inner = IndexManager::new(&index_path, cfg).map_err(map_err)?;
         Ok(Self { inner: Some(inner) })
     }
 
@@ -159,74 +171,35 @@ impl SearchIndex {
 
     #[napi]
     pub fn add_documents(&mut self, docs: Vec<DocumentInput>) -> Result<()> {
-        let inner = self
-            .inner
-            .as_mut()
-            .ok_or_else(|| Error::from_reason("Index is closed"))?;
-        let core_docs: Vec<types::DocumentInput> = docs.into_iter().map(|d| d.into()).collect();
-        inner
-            .add_documents(&core_docs)
-            .map_err(|e| Error::from_reason(format!("Failed to add documents: {}", e)))
+        let core_docs: Vec<types::DocumentInput> = docs.into_iter().map(Into::into).collect();
+        self.inner_mut()?.add_documents(&core_docs).map_err(map_err)
     }
 
     #[napi]
     pub fn remove_documents(&mut self, paths: Vec<String>) -> Result<()> {
-        let inner = self
-            .inner
-            .as_mut()
-            .ok_or_else(|| Error::from_reason("Index is closed"))?;
-        inner.remove_documents(&paths);
+        self.inner_mut()?.remove_documents(&paths);
         Ok(())
     }
 
     #[napi]
     pub fn commit(&mut self) -> Result<()> {
-        let inner = self
-            .inner
-            .as_mut()
-            .ok_or_else(|| Error::from_reason("Index is closed"))?;
-        inner
-            .commit()
-            .map_err(|e| Error::from_reason(format!("Failed to commit: {}", e)))
+        self.inner_mut()?.commit().map_err(map_err)
     }
 
     #[napi]
     pub fn has_document(&self, path: String) -> Result<bool> {
-        let inner = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| Error::from_reason("Index is closed"))?;
-        inner
-            .has_document(&path)
-            .map_err(|e| Error::from_reason(format!("Failed to check document: {}", e)))
+        self.inner()?.has_document(&path).map_err(map_err)
     }
 
     #[napi]
     pub fn document_count(&self) -> Result<f64> {
-        let inner = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| Error::from_reason("Index is closed"))?;
-        inner
-            .document_count()
-            .map(|c| c as f64)
-            .map_err(|e| Error::from_reason(format!("Failed to get document count: {}", e)))
+        self.inner()?.document_count().map(|c| c as f64).map_err(map_err)
     }
 
     #[napi]
-    pub fn search(
-        &self,
-        query: String,
-        options: Option<SearchOptions>,
-    ) -> Result<Vec<SearchResult>> {
-        let inner = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| Error::from_reason("Index is closed"))?;
-        let opts = options.map(|o| o.into()).unwrap_or_default();
-        let results = inner
-            .search(&query, &opts)
-            .map_err(|e| Error::from_reason(format!("Search failed: {}", e)))?;
-        Ok(results.into_iter().map(|r| r.into()).collect())
+    pub fn search(&self, query: String, options: Option<SearchOptions>) -> Result<Vec<SearchResult>> {
+        let opts = options.map(Into::into).unwrap_or_default();
+        let results = self.inner()?.search(&query, &opts).map_err(map_err)?;
+        Ok(results.into_iter().map(Into::into).collect())
     }
 }

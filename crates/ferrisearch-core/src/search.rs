@@ -1,121 +1,115 @@
 use tantivy::collector::TopDocs;
-use tantivy::query::{
-    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, RegexQuery, TermQuery,
-};
+use tantivy::query::{BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, RegexQuery, TermQuery};
 use tantivy::schema::{IndexRecordOption, Value};
-use tantivy::{DocAddress, ReloadPolicy, Searcher, Term};
+use tantivy::{DocAddress, Searcher, Term};
 
 use crate::index::{IndexError, IndexManager};
 use crate::types::{SearchOptions, SearchResult};
 
 impl IndexManager {
-    /// Search the index with the given query string and options
+    /// Search the index with the given query string and options.
     pub fn search(
         &self,
         query_str: &str,
         options: &SearchOptions,
     ) -> Result<Vec<SearchResult>, IndexError> {
-        let reader = self
-            .index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()?;
-        let searcher = reader.searcher();
+        let searcher = self.reader()?.searcher();
 
         let query_str = query_str.trim();
         if query_str.is_empty() {
             return Ok(Vec::new());
         }
 
-        // Parse fuzziness setting
-        let fuzziness_level: f32 = match options.fuzziness.as_str() {
+        let fuzziness: f32 = match options.fuzziness.as_str() {
             "0" => 0.0,
             "1" => 0.1,
             _ => 0.2,
         };
 
-        // Tokenize query: split on whitespace
-        let terms: Vec<&str> = query_str
-            .split_whitespace()
-            .filter(|t| !t.is_empty())
-            .collect();
-
+        let terms: Vec<&str> = query_str.split_whitespace().collect();
         if terms.is_empty() {
             return Ok(Vec::new());
         }
 
-        // For each term, build a BooleanQuery (OR) across all text fields
-        // Then combine all term queries with AND logic
-        let mut term_queries: Vec<Box<dyn Query>> = Vec::new();
+        // For each query term, build an OR across all text fields.
+        // Then combine all term queries with AND (every term must match somewhere).
+        let must_clauses: Vec<(Occur, Box<dyn Query>)> = terms
+            .iter()
+            .map(|term_str| {
+                let lower = term_str.to_lowercase();
+                let field_queries: Vec<(Occur, Box<dyn Query>)> = self
+                    .fields
+                    .text_fields()
+                    .iter()
+                    .flat_map(|(name, field)| {
+                        let boost = options.field_boosts.for_field(name);
+                        let term = Term::from_field_text(*field, &lower);
+                        let mut queries: Vec<(Occur, Box<dyn Query>)> = Vec::with_capacity(3);
 
-        for term_str in &terms {
-            let term_lower = term_str.to_lowercase();
-            let mut field_queries: Vec<(Occur, Box<dyn Query>)> = Vec::new();
+                        // Exact match
+                        queries.push((
+                            Occur::Should,
+                            Box::new(BoostQuery::new(
+                                Box::new(TermQuery::new(term.clone(), IndexRecordOption::WithFreqs)),
+                                boost,
+                            )),
+                        ));
 
-            for (field_name, field) in self.fields.text_fields() {
-                let boost = get_boost_for_field(field_name, &options.field_boosts);
+                        // Prefix match
+                        if lower.len() >= options.prefix_length {
+                            if let Ok(rq) =
+                                RegexQuery::from_pattern(&format!("{}.*", regex::escape(&lower)), *field)
+                            {
+                                queries.push((
+                                    Occur::Should,
+                                    Box::new(BoostQuery::new(Box::new(rq), boost * 0.8)),
+                                ));
+                            }
+                        }
 
-                // Exact term query
-                let exact_term = Term::from_field_text(field, &term_lower);
-                let exact_query = TermQuery::new(exact_term.clone(), IndexRecordOption::WithFreqs);
-                let boosted_exact: Box<dyn Query> =
-                    Box::new(BoostQuery::new(Box::new(exact_query), boost));
-                field_queries.push((Occur::Should, boosted_exact));
+                        // Fuzzy match
+                        if fuzziness > 0.0 {
+                            let dist = fuzzy_distance(&lower, fuzziness);
+                            if dist > 0 {
+                                queries.push((
+                                    Occur::Should,
+                                    Box::new(BoostQuery::new(
+                                        Box::new(FuzzyTermQuery::new(term, dist, true)),
+                                        boost * 0.6,
+                                    )),
+                                ));
+                            }
+                        }
 
-                // Prefix query (if term is long enough)
-                if term_lower.len() >= options.prefix_length
-                    && let Ok(regex_query) = RegexQuery::from_pattern(
-                        &format!("{}.*", regex::escape(&term_lower)),
-                        field,
-                    )
-                {
-                    let boosted_prefix: Box<dyn Query> =
-                        Box::new(BoostQuery::new(Box::new(regex_query), boost * 0.8));
-                    field_queries.push((Occur::Should, boosted_prefix));
-                }
+                        queries
+                    })
+                    .collect();
 
-                // Fuzzy query
-                if fuzziness_level > 0.0 {
-                    let distance = fuzzy_distance(&term_lower, fuzziness_level);
-                    if distance > 0 {
-                        let fuzzy_query = FuzzyTermQuery::new(exact_term, distance, true);
-                        let boosted_fuzzy: Box<dyn Query> =
-                            Box::new(BoostQuery::new(Box::new(fuzzy_query), boost * 0.6));
-                        field_queries.push((Occur::Should, boosted_fuzzy));
-                    }
-                }
-            }
-
-            let combined_field_query = BooleanQuery::new(field_queries);
-            term_queries.push(Box::new(combined_field_query));
-        }
-
-        // Combine all term queries with AND (all terms must match somewhere)
-        let must_clauses: Vec<(Occur, Box<dyn Query>)> =
-            term_queries.into_iter().map(|q| (Occur::Must, q)).collect();
+                (Occur::Must, Box::new(BooleanQuery::new(field_queries)) as Box<dyn Query>)
+            })
+            .collect();
 
         let mut final_query: Box<dyn Query> = Box::new(BooleanQuery::new(must_clauses));
 
-        // If single file path filter, wrap with AND
+        // Optional single-file filter
         if let Some(ref file_path) = options.single_file_path {
             let path_term = Term::from_field_text(self.fields.path, file_path);
-            let path_query = TermQuery::new(path_term, IndexRecordOption::Basic);
-            let combined = BooleanQuery::new(vec![
+            final_query = Box::new(BooleanQuery::new(vec![
                 (Occur::Must, final_query),
-                (Occur::Must, Box::new(path_query)),
-            ]);
-            final_query = Box::new(combined);
+                (
+                    Occur::Must,
+                    Box::new(TermQuery::new(path_term, IndexRecordOption::Basic)),
+                ),
+            ]));
         }
 
-        // Collect results - first get raw results, then apply recency boost post-hoc
-        let top_docs_collector = TopDocs::with_limit(options.limit);
-        let results = searcher.search(&*final_query, &top_docs_collector)?;
+        let results = searcher.search(&*final_query, &TopDocs::with_limit(options.limit))?;
 
-        // Convert to SearchResult structs, applying recency boost
-        let recency_cutoff = match options.recency_boost.as_str() {
-            "1" => Some(-3.0_f64), // Day
-            "2" => Some(-0.3_f64), // Week
-            "3" => Some(-0.1_f64), // Month
+        // Recency boost (applied post-hoc)
+        let recency_decay = match options.recency_boost.as_str() {
+            "1" => Some(-3.0_f64),  // Day
+            "2" => Some(-0.3_f64),  // Week
+            "3" => Some(-0.1_f64),  // Month
             _ => None,
         };
         let now = std::time::SystemTime::now()
@@ -123,26 +117,20 @@ impl IndexManager {
             .map(|d| d.as_millis() as f64)
             .unwrap_or(0.0);
 
-        let mut search_results = Vec::new();
-        for (score, doc_address) in results {
-            if let Ok(mut result) = self.doc_to_result(&searcher, doc_address, score as f64, &terms)
-            {
-                // Apply recency boost
-                if let Some(cutoff) = recency_cutoff {
-                    let days_elapsed = (now - result.mtime as f64) / (24.0 * 3_600_000.0);
-                    result.score *= 1.0 + (cutoff * days_elapsed / 1000.0).exp();
+        let mut search_results: Vec<SearchResult> = results
+            .into_iter()
+            .filter_map(|(score, addr)| {
+                let mut r = self.doc_to_result(&searcher, addr, score as f64, &terms).ok()?;
+                if let Some(decay) = recency_decay {
+                    let days = (now - r.mtime as f64) / (24.0 * 3_600_000.0);
+                    r.score *= 1.0 + (decay * days / 1000.0).exp();
                 }
-                search_results.push(result);
-            }
-        }
+                Some(r)
+            })
+            .collect();
 
-        // Re-sort after recency boost
-        if recency_cutoff.is_some() {
-            search_results.sort_by(|a, b| {
-                b.score
-                    .partial_cmp(&a.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+        if recency_decay.is_some() {
+            search_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         }
 
         Ok(search_results)
@@ -151,73 +139,42 @@ impl IndexManager {
     fn doc_to_result(
         &self,
         searcher: &Searcher,
-        doc_address: DocAddress,
+        addr: DocAddress,
         score: f64,
         query_terms: &[&str],
     ) -> Result<SearchResult, IndexError> {
-        let doc: tantivy::TantivyDocument = searcher.doc(doc_address)?;
+        let doc: tantivy::TantivyDocument = searcher.doc(addr)?;
+        let f = &self.fields;
 
-        let path = doc
-            .get_first(self.fields.path)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+        let text = |field| -> String {
+            doc.get_first(field)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
+        };
 
-        let basename = doc
-            .get_first(self.fields.basename)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let display_title = doc
-            .get_first(self.fields.display_title)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let content = doc
-            .get_first(self.fields.content)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let mtime = doc
-            .get_first(self.fields.mtime)
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
-
-        // Extract tags from stored JSON
-        let tags: Vec<String> = doc
-            .get_first(self.fields.tags_stored)
+        let tags = doc
+            .get_first(f.tags_stored)
             .and_then(|v| v.as_object())
-            .and_then(|obj| {
-                obj.into_iter()
-                    .find(|(k, _)| *k == "tags")
-                    .and_then(|(_, v)| v.as_array())
-                    .map(|arr| {
-                        arr.into_iter()
-                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                            .collect()
-                    })
-            })
+            .and_then(|obj| obj.into_iter().find(|(k, _)| *k == "tags"))
+            .and_then(|(_, v)| v.as_array())
+            .map(|arr| arr.into_iter().filter_map(|v| v.as_str().map(String::from)).collect())
             .unwrap_or_default();
 
-        let matched_terms: Vec<String> = query_terms.iter().map(|t| t.to_lowercase()).collect();
-
         Ok(SearchResult {
-            path,
+            path: text(f.path),
+            basename: text(f.basename),
+            display_title: text(f.display_title),
+            content: text(f.content),
+            mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0),
             score,
-            matched_terms,
-            basename,
-            display_title,
-            content,
-            mtime,
+            matched_terms: query_terms.iter().map(|t| t.to_lowercase()).collect(),
             tags,
         })
     }
 }
 
-/// Determine fuzzy edit distance based on term length and fuzziness level
+/// Determine fuzzy edit distance based on term length and fuzziness level.
 fn fuzzy_distance(term: &str, fuzziness: f32) -> u8 {
     let len = term.len();
     if len <= 3 {
@@ -233,34 +190,18 @@ fn fuzzy_distance(term: &str, fuzziness: f32) -> u8 {
     }
 }
 
-fn get_boost_for_field(field_name: &str, boosts: &crate::types::FieldBoosts) -> f32 {
-    match field_name {
-        "basename" => boosts.basename,
-        "display_title" => boosts.display_title,
-        "aliases" => boosts.aliases,
-        "directory" => boosts.directory,
-        "content" => boosts.content,
-        "headings1" => boosts.headings1,
-        "headings2" => boosts.headings2,
-        "headings3" => boosts.headings3,
-        "tags_text" => boosts.tags_text,
-        "unmarked_tags" => boosts.unmarked_tags,
-        _ => 1.0,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{DocumentInput, IndexConfig, SearchOptions};
+    use crate::types::{DocumentInput, FieldBoosts, IndexConfig, SearchOptions};
 
     fn make_doc(path: &str, basename: &str, content: &str) -> DocumentInput {
         DocumentInput {
-            path: path.to_string(),
-            basename: basename.to_string(),
+            path: path.into(),
+            basename: basename.into(),
             display_title: String::new(),
             aliases: String::new(),
-            content: content.to_string(),
+            content: content.into(),
             headings1: String::new(),
             headings2: String::new(),
             headings3: String::new(),
@@ -281,120 +222,86 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_search() {
+    fn basic_search() {
         let mgr = setup_index(vec![
-            make_doc(
-                "notes/hello.md",
-                "hello",
-                "Hello world, this is a test document",
-            ),
-            make_doc(
-                "notes/other.md",
-                "other",
-                "Completely unrelated content here",
-            ),
+            make_doc("notes/hello.md", "hello", "Hello world, this is a test document"),
+            make_doc("notes/other.md", "other", "Completely unrelated content here"),
         ]);
-
         let results = mgr.search("hello", &SearchOptions::default()).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].path, "notes/hello.md");
     }
 
     #[test]
-    fn test_multi_term_search() {
+    fn multi_term_search() {
         let mgr = setup_index(vec![
             make_doc("a.md", "a", "The quick brown fox jumps over the lazy dog"),
             make_doc("b.md", "b", "The quick rabbit runs fast"),
         ]);
-
         let results = mgr.search("quick fox", &SearchOptions::default()).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].path, "a.md");
     }
 
     #[test]
-    fn test_empty_query() {
+    fn empty_query() {
         let mgr = setup_index(vec![make_doc("a.md", "a", "content")]);
-        let results = mgr.search("", &SearchOptions::default()).unwrap();
-        assert!(results.is_empty());
+        assert!(mgr.search("", &SearchOptions::default()).unwrap().is_empty());
     }
 
     #[test]
-    fn test_single_file_filter() {
+    fn single_file_filter() {
         let mgr = setup_index(vec![
             make_doc("a.md", "a", "hello world"),
             make_doc("b.md", "b", "hello world"),
         ]);
-
         let opts = SearchOptions {
-            single_file_path: Some("a.md".to_string()),
+            single_file_path: Some("a.md".into()),
             ..Default::default()
         };
-
         let results = mgr.search("hello", &opts).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "a.md");
     }
 
     #[test]
-    fn test_basename_boost() {
+    fn basename_boost() {
         let mgr = setup_index(vec![
-            make_doc(
-                "notes/rust.md",
-                "rust",
-                "This note is about python programming",
-            ),
+            make_doc("notes/rust.md", "rust", "This note is about python programming"),
             make_doc("notes/python.md", "python", "This note mentions rust once"),
         ]);
-
         let results = mgr.search("rust", &SearchOptions::default()).unwrap();
         assert!(!results.is_empty());
-        // "rust.md" should score higher because basename matches with high boost
         assert_eq!(results[0].path, "notes/rust.md");
     }
 
     #[test]
-    fn test_fuzzy_search() {
+    fn fuzzy_search() {
         let mgr = setup_index(vec![make_doc(
-            "a.md",
-            "a",
-            "The restaurant serves excellent cuisine",
+            "a.md", "a", "The restaurant serves excellent cuisine",
         )]);
-
-        let opts = SearchOptions {
-            fuzziness: "2".to_string(),
-            ..Default::default()
-        };
-
-        let results = mgr.search("restaurnt", &opts).unwrap();
-        assert!(!results.is_empty());
+        let opts = SearchOptions { fuzziness: "2".into(), ..Default::default() };
+        assert!(!mgr.search("restaurnt", &opts).unwrap().is_empty());
     }
 
     #[test]
-    fn test_tags_in_result() {
-        let mgr = setup_index(vec![{
-            let mut doc = make_doc("a.md", "a", "content");
-            doc.tags = vec!["#rust".to_string(), "#programming".to_string()];
-            doc
-        }]);
-
+    fn tags_in_result() {
+        let mut doc = make_doc("a.md", "a", "content");
+        doc.tags = vec!["#rust".into(), "#programming".into()];
+        let mgr = setup_index(vec![doc]);
         let results = mgr.search("content", &SearchOptions::default()).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].tags, vec!["#rust", "#programming"]);
     }
 
     #[test]
-    fn test_search_returns_stored_fields() {
-        let mgr = setup_index(vec![{
-            let mut doc = make_doc("notes/test.md", "test", "Hello world content");
-            doc.display_title = "Test Note".to_string();
-            doc.mtime = 12345;
-            doc
-        }]);
+    fn search_returns_stored_fields() {
+        let mut doc = make_doc("notes/test.md", "test", "Hello world content");
+        doc.display_title = "Test Note".into();
+        doc.mtime = 12345;
+        let mgr = setup_index(vec![doc]);
 
-        let results = mgr.search("hello", &SearchOptions::default()).unwrap();
-        assert!(!results.is_empty());
-        let r = &results[0];
+        let r = &mgr.search("hello", &SearchOptions::default()).unwrap()[0];
         assert_eq!(r.path, "notes/test.md");
         assert_eq!(r.basename, "test");
         assert_eq!(r.display_title, "Test Note");
@@ -403,209 +310,139 @@ mod tests {
     }
 
     #[test]
-    fn test_fuzzy_distance() {
+    fn fuzzy_distance_values() {
         assert_eq!(fuzzy_distance("ab", 0.2), 0);
         assert_eq!(fuzzy_distance("abc", 0.2), 0);
-        assert_eq!(fuzzy_distance("abcd", 0.2), 1); // 4-5 chars = 1 at 0.1+
+        assert_eq!(fuzzy_distance("abcd", 0.2), 1);
         assert_eq!(fuzzy_distance("abcd", 0.1), 1);
+        assert_eq!(fuzzy_distance("abcde", 0.2), 1);
+        assert_eq!(fuzzy_distance("abcde", 0.0), 0);
         assert_eq!(fuzzy_distance("abcdef", 0.2), 2);
         assert_eq!(fuzzy_distance("abcdef", 0.1), 1);
         assert_eq!(fuzzy_distance("abcdef", 0.0), 0);
     }
 
     #[test]
-    fn test_whitespace_only_query() {
+    fn whitespace_only_query() {
         let mgr = setup_index(vec![make_doc("a.md", "a", "content")]);
-        let results = mgr.search("   \t  ", &SearchOptions::default()).unwrap();
-        assert!(results.is_empty());
+        assert!(mgr.search("   \t  ", &SearchOptions::default()).unwrap().is_empty());
     }
 
     #[test]
-    fn test_fuzziness_zero_no_fuzzy() {
+    fn fuzziness_zero_no_fuzzy() {
         let mgr = setup_index(vec![make_doc(
-            "a.md",
-            "a",
-            "The restaurant serves excellent cuisine",
+            "a.md", "a", "The restaurant serves excellent cuisine",
         )]);
-
-        let opts = SearchOptions {
-            fuzziness: "0".to_string(),
-            ..Default::default()
-        };
-
-        // "restaurnt" (typo) should NOT match with fuzziness=0
-        let results = mgr.search("restaurnt", &opts).unwrap();
-        assert!(results.is_empty());
+        let opts = SearchOptions { fuzziness: "0".into(), ..Default::default() };
+        assert!(mgr.search("restaurnt", &opts).unwrap().is_empty());
     }
 
     #[test]
-    fn test_recency_boost_day() {
+    fn recency_boost_day() {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
 
-        let mgr = setup_index(vec![
-            {
-                let mut doc = make_doc("recent.md", "recent", "hello world test");
-                doc.mtime = now; // just now
-                doc
-            },
-            {
-                let mut doc = make_doc("old.md", "old", "hello world test");
-                doc.mtime = now - 30 * 24 * 3_600_000; // 30 days ago
-                doc
-            },
-        ]);
+        let mut recent = make_doc("recent.md", "recent", "hello world test");
+        recent.mtime = now;
+        let mut old = make_doc("old.md", "old", "hello world test");
+        old.mtime = now - 30 * 24 * 3_600_000;
 
-        let opts = SearchOptions {
-            recency_boost: "1".to_string(), // Day
-            ..Default::default()
-        };
-
+        let mgr = setup_index(vec![recent, old]);
+        let opts = SearchOptions { recency_boost: "1".into(), ..Default::default() };
         let results = mgr.search("hello", &opts).unwrap();
         assert!(results.len() >= 2);
-        // Recent doc should score higher
         assert_eq!(results[0].path, "recent.md");
     }
 
     #[test]
-    fn test_matched_terms_lowercased() {
+    fn matched_terms_lowercased() {
         let mgr = setup_index(vec![make_doc("a.md", "a", "Hello World content")]);
-
         let results = mgr.search("Hello World", &SearchOptions::default()).unwrap();
         assert!(!results.is_empty());
-        // matched_terms should be lowercased
-        assert!(results[0].matched_terms.contains(&"hello".to_string()));
-        assert!(results[0].matched_terms.contains(&"world".to_string()));
+        assert!(results[0].matched_terms.contains(&"hello".into()));
+        assert!(results[0].matched_terms.contains(&"world".into()));
     }
 
     #[test]
-    fn test_get_boost_for_field_all_cases() {
-        let boosts = crate::types::FieldBoosts::default();
-        assert_eq!(get_boost_for_field("basename", &boosts), 10.0);
-        assert_eq!(get_boost_for_field("display_title", &boosts), 10.0);
-        assert_eq!(get_boost_for_field("aliases", &boosts), 10.0);
-        assert_eq!(get_boost_for_field("directory", &boosts), 7.0);
-        assert_eq!(get_boost_for_field("content", &boosts), 1.0);
-        assert_eq!(get_boost_for_field("headings1", &boosts), 6.0);
-        assert_eq!(get_boost_for_field("headings2", &boosts), 5.0);
-        assert_eq!(get_boost_for_field("headings3", &boosts), 4.0);
-        assert_eq!(get_boost_for_field("tags_text", &boosts), 2.0);
-        assert_eq!(get_boost_for_field("unmarked_tags", &boosts), 2.0);
-        // Unknown field should return 1.0
-        assert_eq!(get_boost_for_field("nonexistent_field", &boosts), 1.0);
+    fn field_boosts_for_field() {
+        let b = FieldBoosts::default();
+        assert_eq!(b.for_field("basename"), 10.0);
+        assert_eq!(b.for_field("display_title"), 10.0);
+        assert_eq!(b.for_field("aliases"), 10.0);
+        assert_eq!(b.for_field("directory"), 7.0);
+        assert_eq!(b.for_field("content"), 1.0);
+        assert_eq!(b.for_field("headings1"), 6.0);
+        assert_eq!(b.for_field("headings2"), 5.0);
+        assert_eq!(b.for_field("headings3"), 4.0);
+        assert_eq!(b.for_field("tags_text"), 2.0);
+        assert_eq!(b.for_field("unmarked_tags"), 2.0);
+        assert_eq!(b.for_field("nonexistent"), 1.0);
     }
 
     #[test]
-    fn test_headings_search() {
-        let mgr = setup_index(vec![{
-            let mut doc = make_doc("a.md", "a", "body text");
-            doc.headings1 = "Important Heading".to_string();
-            doc
-        }]);
-
+    fn headings_search() {
+        let mut doc = make_doc("a.md", "a", "body text");
+        doc.headings1 = "Important Heading".into();
+        let mgr = setup_index(vec![doc]);
         let results = mgr.search("important", &SearchOptions::default()).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].path, "a.md");
     }
 
     #[test]
-    fn test_aliases_search() {
-        let mgr = setup_index(vec![{
-            let mut doc = make_doc("a.md", "a", "body text");
-            doc.aliases = "nickname shortname".to_string();
-            doc
-        }]);
-
-        let results = mgr.search("nickname", &SearchOptions::default()).unwrap();
-        assert!(!results.is_empty());
-        assert_eq!(results[0].path, "a.md");
+    fn aliases_search() {
+        let mut doc = make_doc("a.md", "a", "body text");
+        doc.aliases = "nickname shortname".into();
+        let mgr = setup_index(vec![doc]);
+        assert!(!mgr.search("nickname", &SearchOptions::default()).unwrap().is_empty());
     }
 
     #[test]
-    fn test_tags_text_search() {
-        let mgr = setup_index(vec![{
-            let mut doc = make_doc("a.md", "a", "body text");
-            doc.tags = vec!["#programming".to_string(), "#rust".to_string()];
-            doc
-        }]);
-
-        let results = mgr.search("programming", &SearchOptions::default()).unwrap();
-        assert!(!results.is_empty());
-        assert_eq!(results[0].path, "a.md");
+    fn tags_text_search() {
+        let mut doc = make_doc("a.md", "a", "body text");
+        doc.tags = vec!["#programming".into(), "#rust".into()];
+        let mgr = setup_index(vec![doc]);
+        assert!(!mgr.search("programming", &SearchOptions::default()).unwrap().is_empty());
     }
 
     #[test]
-    fn test_unmarked_tags_search() {
-        let mgr = setup_index(vec![{
-            let mut doc = make_doc("a.md", "a", "body text");
-            doc.unmarked_tags = vec!["coding".to_string()];
-            doc
-        }]);
-
-        let results = mgr.search("coding", &SearchOptions::default()).unwrap();
-        assert!(!results.is_empty());
-        assert_eq!(results[0].path, "a.md");
+    fn unmarked_tags_search() {
+        let mut doc = make_doc("a.md", "a", "body text");
+        doc.unmarked_tags = vec!["coding".into()];
+        let mgr = setup_index(vec![doc]);
+        assert!(!mgr.search("coding", &SearchOptions::default()).unwrap().is_empty());
     }
 
     #[test]
-    fn test_limit_results() {
+    fn limit_results() {
         let docs: Vec<DocumentInput> = (0..10)
             .map(|i| make_doc(&format!("{i}.md"), &format!("{i}"), "common search term"))
             .collect();
         let mgr = setup_index(docs);
-
-        let opts = SearchOptions {
-            limit: 3,
-            ..Default::default()
-        };
-
-        let results = mgr.search("common", &opts).unwrap();
-        assert!(results.len() <= 3);
+        let opts = SearchOptions { limit: 3, ..Default::default() };
+        assert!(mgr.search("common", &opts).unwrap().len() <= 3);
     }
 
     #[test]
-    fn test_prefix_search_short_term() {
+    fn prefix_search() {
         let mgr = setup_index(vec![make_doc(
-            "a.md",
-            "a",
-            "internationalization is important",
+            "a.md", "a", "internationalization is important",
         )]);
-
-        // With prefix_length=1, even short query prefixes should work
-        let opts = SearchOptions {
-            prefix_length: 1,
-            ..Default::default()
-        };
-
-        let results = mgr.search("intern", &opts).unwrap();
-        assert!(!results.is_empty());
+        let opts = SearchOptions { prefix_length: 1, ..Default::default() };
+        assert!(!mgr.search("intern", &opts).unwrap().is_empty());
     }
 
     #[test]
-    fn test_no_results_for_nonexistent_term() {
+    fn no_results_for_nonexistent() {
         let mgr = setup_index(vec![make_doc("a.md", "a", "hello world")]);
-
-        let results = mgr
-            .search("xyzzynonexistent", &SearchOptions::default())
-            .unwrap();
-        assert!(results.is_empty());
+        assert!(mgr.search("xyzzynonexistent", &SearchOptions::default()).unwrap().is_empty());
     }
 
     #[test]
-    fn test_fuzzy_distance_boundary_5_chars() {
-        assert_eq!(fuzzy_distance("abcde", 0.2), 1);
-        assert_eq!(fuzzy_distance("abcde", 0.1), 1);
-        assert_eq!(fuzzy_distance("abcde", 0.0), 0);
-    }
-
-    #[test]
-    fn test_single_char_query() {
+    fn single_char_query() {
         let mgr = setup_index(vec![make_doc("a.md", "a", "x marks the spot")]);
-
-        // Single char "x" - should still work (exact match)
-        let results = mgr.search("x", &SearchOptions::default()).unwrap();
-        assert!(!results.is_empty());
+        assert!(!mgr.search("x", &SearchOptions::default()).unwrap().is_empty());
     }
 }

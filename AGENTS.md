@@ -50,7 +50,12 @@ napi/
   build.rs, Cargo.toml
 crates/
   ferrisearch-core/src/
-    lib.rs, index.rs, schema.rs, search.rs, tokenizer.rs, types.rs
+    lib.rs                 # Re-exports all modules
+    types.rs               # Core types: DocumentInput, SearchResult, SearchOptions, FieldBoosts, IndexConfig
+    schema.rs              # Tantivy schema definition (13 fields) + FieldHandles
+    tokenizer.rs           # FerrisearchTokenizer (Unicode-category separator regex, camelCase split) + DiacriticFilter
+    index.rs               # IndexManager: create/open index, add/remove/commit documents
+    search.rs              # Search impl on IndexManager: multi-term boolean queries, fuzzy/prefix matching, recency boost
 ```
 
 ## Key Patterns
@@ -83,7 +88,7 @@ crates/
 
 - **Runtime:** `search-query-parser` (query parsing with keywords like `ext:`, `path:`, quoted phrases, exclusions)
 - **Dev:** `@biomejs/biome`, `happy-dom`, `@types/bun`, `obsidian`, `typescript`
-- **Native:** Rust crate `ferrisearch-core` using Tantivy for full-text search, exposed via `napi-rs`
+- **Native:** Rust crate `ferrisearch-core` using Tantivy for full-text search, exposed via `napi-rs`. Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars (`\p{P}\p{Z}\p{Cc}\p{S}`), emits camelCase sub-tokens, and optionally strips diacritics via NFD decomposition.
 
 ## Data Flow
 

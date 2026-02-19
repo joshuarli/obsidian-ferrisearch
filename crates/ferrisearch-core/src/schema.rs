@@ -1,6 +1,5 @@
 use tantivy::schema::*;
 
-/// Field handles for quick access after schema creation
 #[derive(Debug, Clone)]
 pub struct FieldHandles {
     pub path: Field,
@@ -19,9 +18,9 @@ pub struct FieldHandles {
 }
 
 impl FieldHandles {
-    /// Returns all searchable text fields with their names (excluding path)
-    pub fn text_fields(&self) -> Vec<(&'static str, Field)> {
-        vec![
+    /// All searchable text fields with their names (excludes path, tags_stored, mtime).
+    pub fn text_fields(&self) -> [(&'static str, Field); 10] {
+        [
             ("basename", self.basename),
             ("display_title", self.display_title),
             ("directory", self.directory),
@@ -36,15 +35,12 @@ impl FieldHandles {
     }
 }
 
-/// Build the Tantivy schema and return (schema, field handles)
 pub fn build_schema() -> (Schema, FieldHandles) {
-    let mut builder = Schema::builder();
+    let mut b = Schema::builder();
 
-    // path: unique ID, exact match only, stored for retrieval
-    let path = builder.add_text_field("path", STRING | STORED);
+    let path = b.add_text_field("path", STRING | STORED);
 
-    // Custom tokenizer options: indexed with freqs+positions for BM25
-    let text_options = TextOptions::default()
+    let indexed_stored = TextOptions::default()
         .set_indexing_options(
             TextFieldIndexing::default()
                 .set_tokenizer("ferrisearch")
@@ -52,47 +48,43 @@ pub fn build_schema() -> (Schema, FieldHandles) {
         )
         .set_stored();
 
-    let text_not_stored = TextOptions::default().set_indexing_options(
+    let indexed = TextOptions::default().set_indexing_options(
         TextFieldIndexing::default()
             .set_tokenizer("ferrisearch")
             .set_index_option(IndexRecordOption::WithFreqsAndPositions),
     );
 
-    let basename = builder.add_text_field("basename", text_options.clone());
-    let display_title = builder.add_text_field("display_title", text_options.clone());
-    let directory = builder.add_text_field("directory", text_not_stored.clone());
-    let aliases = builder.add_text_field("aliases", text_not_stored.clone());
-    let content = builder.add_text_field("content", text_options.clone());
-    let headings1 = builder.add_text_field("headings1", text_not_stored.clone());
-    let headings2 = builder.add_text_field("headings2", text_not_stored.clone());
-    let headings3 = builder.add_text_field("headings3", text_not_stored.clone());
-    let tags_text = builder.add_text_field("tags_text", text_not_stored.clone());
-    let unmarked_tags = builder.add_text_field("unmarked_tags", text_not_stored);
+    let basename = b.add_text_field("basename", indexed_stored.clone());
+    let display_title = b.add_text_field("display_title", indexed_stored.clone());
+    let directory = b.add_text_field("directory", indexed.clone());
+    let aliases = b.add_text_field("aliases", indexed.clone());
+    let content = b.add_text_field("content", indexed_stored);
+    let headings1 = b.add_text_field("headings1", indexed.clone());
+    let headings2 = b.add_text_field("headings2", indexed.clone());
+    let headings3 = b.add_text_field("headings3", indexed.clone());
+    let tags_text = b.add_text_field("tags_text", indexed.clone());
+    let unmarked_tags = b.add_text_field("unmarked_tags", indexed);
+    let tags_stored = b.add_json_field("tags_stored", STORED);
+    let mtime = b.add_u64_field("mtime", STORED | FAST);
 
-    // Tags stored as JSON for post-search boost
-    let tags_stored = builder.add_json_field("tags_stored", STORED);
-
-    // Modification time: stored and fast for sorting/scoring
-    let mtime = builder.add_u64_field("mtime", STORED | FAST);
-
-    let schema = builder.build();
-    let handles = FieldHandles {
-        path,
-        basename,
-        display_title,
-        directory,
-        aliases,
-        content,
-        headings1,
-        headings2,
-        headings3,
-        tags_text,
-        unmarked_tags,
-        tags_stored,
-        mtime,
-    };
-
-    (schema, handles)
+    (
+        b.build(),
+        FieldHandles {
+            path,
+            basename,
+            display_title,
+            directory,
+            aliases,
+            content,
+            headings1,
+            headings2,
+            headings3,
+            tags_text,
+            unmarked_tags,
+            tags_stored,
+            mtime,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -102,56 +94,36 @@ mod tests {
     #[test]
     fn test_build_schema_returns_all_fields() {
         let (schema, handles) = build_schema();
-        // Verify all fields exist by looking them up by name
-        assert!(schema.get_field("path").is_ok());
-        assert!(schema.get_field("basename").is_ok());
-        assert!(schema.get_field("display_title").is_ok());
-        assert!(schema.get_field("directory").is_ok());
-        assert!(schema.get_field("aliases").is_ok());
-        assert!(schema.get_field("content").is_ok());
-        assert!(schema.get_field("headings1").is_ok());
-        assert!(schema.get_field("headings2").is_ok());
-        assert!(schema.get_field("headings3").is_ok());
-        assert!(schema.get_field("tags_text").is_ok());
-        assert!(schema.get_field("unmarked_tags").is_ok());
-        assert!(schema.get_field("tags_stored").is_ok());
-        assert!(schema.get_field("mtime").is_ok());
-
-        // Verify handles match schema lookups
+        for name in [
+            "path",
+            "basename",
+            "display_title",
+            "directory",
+            "aliases",
+            "content",
+            "headings1",
+            "headings2",
+            "headings3",
+            "tags_text",
+            "unmarked_tags",
+            "tags_stored",
+            "mtime",
+        ] {
+            assert!(schema.get_field(name).is_ok(), "missing field: {name}");
+        }
         assert_eq!(handles.path, schema.get_field("path").unwrap());
-        assert_eq!(handles.basename, schema.get_field("basename").unwrap());
         assert_eq!(handles.content, schema.get_field("content").unwrap());
         assert_eq!(handles.mtime, schema.get_field("mtime").unwrap());
     }
 
     #[test]
     fn test_text_fields_returns_10_searchable_fields() {
-        let (_schema, handles) = build_schema();
-        let text_fields = handles.text_fields();
-        assert_eq!(text_fields.len(), 10);
-
-        let names: Vec<&str> = text_fields.iter().map(|(name, _)| *name).collect();
-        assert!(names.contains(&"basename"));
-        assert!(names.contains(&"display_title"));
-        assert!(names.contains(&"directory"));
-        assert!(names.contains(&"aliases"));
-        assert!(names.contains(&"content"));
-        assert!(names.contains(&"headings1"));
-        assert!(names.contains(&"headings2"));
-        assert!(names.contains(&"headings3"));
-        assert!(names.contains(&"tags_text"));
-        assert!(names.contains(&"unmarked_tags"));
-    }
-
-    #[test]
-    fn test_text_fields_excludes_non_searchable() {
-        let (_schema, handles) = build_schema();
-        let text_fields = handles.text_fields();
-        let names: Vec<&str> = text_fields.iter().map(|(name, _)| *name).collect();
-        // path, tags_stored, mtime should not be in text_fields
+        let (_, handles) = build_schema();
+        let fields = handles.text_fields();
+        assert_eq!(fields.len(), 10);
+        let names: Vec<&str> = fields.iter().map(|(n, _)| *n).collect();
         assert!(!names.contains(&"path"));
         assert!(!names.contains(&"tags_stored"));
         assert!(!names.contains(&"mtime"));
     }
-
 }
