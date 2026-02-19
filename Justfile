@@ -6,6 +6,9 @@ default:
 setup:
     prek install --install-hooks
 
+loc:
+    tokei
+
 dev:
     bun run --watch build.ts
 
