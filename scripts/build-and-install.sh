@@ -14,14 +14,17 @@ PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
 # Map architecture names to match Node.js conventions
 case "$ARCH" in
-  arm64|aarch64) ARCH="arm64" ;;
-  x86_64)        ARCH="x64" ;;
+arm64 | aarch64) ARCH="arm64" ;;
+x86_64) ARCH="x64" ;;
 esac
 
 case "$PLATFORM" in
-  darwin) DYLIB_EXT="dylib" ;;
-  linux)  DYLIB_EXT="so" ;;
-  *)      echo "Unsupported platform: $PLATFORM"; exit 1 ;;
+darwin) DYLIB_EXT="dylib" ;;
+linux) DYLIB_EXT="so" ;;
+*)
+  echo "Unsupported platform: $PLATFORM"
+  exit 1
+  ;;
 esac
 
 NODE_FILE="ferrisearch.${PLATFORM}-${ARCH}.node"
@@ -53,9 +56,9 @@ for VAULT in "${VAULT_NAMES[@]}"; do
   PLUGIN_DIR="$VAULT_ROOT/$VAULT/.obsidian/plugins/ferrisearch"
   echo "==> Installing to $PLUGIN_DIR..."
   mkdir -p "$PLUGIN_DIR"
-  cp dist/main.js           "$PLUGIN_DIR/"
-  cp dist/manifest.json     "$PLUGIN_DIR/"
-  cp dist/styles.css        "$PLUGIN_DIR/"
+  cp dist/main.js "$PLUGIN_DIR/"
+  cp dist/manifest.json "$PLUGIN_DIR/"
+  cp dist/styles.css "$PLUGIN_DIR/"
   cp "$PROJECT_DIR/$NODE_FILE" "$PLUGIN_DIR/"
   ls -lh "$PLUGIN_DIR"
   echo ""

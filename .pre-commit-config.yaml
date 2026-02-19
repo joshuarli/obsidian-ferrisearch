@@ -21,3 +21,15 @@ repos:
         language: system
         types: [rust]
         pass_filenames: false
+
+      - id: shfmt
+        name: shfmt
+        entry: shfmt -w
+        language: system
+        types: [shell]
+
+      - id: shellcheck
+        name: shellcheck
+        entry: shellcheck
+        language: system
+        types: [shell]
