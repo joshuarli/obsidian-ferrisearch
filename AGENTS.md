@@ -6,7 +6,9 @@ Ferrisearch is an Obsidian plugin that provides fast full-text search using a Ru
 TypeScript (Obsidian plugin)  <-->  NAPI-RS  <-->  Rust/Tantivy (search engine)
 ```
 
-The plugin loads a platform-specific `.node` binary (`ferrisearch.{platform}-{arch}.node`) at runtime from the plugin directory. The native module exposes `SearchIndex` with methods for adding/removing documents, committing, and searching.
+The plugin loads a platform-specific `.node` binary (`ferrisearch.{platform}-{arch}.node`) at runtime from the plugin directory via `require()`. The native module exposes `SearchIndex` with methods for adding/removing documents, committing, warming up, and searching.
+
+**NAPI version check:** Native `.node` binaries are cached in memory by `dlopen()` — rebuilding the binary on disk does NOT update the in-memory copy until Obsidian restarts. To detect stale binaries, the native module exports `napiVersion()` (Rust: `NAPI_VERSION` in `napi/src/lib.rs`) and the TS layer checks it against `EXPECTED_NAPI_VERSION` in `search-engine.ts`. **Bump both constants whenever the NAPI interface changes** (new methods, renamed/added fields, changed signatures). On mismatch, the plugin shows a "please restart Obsidian" notice and skips initialization.
 
 ## Directory Structure
 
@@ -52,10 +54,10 @@ crates/
   ferrisearch-core/src/
     lib.rs                 # Re-exports all modules
     types.rs               # Core types: DocumentInput, SearchResult, SearchOptions, FieldBoosts, IndexConfig
-    schema.rs              # Tantivy schema (13 fields, 7 searched) + FieldHandles
+    schema.rs              # Tantivy schema (4 searched fields) + FieldHandles
     tokenizer.rs           # FerrisearchTokenizer (Unicode-category separator regex, camelCase split) + DiacriticFilter
     index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader
-    search.rs              # Search: phrase queries, multi-term boolean, PhrasePrefixQuery, fuzzy, recency boost
+    search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost
   ferrisearch-core/benches/
     query.rs               # Query latency benchmarks (writes bench/results.md with % change tracking)
 bench/
@@ -81,14 +83,15 @@ Sub-tokens sharing the parent position is critical for phrase queries: `"variabl
 
 ### Schema (`schema.rs`)
 
-13 fields total. 7 are searched by default (basename, display_title, directory, content, headings1-3). 3 are indexed but not searched (aliases, tags_text, unmarked_tags — disabled for performance). All text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization).
+4 fields are searched: `display_title`, `directory`, `content`, `headings`. Others are indexed but not searched (basename, aliases, tags_text, unmarked_tags — disabled for performance). All text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization).
 
 ### Search (`search.rs`)
 
-For each query term, builds per-field sub-queries OR'd together, then AND'd across terms:
-- **Exact:** `TermQuery` (boosted by field weight)
-- **Prefix:** `PhrasePrefixQuery` — fast FST prefix scan (0.8x boost)
-- **Fuzzy:** `FuzzyTermQuery` with edit distance based on term length (0.6x boost)
+**Two-phase search** for each query:
+- **Phase 1 (exact + prefix, no fuzzy):** For each term, builds per-field sub-queries OR'd together, then AND'd across terms:
+  - **Exact:** `TermQuery` on all 4 searched fields (boosted by field weight)
+  - **Prefix:** `PhrasePrefixQuery` on 3 fields (skips directory) — fast FST prefix scan (0.8x boost)
+- **Phase 2 (add fuzzy):** Only triggers if Phase 1 returns fewer than `FUZZY_RESULT_THRESHOLD` (5) results and fuzziness > 0. Adds `FuzzyTermQuery` on **content only** (0.6x boost). Correctly-spelled queries never pay the fuzzy cost.
 
 Quoted phrases (`"foo bar"`) use `PhraseQuery` — requires terms at consecutive positions in the same field.
 
@@ -96,7 +99,9 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 ### Index (`index.rs`)
 
-`IndexManager` stores a single `IndexReader` (created once, reloaded after commit via `reader.reload()`). Uses explicit single-threaded `IndexWriter` — Obsidian vaults are small enough that multi-threaded indexing adds overhead without benefit. Heap size: 50MB for disk, 15MB for in-memory (tests).
+`IndexManager` stores an `Index`, `IndexWriter`, and `IndexReader`. Uses explicit single-threaded writer — Obsidian vaults are small enough that multi-threaded indexing adds overhead without benefit. Heap size: 50MB for disk, 15MB for in-memory (tests).
+
+On `commit()`, force-merges to a single segment (best-effort — background merge policy may already have consolidated). Single-segment means a single FST traversal per query. `warm_up()` pre-loads FST pages into the OS page cache by touching each field's `inverted_index().terms().num_terms()`. Called after initial indexing and when the search modal opens.
 
 ## Key Patterns
 
@@ -145,7 +150,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 ## Settings
 
 Settings are persisted via Obsidian's `plugin.saveData()`. Key settings:
-- **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2), `ignoreDiacritics`, `minQueryLength` (default: 3)
+- **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2), `ignoreDiacritics`, `minQueryLength` (default: 3), `resultLimit` (default: 10)
 - **UI:** `showExcerpt`, `maxEmbeds`, `renderLineReturnInExcerpts`, `highlight`
-- **Weighting:** `weightBasename`, `weightDirectory`, `weightH1`–`H3`, `weightUnmarkedTags`
+- **Weighting:** `weightBasename`, `weightDirectory`, `weightHeadings`, `weightUnmarkedTags`
 - **Other:** `recencyBoost` (disabled/day/week/month), `verboseLogging`

@@ -4,7 +4,15 @@ import type FerrisearchPlugin from '../main'
 import { logVerbose, removeDiacritics } from '../tools/utils'
 import type { Query } from './query'
 
+// Must match NAPI_VERSION in napi/src/lib.rs
+const EXPECTED_NAPI_VERSION = 1
+
 // The napi binding types - loaded at runtime
+interface NativeModule {
+  napiVersion(): number
+  SearchIndex: new (indexPath: string, config?: { ignoreDiacritics?: boolean }) => NativeSearchIndex
+}
+
 interface NativeSearchIndex {
   addDocuments(docs: NativeDocumentInput[]): void
   removeDocuments(paths: string[]): void
@@ -66,8 +74,16 @@ export class SearchEngine {
 
   public async initialize(): Promise<void> {
     try {
-      const { SearchIndex } = this.loadNativeModule()
-      this.nativeIndex = new SearchIndex(this.getIndexPath(), {
+      const module = this.loadNativeModule()
+
+      // Detect stale native binary cached by dlopen after a plugin update
+      const version = typeof module.napiVersion === 'function' ? module.napiVersion() : 0
+      if (version !== EXPECTED_NAPI_VERSION) {
+        new Notice('Ferrisearch: native module outdated — please restart Obsidian.', 0)
+        return
+      }
+
+      this.nativeIndex = new module.SearchIndex(this.getIndexPath(), {
         ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
       })
       console.log('Ferrisearch - Native search index initialized')
@@ -372,7 +388,7 @@ export class SearchEngine {
     return `${this.plugin.app.vault.configDir}/plugins/ferrisearch/index-manifest.json`
   }
 
-  private loadNativeModule(): NativeSearchIndex {
+  private loadNativeModule(): NativeModule {
     const path = require('node:path')
     const pluginDir = path.join(
       this.plugin.app.vault.adapter.basePath,

@@ -4,6 +4,15 @@ use napi_derive::napi;
 use ferrisearch_core::index::IndexManager;
 use ferrisearch_core::types;
 
+/// Bump this whenever the NAPI interface changes (new methods, renamed fields, etc.)
+/// so the TS layer can detect a stale dlopen-cached binary and prompt a restart.
+const NAPI_VERSION: u32 = 1;
+
+#[napi]
+pub fn napi_version() -> u32 {
+    NAPI_VERSION
+}
+
 /// A document to be indexed. Maps to a single Obsidian note.
 ///
 /// **Searched fields** (queries match against these via exact, prefix, and fuzzy):
