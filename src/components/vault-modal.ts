@@ -9,7 +9,7 @@ import {
 } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { Query } from '../search/query'
-import { createNote, openNote } from '../tools/notes'
+import { openNote } from '../tools/notes'
 import { getAltKeyLabel, getCtrlKeyLabel, getExtension, loopIndex, wait } from '../tools/utils'
 import { FerrisearchInFileModal, type FerrisearchVaultModal } from './modals'
 import { cleanupResultItem, createVaultResultItem, updateSelection } from './result-items'
@@ -49,10 +49,6 @@ export function renderVaultModal(
   inputField.appendChild(input)
   inputContainer.appendChild(inputField)
 
-  // Create note button slot
-  const buttonsDiv = document.createElement('div')
-  buttonsDiv.className = 'ferrisearch-input-container__buttons'
-  inputContainer.appendChild(buttonsDiv)
   container.appendChild(inputContainer)
 
   // Indexing status
@@ -88,10 +84,7 @@ export function renderVaultModal(
     [`${ctrlKey} ↵`, 'to open in a new pane'],
     [`${ctrlKey} ${altKey} ↵`, 'to open in a new split'],
     [`${ctrlKey} o`, 'to open in the background'],
-    ['Shift ↵', 'to create'],
-    [`${ctrlKey} Shift ↵`, 'to create in a new pane'],
     [`${altKey} ↵`, 'to insert a link'],
-    [`${ctrlKey} g`, 'to toggle excerpts'],
     ['Esc', 'to close'],
   ]
   for (const [cmd, desc] of hints) {
@@ -364,18 +357,6 @@ export function renderVaultModal(
     modal.close()
   }
 
-  async function createNoteAndCloseModal(opt?: { newLeaf: boolean }) {
-    if (searchQuery) {
-      try {
-        await createNote(plugin.app, searchQuery, opt?.newLeaf)
-      } catch (e) {
-        new Notice((e as Error).message)
-        return
-      }
-      modal.close()
-    }
-  }
-
   function insertLink() {
     const selectedNote = getSelectedNote()
     if (!selectedNote) return
@@ -459,7 +440,6 @@ export function renderVaultModal(
   eventBus.enable('vault')
   eventBus.on('vault', Action.Enter, openNoteAndCloseModal)
   eventBus.on('vault', Action.OpenInBackground, openNoteInBackground)
-  eventBus.on('vault', Action.CreateNote, createNoteAndCloseModal)
   eventBus.on('vault', Action.OpenInNewPane, openNoteInNewPane)
   eventBus.on('vault', Action.InsertLink, insertLink)
   eventBus.on('vault', Action.Tab, switchToInFileModal)

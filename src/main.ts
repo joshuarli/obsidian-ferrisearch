@@ -1,13 +1,13 @@
 import { type App, Notice, Plugin, type PluginManifest, TFile } from 'obsidian'
 import { FerrisearchInFileModal, FerrisearchVaultModal } from './components/modals'
 import { Database } from './database'
-import { EventNames, eventBus, IndexingStepType, indexingStep } from './globals'
+import { eventBus, IndexingStepType, indexingStep } from './globals'
 import { NotesIndexer } from './notes-indexer'
 import { DocumentsRepository } from './repositories/documents-repository'
 import { EmbedsRepository } from './repositories/embeds-repository'
 import { SearchEngine } from './search/search-engine'
 import { SearchHistory } from './search/search-history'
-import { getDefaultSettings, loadSettings, SettingsTab, showExcerpt } from './settings'
+import { getDefaultSettings, loadSettings, SettingsTab } from './settings'
 import type { FerrisearchSettings } from './settings/utils'
 import { isPluginDisabled } from './settings/utils'
 import { notifyOnIndexed, registerAPI } from './tools/api'
@@ -47,8 +47,6 @@ export default class FerrisearchPlugin extends Plugin {
 
     registerAPI(this)
 
-    const settings = this.settings
-
     // Always add ribbon button
     this.addRibbonIcon('search', 'Ferrisearch', () => {
       new FerrisearchVaultModal(this).open()
@@ -56,9 +54,6 @@ export default class FerrisearchPlugin extends Plugin {
 
     eventBus.disable('vault')
     eventBus.disable('infile')
-    eventBus.on('global', EventNames.ToggleExcerpts, () => {
-      showExcerpt.set(!settings.showExcerpt)
-    })
 
     // Commands to display Ferrisearch modals
     this.addCommand({

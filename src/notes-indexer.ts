@@ -1,7 +1,5 @@
 import type { TAbstractFile } from 'obsidian'
-import type { IndexedDocument } from './globals'
 import type FerrisearchPlugin from './main'
-import { removeAnchors } from './tools/notes'
 import { logVerbose } from './tools/utils'
 
 export class NotesIndexer {
@@ -33,34 +31,6 @@ export class NotesIndexer {
 
   public isFileIndexable(path: string): boolean {
     return this.isFilePlaintext(path)
-  }
-
-  /**
-   * Index a non-existing note.
-   * Useful to find internal links that lead (yet) to nowhere
-   */
-  public generateIndexableNonexistingDocument(name: string, parent: string): IndexedDocument {
-    name = removeAnchors(name)
-    const filename = name + (name.endsWith('.md') ? '' : '.md')
-
-    return {
-      path: filename,
-      basename: name,
-      displayTitle: '',
-      mtime: 0,
-
-      content: '',
-      cleanedContent: '',
-      tags: [],
-      unmarkedTags: [],
-      aliases: '',
-      headings1: '',
-      headings2: '',
-      headings3: '',
-
-      doesNotExist: true,
-      parent,
-    }
   }
 
   public isFilePlaintext(path: string): boolean {

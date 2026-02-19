@@ -1,5 +1,5 @@
 import { MarkdownView, Modal, type TFile } from 'obsidian'
-import { Action, EventNames, eventBus, isInputComposition } from '../globals'
+import { Action, eventBus, isInputComposition } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { renderInFileModal } from './infile-modal'
 import { renderVaultModal } from './vault-modal'
@@ -68,16 +68,6 @@ abstract class FerrisearchModal extends Modal {
       eventBus.emit(Action.InsertLink)
     })
 
-    // Create a new note
-    this.scope.register(['Shift'], 'Enter', e => {
-      e.preventDefault()
-      eventBus.emit(Action.CreateNote)
-    })
-    this.scope.register(['Mod', 'Shift'], 'Enter', e => {
-      e.preventDefault()
-      eventBus.emit(Action.CreateNote, { newLeaf: true })
-    })
-
     // Open in current pane
     this.scope.register([], 'Enter', e => {
       if (!isInputComposition()) {
@@ -107,11 +97,6 @@ abstract class FerrisearchModal extends Modal {
     this.scope.register(['Alt'], 'ArrowUp', e => {
       e.preventDefault()
       eventBus.emit(Action.PrevSearchHistory)
-    })
-
-    // Context
-    this.scope.register(['Mod'], 'G', _e => {
-      eventBus.emit(EventNames.ToggleExcerpts)
     })
   }
 }

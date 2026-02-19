@@ -35,10 +35,6 @@ export const K_DISABLE_FERRISEARCH = 'ferrisearch-disabled'
 
 export const eventBus = new EventBus()
 
-export const EventNames = {
-  ToggleExcerpts: 'toggle-excerpts',
-} as const
-
 export enum IndexingStepType {
   Done,
   LoadingCache,
@@ -50,7 +46,6 @@ export enum IndexingStepType {
 export enum Action {
   Enter = 'enter',
   OpenInBackground = 'open-in-background',
-  CreateNote = 'create-note',
   OpenInNewPane = 'open-in-new-pane',
   InsertLink = 'insert-link',
   Tab = 'tab',
@@ -84,9 +79,6 @@ export type IndexedDocument = {
   headings1: string
   headings2: string
   headings3: string
-
-  doesNotExist?: boolean
-  parent?: string
 }
 
 export type SearchMatch = {

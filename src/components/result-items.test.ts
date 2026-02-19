@@ -39,22 +39,6 @@ describe('createVaultResultItem', () => {
     expect(el.className).not.toContain('ferrisearch-result__embed')
   })
 
-  it('shows glyph when glyph=true', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
-    const el = createVaultResultItem(note, plugin, true)
-    const flair = el.querySelector('.suggestion-flair')
-    expect(flair).not.toBeNull()
-    expect(flair?.innerHTML).toContain('svg')
-  })
-
-  it('does not show glyph by default', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
-    const el = createVaultResultItem(note, plugin)
-    expect(el.querySelector('.suggestion-flair')).toBeNull()
-  })
-
   it('displays match counter with singular "match"', () => {
     const plugin = createMockPlugin()
     const note = createMockResultNote({ matches: [{ match: 'test', offset: 0 }] })
