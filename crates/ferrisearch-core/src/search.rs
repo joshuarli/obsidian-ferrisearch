@@ -185,30 +185,16 @@ impl IndexManager {
         // Extract tags from stored JSON
         let tags: Vec<String> = doc
             .get_first(self.fields.tags_stored)
-            .and_then(|v| {
-                if let tantivy::schema::OwnedValue::Object(map) = v {
-                    map.iter()
-                        .find(|(k, _)| k.as_str() == "tags")
-                        .and_then(|(_, v)| {
-                            if let tantivy::schema::OwnedValue::Array(arr) = v {
-                                Some(
-                                    arr.iter()
-                                        .filter_map(|item| {
-                                            if let tantivy::schema::OwnedValue::Str(s) = item {
-                                                Some(s.clone())
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .collect(),
-                                )
-                            } else {
-                                None
-                            }
-                        })
-                } else {
-                    None
-                }
+            .and_then(|v| v.as_object())
+            .and_then(|obj| {
+                obj.into_iter()
+                    .find(|(k, _)| *k == "tags")
+                    .and_then(|(_, v)| v.as_array())
+                    .map(|arr| {
+                        arr.into_iter()
+                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
             })
             .unwrap_or_default();
 

@@ -115,7 +115,6 @@ impl IndexManager {
         tantivy_doc.add_text(self.fields.unmarked_tags, &doc.unmarked_tags.join(" "));
 
         // Tags stored as JSON for post-search boost
-        // Convert to BTreeMap<String, OwnedValue>
         let tags_array: Vec<tantivy::schema::OwnedValue> = doc
             .tags
             .iter()
