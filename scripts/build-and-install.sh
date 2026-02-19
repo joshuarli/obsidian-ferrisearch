@@ -3,8 +3,8 @@ set -euo pipefail
 
 # ── Configuration ────────────────────────────────────────────────────────────
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-VAULT_PATH="${FERRISEARCH_VAULT:-/Users/josh/iCloud~md~obsidian/Documents/Notes}"
-PLUGIN_DIR="$VAULT_PATH/.obsidian/plugins/ferrisearch"
+VAULT_ROOT="/Users/josh/iCloud~md~obsidian/Documents"
+VAULT_NAMES=("Notes" "Apple Notes")
 
 # Ensure Rust toolchain is in PATH
 export PATH="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH"
@@ -48,16 +48,18 @@ cd "$PROJECT_DIR"
 bun run build.ts production
 echo "    Built dist/main.js ($(du -h dist/main.js | cut -f1 | xargs))"
 
-# ── Step 3: Install to Obsidian vault ────────────────────────────────────────
-echo "==> Installing to $PLUGIN_DIR..."
-mkdir -p "$PLUGIN_DIR"
-cp dist/main.js     "$PLUGIN_DIR/"
-cp dist/manifest.json "$PLUGIN_DIR/"
-cp dist/styles.css  "$PLUGIN_DIR/"
-cp "$PROJECT_DIR/$NODE_FILE" "$PLUGIN_DIR/"
+# ── Step 3: Install to Obsidian vaults ───────────────────────────────────────
+for VAULT in "${VAULT_NAMES[@]}"; do
+  PLUGIN_DIR="$VAULT_ROOT/$VAULT/.obsidian/plugins/ferrisearch"
+  echo "==> Installing to $PLUGIN_DIR..."
+  mkdir -p "$PLUGIN_DIR"
+  cp dist/main.js           "$PLUGIN_DIR/"
+  cp dist/manifest.json     "$PLUGIN_DIR/"
+  cp dist/styles.css        "$PLUGIN_DIR/"
+  cp "$PROJECT_DIR/$NODE_FILE" "$PLUGIN_DIR/"
+  ls -lh "$PLUGIN_DIR"
+  echo ""
+done
 
-echo ""
-echo "==> Installed successfully!"
-ls -lh "$PLUGIN_DIR"
-echo ""
+echo "==> Installed to ${#VAULT_NAMES[@]} vaults!"
 echo "Reload Obsidian or toggle the plugin to pick up the changes."
