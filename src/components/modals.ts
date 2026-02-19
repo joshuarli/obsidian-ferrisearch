@@ -110,19 +110,15 @@ export class FerrisearchVaultModal extends FerrisearchModal {
       .getActiveViewOfType(MarkdownView)
       ?.editor.getSelection()
 
-    plugin.searchHistory.getHistory().then(history => {
-      const previous = history[0] ?? null
-
-      const handle = renderVaultModal(this.modalEl, {
-        plugin,
-        modal: this,
-        previousQuery: query || selectedText || previous || '',
-      })
-
-      this.onClose = () => {
-        handle.destroy()
-      }
+    const handle = renderVaultModal(this.modalEl, {
+      plugin,
+      modal: this,
+      previousQuery: query || selectedText || '',
     })
+
+    this.onClose = () => {
+      handle.destroy()
+    }
   }
 }
 
