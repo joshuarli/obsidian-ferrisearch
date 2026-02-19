@@ -54,26 +54,29 @@ impl Tokenizer for FerrisearchTokenizer {
 
 fn emit_tokens(tokens: &mut Vec<Token>, segment: &str, offset_from: usize, position: &mut usize) {
     let offset_to = offset_from + segment.len();
+    let pos = *position;
 
     tokens.push(Token {
         offset_from,
         offset_to,
-        position: *position,
+        position: pos,
         text: segment.to_lowercase(),
         ..Default::default()
     });
-    *position += 1;
 
+    // CamelCase sub-tokens share the same position as the parent so that
+    // phrase queries still work across camelCase boundaries.
     for part in split_camel_case(segment) {
         tokens.push(Token {
             offset_from,
             offset_to,
-            position: *position,
+            position: pos,
             text: part.to_lowercase(),
             ..Default::default()
         });
-        *position += 1;
     }
+
+    *position += 1;
 }
 
 pub struct FerrisearchTokenStream {
@@ -345,6 +348,21 @@ mod tests {
         for w in positions.windows(2) {
             assert!(w[1] > w[0]);
         }
+    }
+
+    #[test]
+    fn camel_case_shares_parent_position() {
+        let mut t = FerrisearchTokenizer::new();
+        let mut stream = t.token_stream("fooBar baz");
+        let mut tokens = Vec::new();
+        while stream.advance() {
+            tokens.push((stream.token().text.clone(), stream.token().position));
+        }
+        // "foobar", "foo", "bar" all at position 0; "baz" at position 1
+        assert!(tokens.contains(&("foobar".into(), 0)));
+        assert!(tokens.contains(&("foo".into(), 0)));
+        assert!(tokens.contains(&("bar".into(), 0)));
+        assert!(tokens.contains(&("baz".into(), 1)));
     }
 
     #[test]

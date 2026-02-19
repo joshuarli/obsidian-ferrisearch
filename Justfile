@@ -3,6 +3,9 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
+setup:
+    prek install --install-hooks
+
 dev:
     bun run --watch build.ts
 

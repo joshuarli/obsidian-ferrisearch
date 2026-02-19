@@ -1,6 +1,6 @@
 use tantivy::collector::TopDocs;
 use tantivy::query::{
-    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, RegexQuery, TermQuery,
+    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, PhraseQuery, Query, RegexQuery, TermQuery,
 };
 use tantivy::schema::{IndexRecordOption, Value};
 use tantivy::{DocAddress, Searcher, Term};
@@ -8,8 +8,76 @@ use tantivy::{DocAddress, Searcher, Term};
 use crate::index::{IndexError, IndexManager};
 use crate::types::{SearchOptions, SearchResult};
 
+/// Parsed query: individual terms and quoted phrases.
+struct ParsedQuery {
+    terms: Vec<String>,
+    phrases: Vec<Vec<String>>,
+}
+
+/// Parse a query string into individual terms and quoted phrases.
+/// `"foo bar" baz` → phrases: \[\["foo", "bar"\]\], terms: \["baz"\]
+/// Single-word phrases are promoted to terms. Unclosed quotes are treated as terms.
+fn parse_query(input: &str) -> ParsedQuery {
+    let mut terms = Vec::new();
+    let mut phrases = Vec::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(&ch) = chars.peek() {
+        if ch.is_whitespace() {
+            chars.next();
+            continue;
+        }
+
+        if ch == '"' {
+            chars.next(); // consume opening quote
+            let mut phrase_text = String::new();
+            let mut closed = false;
+
+            for c in chars.by_ref() {
+                if c == '"' {
+                    closed = true;
+                    break;
+                }
+                phrase_text.push(c);
+            }
+
+            if closed {
+                let words: Vec<String> = phrase_text
+                    .split_whitespace()
+                    .map(|w| w.to_lowercase())
+                    .collect();
+                match words.len() {
+                    0 => {}
+                    1 => terms.push(words.into_iter().next().unwrap()),
+                    _ => phrases.push(words),
+                }
+            } else {
+                // Unclosed quote: treat contents as individual terms
+                for word in phrase_text.split_whitespace() {
+                    terms.push(word.to_lowercase());
+                }
+            }
+        } else {
+            let mut word = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_whitespace() || c == '"' {
+                    break;
+                }
+                word.push(c);
+                chars.next();
+            }
+            if !word.is_empty() {
+                terms.push(word.to_lowercase());
+            }
+        }
+    }
+
+    ParsedQuery { terms, phrases }
+}
+
 impl IndexManager {
     /// Search the index with the given query string and options.
+    /// Supports quoted phrases: `"quick brown"` requires adjacent terms.
     pub fn search(
         &self,
         query_str: &str,
@@ -28,24 +96,32 @@ impl IndexManager {
             _ => 0.2,
         };
 
-        let terms: Vec<&str> = query_str.split_whitespace().collect();
-        if terms.is_empty() {
+        let parsed = parse_query(query_str);
+        if parsed.terms.is_empty() && parsed.phrases.is_empty() {
             return Ok(Vec::new());
         }
 
-        // For each query term, build an OR across all text fields.
-        // Then combine all term queries with AND (every term must match somewhere).
-        let must_clauses: Vec<(Occur, Box<dyn Query>)> = terms
+        // All individual words (terms + phrase words) for matched_terms / highlighting
+        let all_words: Vec<String> = parsed
+            .terms
             .iter()
-            .map(|term_str| {
-                let lower = term_str.to_lowercase();
+            .chain(parsed.phrases.iter().flatten())
+            .cloned()
+            .collect();
+
+        // For each query term, build an OR across all text fields (exact + prefix + fuzzy).
+        // Then combine all term queries with AND (every term must match somewhere).
+        let mut must_clauses: Vec<(Occur, Box<dyn Query>)> = parsed
+            .terms
+            .iter()
+            .map(|lower| {
                 let field_queries: Vec<(Occur, Box<dyn Query>)> = self
                     .fields
                     .text_fields()
                     .iter()
                     .flat_map(|(name, field)| {
                         let boost = options.field_boosts.for_field(name);
-                        let term = Term::from_field_text(*field, &lower);
+                        let term = Term::from_field_text(*field, lower);
                         let mut queries: Vec<(Occur, Box<dyn Query>)> = Vec::with_capacity(3);
 
                         // Exact match
@@ -63,7 +139,7 @@ impl IndexManager {
                         // Prefix match
                         if lower.len() >= options.prefix_length
                             && let Ok(rq) = RegexQuery::from_pattern(
-                                &format!("{}.*", regex::escape(&lower)),
+                                &format!("{}.*", regex::escape(lower)),
                                 *field,
                             )
                         {
@@ -75,7 +151,7 @@ impl IndexManager {
 
                         // Fuzzy match
                         if fuzziness > 0.0 {
-                            let dist = fuzzy_distance(&lower, fuzziness);
+                            let dist = fuzzy_distance(lower, fuzziness);
                             if dist > 0 {
                                 queries.push((
                                     Occur::Should,
@@ -97,6 +173,32 @@ impl IndexManager {
                 )
             })
             .collect();
+
+        // Phrase queries: each phrase must match in at least one field
+        for phrase_words in &parsed.phrases {
+            let field_queries: Vec<(Occur, Box<dyn Query>)> = self
+                .fields
+                .text_fields()
+                .iter()
+                .map(|(name, field)| {
+                    let boost = options.field_boosts.for_field(name);
+                    let terms: Vec<Term> = phrase_words
+                        .iter()
+                        .map(|w| Term::from_field_text(*field, w))
+                        .collect();
+                    (
+                        Occur::Should,
+                        Box::new(BoostQuery::new(Box::new(PhraseQuery::new(terms)), boost))
+                            as Box<dyn Query>,
+                    )
+                })
+                .collect();
+
+            must_clauses.push((
+                Occur::Must,
+                Box::new(BooleanQuery::new(field_queries)) as Box<dyn Query>,
+            ));
+        }
 
         let mut final_query: Box<dyn Query> = Box::new(BooleanQuery::new(must_clauses));
 
@@ -130,7 +232,7 @@ impl IndexManager {
             .into_iter()
             .filter_map(|(score, addr)| {
                 let mut r = self
-                    .doc_to_result(&searcher, addr, score as f64, &terms)
+                    .doc_to_result(&searcher, addr, score as f64, &all_words)
                     .ok()?;
                 if let Some(decay) = recency_decay {
                     let days = (now - r.mtime as f64) / (24.0 * 3_600_000.0);
@@ -156,7 +258,7 @@ impl IndexManager {
         searcher: &Searcher,
         addr: DocAddress,
         score: f64,
-        query_terms: &[&str],
+        query_words: &[String],
     ) -> Result<SearchResult, IndexError> {
         let doc: tantivy::TantivyDocument = searcher.doc(addr)?;
         let f = &self.fields;
@@ -187,7 +289,7 @@ impl IndexManager {
             content: text(f.content),
             mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0),
             score,
-            matched_terms: query_terms.iter().map(|t| t.to_lowercase()).collect(),
+            matched_terms: query_words.to_vec(),
             tags,
         })
     }
@@ -526,5 +628,189 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    // ── Phrase query tests ─────────────────────────────────────────────
+
+    #[test]
+    fn phrase_basic_match() {
+        let mgr = setup_index(vec![
+            make_doc("a.md", "a", "the quick brown fox jumps"),
+            make_doc("b.md", "b", "the brown quick fox jumps"),
+        ]);
+        let results = mgr
+            .search("\"quick brown\"", &SearchOptions::default())
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn phrase_no_match_reversed() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "the brown quick fox")]);
+        assert!(
+            mgr.search("\"quick brown\"", &SearchOptions::default())
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn phrase_no_match_non_adjacent() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "quick red brown fox")]);
+        assert!(
+            mgr.search("\"quick brown\"", &SearchOptions::default())
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn phrase_with_extra_terms() {
+        let mgr = setup_index(vec![
+            make_doc("a.md", "a", "the quick brown fox jumps over the lazy dog"),
+            make_doc("b.md", "b", "the lazy dog sleeps all day"),
+        ]);
+        let results = mgr
+            .search("\"quick brown\" lazy", &SearchOptions::default())
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn single_word_phrase_as_term() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "hello world")]);
+        let results = mgr.search("\"hello\"", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn multiple_phrases() {
+        let mgr = setup_index(vec![
+            make_doc("a.md", "a", "quick brown fox and lazy dog"),
+            make_doc("b.md", "b", "quick brown fox and busy cat"),
+        ]);
+        let results = mgr
+            .search("\"quick brown\" \"lazy dog\"", &SearchOptions::default())
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn empty_phrase_ignored() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "hello world")]);
+        assert!(
+            mgr.search("\"\"", &SearchOptions::default())
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn unclosed_quote_as_terms() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "hello beautiful world")]);
+        // Unclosed quote: words treated as individual terms (AND, not phrase)
+        let results = mgr
+            .search("\"hello world", &SearchOptions::default())
+            .unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn phrase_in_headings() {
+        let mut doc = make_doc("a.md", "a", "body text only");
+        doc.headings1 = "quick brown fox".into();
+        let mgr = setup_index(vec![doc]);
+        let results = mgr
+            .search("\"quick brown\"", &SearchOptions::default())
+            .unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn phrase_across_camel_case_boundary() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "myVariable is great")]);
+        // "variable is" matches because sub-token "variable" (pos 0) and "is" (pos 1)
+        // are at consecutive positions
+        let results = mgr
+            .search("\"variable is\"", &SearchOptions::default())
+            .unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn phrase_matched_terms_include_phrase_words() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "the quick brown fox")]);
+        let results = mgr
+            .search("\"quick brown\" fox", &SearchOptions::default())
+            .unwrap();
+        assert!(!results.is_empty());
+        assert!(results[0].matched_terms.contains(&"quick".into()));
+        assert!(results[0].matched_terms.contains(&"brown".into()));
+        assert!(results[0].matched_terms.contains(&"fox".into()));
+    }
+
+    // ── Query parser tests ─────────────────────────────────────────────
+
+    #[test]
+    fn parse_query_simple_terms() {
+        let p = parse_query("hello world");
+        assert_eq!(p.terms, vec!["hello", "world"]);
+        assert!(p.phrases.is_empty());
+    }
+
+    #[test]
+    fn parse_query_single_phrase() {
+        let p = parse_query("\"quick brown\"");
+        assert!(p.terms.is_empty());
+        assert_eq!(p.phrases, vec![vec!["quick", "brown"]]);
+    }
+
+    #[test]
+    fn parse_query_phrase_and_terms() {
+        let p = parse_query("hello \"quick brown\" world");
+        assert_eq!(p.terms, vec!["hello", "world"]);
+        assert_eq!(p.phrases, vec![vec!["quick", "brown"]]);
+    }
+
+    #[test]
+    fn parse_query_single_word_phrase_promoted() {
+        let p = parse_query("\"hello\"");
+        assert_eq!(p.terms, vec!["hello"]);
+        assert!(p.phrases.is_empty());
+    }
+
+    #[test]
+    fn parse_query_empty_phrase_ignored() {
+        let p = parse_query("\"\"");
+        assert!(p.terms.is_empty());
+        assert!(p.phrases.is_empty());
+    }
+
+    #[test]
+    fn parse_query_unclosed_quote() {
+        let p = parse_query("\"hello world");
+        assert_eq!(p.terms, vec!["hello", "world"]);
+        assert!(p.phrases.is_empty());
+    }
+
+    #[test]
+    fn parse_query_multiple_phrases() {
+        let p = parse_query("\"foo bar\" \"baz qux\"");
+        assert!(p.terms.is_empty());
+        assert_eq!(p.phrases, vec![vec!["foo", "bar"], vec!["baz", "qux"]]);
+    }
+
+    #[test]
+    fn parse_query_lowercases() {
+        let p = parse_query("Hello \"FOO Bar\"");
+        assert_eq!(p.terms, vec!["hello"]);
+        assert_eq!(p.phrases, vec![vec!["foo", "bar"]]);
     }
 }
