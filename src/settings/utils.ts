@@ -15,9 +15,7 @@ export const needsARestart = `<strong style="color: var(--text-accent)">Needs a 
 export interface WeightingSettings {
   weightBasename: number
   weightDirectory: number
-  weightH1: number
-  weightH2: number
-  weightH3: number
+  weightHeadings: number
   weightUnmarkedTags: number
 }
 

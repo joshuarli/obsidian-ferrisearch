@@ -65,9 +65,7 @@ export type IndexedDocument = {
   aliases: string
   tags: string[]
   unmarkedTags: string[]
-  headings1: string
-  headings2: string
-  headings3: string
+  headings: string
 }
 
 export type SearchMatch = {

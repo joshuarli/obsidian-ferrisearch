@@ -7,7 +7,7 @@ use ferrisearch_core::types;
 /// A document to be indexed. Maps to a single Obsidian note.
 ///
 /// **Searched fields** (queries match against these via exact, prefix, and fuzzy):
-///   `display_title`, `directory` (derived from path), `content`, `headings1-3`
+///   `display_title`, `directory` (derived from path), `content`, `headings`
 ///
 /// **Indexed but not searched** (stored for retrieval/filtering, not matched by queries):
 ///   `basename`, `aliases`, `tags`, `unmarked_tags`
@@ -28,12 +28,8 @@ pub struct DocumentInput {
     pub aliases: String,
     /// Full markdown body of the note (without frontmatter). Primary search field.
     pub content: String,
-    /// Space-joined `# H1` headings. Searched with 6x boost.
-    pub headings1: String,
-    /// Space-joined `## H2` headings. Searched with 5x boost.
-    pub headings2: String,
-    /// Space-joined `### H3` headings. Searched with 4x boost.
-    pub headings3: String,
+    /// Space-joined headings from all levels (H1-H3). Searched with 5x boost.
+    pub headings: String,
     /// Obsidian tags from frontmatter and inline `#tag` syntax, e.g. ["#rust", "#code"].
     /// Stored as JSON for post-search retrieval. Indexed as text but not searched by default.
     pub tags: Vec<String>,
@@ -52,9 +48,7 @@ impl From<DocumentInput> for types::DocumentInput {
             display_title: d.display_title,
             aliases: d.aliases,
             content: d.content,
-            headings1: d.headings1,
-            headings2: d.headings2,
-            headings3: d.headings3,
+            headings: d.headings,
             tags: d.tags,
             unmarked_tags: d.unmarked_tags,
             mtime: d.mtime as u64,
@@ -83,9 +77,7 @@ pub struct FieldBoosts {
     pub display_title: Option<f64>,
     pub aliases: Option<f64>,
     pub directory: Option<f64>,
-    pub headings1: Option<f64>,
-    pub headings2: Option<f64>,
-    pub headings3: Option<f64>,
+    pub headings: Option<f64>,
     pub tags_text: Option<f64>,
     pub unmarked_tags: Option<f64>,
     pub content: Option<f64>,
@@ -99,9 +91,7 @@ impl From<FieldBoosts> for types::FieldBoosts {
             display_title: b.display_title.map_or(d.display_title, |v| v as f32),
             aliases: b.aliases.map_or(d.aliases, |v| v as f32),
             directory: b.directory.map_or(d.directory, |v| v as f32),
-            headings1: b.headings1.map_or(d.headings1, |v| v as f32),
-            headings2: b.headings2.map_or(d.headings2, |v| v as f32),
-            headings3: b.headings3.map_or(d.headings3, |v| v as f32),
+            headings: b.headings.map_or(d.headings, |v| v as f32),
             tags_text: b.tags_text.map_or(d.tags_text, |v| v as f32),
             unmarked_tags: b.unmarked_tags.map_or(d.unmarked_tags, |v| v as f32),
             content: b.content.map_or(d.content, |v| v as f32),

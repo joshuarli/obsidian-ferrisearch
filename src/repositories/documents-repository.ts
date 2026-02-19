@@ -81,9 +81,13 @@ export class DocumentsRepository {
       tags,
       unmarkedTags: tags.map(t => t.replace('#', '')),
       aliases: getAliasesFromMetadata(metadata).join(''),
-      headings1: metadata ? extractHeadingsFromCache(metadata, 1).join(' ') : '',
-      headings2: metadata ? extractHeadingsFromCache(metadata, 2).join(' ') : '',
-      headings3: metadata ? extractHeadingsFromCache(metadata, 3).join(' ') : '',
+      headings: metadata
+        ? [
+            ...extractHeadingsFromCache(metadata, 1),
+            ...extractHeadingsFromCache(metadata, 2),
+            ...extractHeadingsFromCache(metadata, 3),
+          ].join(' ')
+        : '',
     }
   }
 }

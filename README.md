@@ -12,5 +12,6 @@ key changes:
   - dependencies have been cut down to the minimum
     - svelte has been replaced with pure TS for simplicity
     - bun replaces esbuild
-- focus on reducing percieved latency
+- cut down on query granularity for maximum performance
+- cut down on unnecessary/useless queries
   - the first 2 search characters do not issue a query by default

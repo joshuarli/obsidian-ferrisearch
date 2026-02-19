@@ -100,9 +100,7 @@ impl IndexManager {
         d.add_text(f.directory, path_without_filename(&doc.path));
         d.add_text(f.aliases, &doc.aliases);
         d.add_text(f.content, &doc.content);
-        d.add_text(f.headings1, &doc.headings1);
-        d.add_text(f.headings2, &doc.headings2);
-        d.add_text(f.headings3, &doc.headings3);
+        d.add_text(f.headings, &doc.headings);
         d.add_text(f.tags_text, doc.tags.join(" "));
         d.add_text(f.unmarked_tags, doc.unmarked_tags.join(" "));
 
@@ -187,9 +185,7 @@ mod tests {
             display_title: String::new(),
             aliases: String::new(),
             content: content.into(),
-            headings1: String::new(),
-            headings2: String::new(),
-            headings3: String::new(),
+            headings: String::new(),
             tags: vec![],
             unmarked_tags: vec![],
             mtime: 1000,
@@ -321,9 +317,7 @@ mod tests {
             display_title: "Test Title".into(),
             aliases: "alias1 alias2".into(),
             content: "Full content here".into(),
-            headings1: "Heading One".into(),
-            headings2: "Heading Two".into(),
-            headings3: "Heading Three".into(),
+            headings: "Heading One Heading Two Heading Three".into(),
             tags: vec!["#rust".into(), "#code".into()],
             unmarked_tags: vec!["programming".into()],
             mtime: 42000,

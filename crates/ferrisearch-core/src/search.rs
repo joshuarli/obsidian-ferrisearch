@@ -322,9 +322,7 @@ mod tests {
             display_title: title.into(),
             aliases: String::new(),
             content: content.into(),
-            headings1: String::new(),
-            headings2: String::new(),
-            headings3: String::new(),
+            headings: String::new(),
             tags: vec![],
             unmarked_tags: vec![],
             mtime: std::time::SystemTime::now()
@@ -528,9 +526,7 @@ mod tests {
         assert_eq!(b.for_field("aliases"), 10.0);
         assert_eq!(b.for_field("directory"), 7.0);
         assert_eq!(b.for_field("content"), 1.0);
-        assert_eq!(b.for_field("headings1"), 6.0);
-        assert_eq!(b.for_field("headings2"), 5.0);
-        assert_eq!(b.for_field("headings3"), 4.0);
+        assert_eq!(b.for_field("headings"), 5.0);
         assert_eq!(b.for_field("tags_text"), 2.0);
         assert_eq!(b.for_field("unmarked_tags"), 2.0);
         assert_eq!(b.for_field("nonexistent"), 1.0);
@@ -539,7 +535,7 @@ mod tests {
     #[test]
     fn headings_search() {
         let mut doc = make_doc("a.md", "a", "body text");
-        doc.headings1 = "Important Heading".into();
+        doc.headings = "Important Heading".into();
         let mgr = setup_index(vec![doc]);
         let results = mgr.search("important", &SearchOptions::default()).unwrap();
         assert!(!results.is_empty());
@@ -712,7 +708,7 @@ mod tests {
     #[test]
     fn phrase_in_headings() {
         let mut doc = make_doc("a.md", "a", "body text only");
-        doc.headings1 = "quick brown fox".into();
+        doc.headings = "quick brown fox".into();
         let mgr = setup_index(vec![doc]);
         let results = mgr
             .search("\"quick brown\"", &SearchOptions::default())

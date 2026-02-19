@@ -86,9 +86,7 @@ export function getDefaultSettings(): FerrisearchSettings {
 
     weightBasename: 10,
     weightDirectory: 7,
-    weightH1: 6,
-    weightH2: 5,
-    weightH3: 4,
+    weightHeadings: 5,
     weightUnmarkedTags: 2,
 
     welcomeMessage: '',

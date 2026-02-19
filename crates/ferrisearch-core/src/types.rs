@@ -7,9 +7,7 @@ pub struct DocumentInput {
     pub display_title: String,
     pub aliases: String,
     pub content: String,
-    pub headings1: String,
-    pub headings2: String,
-    pub headings3: String,
+    pub headings: String,
     pub tags: Vec<String>,
     pub unmarked_tags: Vec<String>,
     pub mtime: u64,
@@ -72,9 +70,7 @@ pub struct FieldBoosts {
     pub display_title: f32,
     pub aliases: f32,
     pub directory: f32,
-    pub headings1: f32,
-    pub headings2: f32,
-    pub headings3: f32,
+    pub headings: f32,
     pub tags_text: f32,
     pub unmarked_tags: f32,
     pub content: f32,
@@ -87,9 +83,7 @@ impl Default for FieldBoosts {
             display_title: 10.0,
             aliases: 10.0,
             directory: 7.0,
-            headings1: 6.0,
-            headings2: 5.0,
-            headings3: 4.0,
+            headings: 5.0,
             tags_text: 2.0,
             unmarked_tags: 2.0,
             content: 1.0,
@@ -105,9 +99,7 @@ impl FieldBoosts {
             "aliases" => self.aliases,
             "directory" => self.directory,
             "content" => self.content,
-            "headings1" => self.headings1,
-            "headings2" => self.headings2,
-            "headings3" => self.headings3,
+            "headings" => self.headings,
             "tags_text" => self.tags_text,
             "unmarked_tags" => self.unmarked_tags,
             _ => 1.0,
@@ -147,6 +139,7 @@ mod tests {
     fn test_field_boosts_for_field() {
         let boosts = FieldBoosts::default();
         assert_eq!(boosts.for_field("basename"), 10.0);
+        assert_eq!(boosts.for_field("headings"), 5.0);
         assert_eq!(boosts.for_field("content"), 1.0);
         assert_eq!(boosts.for_field("unknown"), 1.0);
     }

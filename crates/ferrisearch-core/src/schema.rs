@@ -8,9 +8,7 @@ pub struct FieldHandles {
     pub directory: Field,
     pub aliases: Field,
     pub content: Field,
-    pub headings1: Field,
-    pub headings2: Field,
-    pub headings3: Field,
+    pub headings: Field,
     pub tags_text: Field,
     pub unmarked_tags: Field,
     pub tags_stored: Field,
@@ -19,14 +17,12 @@ pub struct FieldHandles {
 
 impl FieldHandles {
     /// Primary searchable text fields (excludes basename, tags, aliases, path, tags_stored, mtime).
-    pub fn text_fields(&self) -> [(&'static str, Field); 6] {
+    pub fn text_fields(&self) -> [(&'static str, Field); 4] {
         [
             ("display_title", self.display_title),
             ("directory", self.directory),
             ("content", self.content),
-            ("headings1", self.headings1),
-            ("headings2", self.headings2),
-            ("headings3", self.headings3),
+            ("headings", self.headings),
         ]
     }
 }
@@ -59,9 +55,7 @@ pub fn build_schema() -> (Schema, FieldHandles) {
     let directory = b.add_text_field("directory", short.clone());
     let aliases = b.add_text_field("aliases", short.clone());
     let content = b.add_text_field("content", content_opts);
-    let headings1 = b.add_text_field("headings1", short.clone());
-    let headings2 = b.add_text_field("headings2", short.clone());
-    let headings3 = b.add_text_field("headings3", short.clone());
+    let headings = b.add_text_field("headings", short.clone());
     let tags_text = b.add_text_field("tags_text", short.clone());
     let unmarked_tags = b.add_text_field("unmarked_tags", short);
     let tags_stored = b.add_json_field("tags_stored", STORED);
@@ -76,9 +70,7 @@ pub fn build_schema() -> (Schema, FieldHandles) {
             directory,
             aliases,
             content,
-            headings1,
-            headings2,
-            headings3,
+            headings,
             tags_text,
             unmarked_tags,
             tags_stored,
@@ -101,9 +93,7 @@ mod tests {
             "directory",
             "aliases",
             "content",
-            "headings1",
-            "headings2",
-            "headings3",
+            "headings",
             "tags_text",
             "unmarked_tags",
             "tags_stored",
@@ -120,14 +110,11 @@ mod tests {
     fn test_text_fields_returns_searchable_fields() {
         let (_, handles) = build_schema();
         let fields = handles.text_fields();
-        assert_eq!(fields.len(), 6);
+        assert_eq!(fields.len(), 4);
         let names: Vec<&str> = fields.iter().map(|(n, _)| *n).collect();
-        assert!(!names.contains(&"path"));
-        assert!(!names.contains(&"basename"));
-        assert!(!names.contains(&"aliases"));
-        assert!(!names.contains(&"tags_text"));
-        assert!(!names.contains(&"unmarked_tags"));
-        assert!(!names.contains(&"tags_stored"));
-        assert!(!names.contains(&"mtime"));
+        assert!(names.contains(&"display_title"));
+        assert!(names.contains(&"directory"));
+        assert!(names.contains(&"content"));
+        assert!(names.contains(&"headings"));
     }
 }

@@ -21,9 +21,7 @@ interface NativeDocumentInput {
   displayTitle: string
   aliases: string
   content: string
-  headings1: string
-  headings2: string
-  headings3: string
+  headings: string
   tags: string[]
   unmarkedTags: string[]
   mtime: number
@@ -35,9 +33,7 @@ interface NativeSearchOptions {
     displayTitle?: number
     aliases?: number
     directory?: number
-    headings1?: number
-    headings2?: number
-    headings3?: number
+    headings?: number
     tagsText?: number
     unmarkedTags?: number
     content?: number
@@ -184,9 +180,7 @@ export class SearchEngine {
           displayTitle: settings.weightBasename,
           aliases: settings.weightBasename,
           directory: settings.weightDirectory,
-          headings1: settings.weightH1,
-          headings2: settings.weightH2,
-          headings3: settings.weightH3,
+          headings: settings.weightHeadings,
           tagsText: settings.weightUnmarkedTags,
           unmarkedTags: settings.weightUnmarkedTags,
           content: 1,
