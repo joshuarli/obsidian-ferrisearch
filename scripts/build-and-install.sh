@@ -45,7 +45,7 @@ echo "    Built $NODE_FILE ($(du -h "$PROJECT_DIR/$NODE_FILE" | cut -f1 | xargs)
 # ── Step 2: Build TypeScript ─────────────────────────────────────────────────
 echo "==> Building TypeScript (production)..."
 cd "$PROJECT_DIR"
-node esbuild.config.mjs production
+bun run build.ts production
 echo "    Built dist/main.js ($(du -h dist/main.js | cut -f1 | xargs))"
 
 # ── Step 3: Install to Obsidian vault ────────────────────────────────────────

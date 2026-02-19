@@ -7,5 +7,7 @@ mitigated by lazy-plugin-loader
 
 key changes:
 - minisearch has been replaced with tantivy (rust)
-- svelte has been replaced with pure TS for simplicity
 - search restricted to pure text
+- builds are very fast
+  - svelte has been replaced with pure TS for simplicity
+  - bun replaces esbuild
