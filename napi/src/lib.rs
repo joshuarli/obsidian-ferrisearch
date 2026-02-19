@@ -4,19 +4,43 @@ use napi_derive::napi;
 use ferrisearch_core::index::IndexManager;
 use ferrisearch_core::types;
 
+/// A document to be indexed. Maps to a single Obsidian note.
+///
+/// **Searched fields** (queries match against these via exact, prefix, and fuzzy):
+///   `basename`, `display_title`, `directory` (derived from path), `content`, `headings1-3`
+///
+/// **Indexed but not searched** (stored for retrieval/filtering, not matched by queries):
+///   `aliases`, `tags`, `unmarked_tags`
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct DocumentInput {
+    /// Full vault-relative path including extension, e.g. "notes/sub/my-note.md".
+    /// Used as the unique document key for upsert/delete. Also used to derive the
+    /// `directory` search field (everything before the last `/`).
     pub path: String,
+    /// Filename without extension, e.g. "my-note". Searched with high boost (10x).
     pub basename: String,
+    /// User-facing title from frontmatter `title:` field, or the basename if absent.
+    /// Searched with high boost (10x).
     pub display_title: String,
+    /// Alternative names from frontmatter `aliases:` field, space-separated.
+    /// Indexed but not currently searched by default.
     pub aliases: String,
+    /// Full markdown body of the note (without frontmatter). Primary search field.
     pub content: String,
+    /// Space-joined `# H1` headings. Searched with 6x boost.
     pub headings1: String,
+    /// Space-joined `## H2` headings. Searched with 5x boost.
     pub headings2: String,
+    /// Space-joined `### H3` headings. Searched with 4x boost.
     pub headings3: String,
+    /// Obsidian tags from frontmatter and inline `#tag` syntax, e.g. ["#rust", "#code"].
+    /// Stored as JSON for post-search retrieval. Indexed as text but not searched by default.
     pub tags: Vec<String>,
+    /// Tags inferred from note content that aren't explicit `#tag` syntax.
+    /// Indexed as text but not searched by default.
     pub unmarked_tags: Vec<String>,
+    /// Last modification time as Unix epoch milliseconds. Used for recency boosting.
     pub mtime: f64,
 }
 

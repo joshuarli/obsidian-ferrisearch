@@ -547,36 +547,26 @@ mod tests {
     }
 
     #[test]
-    fn aliases_search() {
+    fn disabled_fields_not_searched() {
+        // aliases, tags_text, and unmarked_tags are indexed but not in text_fields(),
+        // so searching for their content alone should return no results.
         let mut doc = make_doc("a.md", "a", "body text");
-        doc.aliases = "nickname shortname".into();
-        let mgr = setup_index(vec![doc]);
-        assert!(
-            !mgr.search("nickname", &SearchOptions::default())
-                .unwrap()
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn tags_text_search() {
-        let mut doc = make_doc("a.md", "a", "body text");
-        doc.tags = vec!["#programming".into(), "#rust".into()];
-        let mgr = setup_index(vec![doc]);
-        assert!(
-            !mgr.search("programming", &SearchOptions::default())
-                .unwrap()
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn unmarked_tags_search() {
-        let mut doc = make_doc("a.md", "a", "body text");
+        doc.aliases = "nickname".into();
+        doc.tags = vec!["#programming".into()];
         doc.unmarked_tags = vec!["coding".into()];
         let mgr = setup_index(vec![doc]);
         assert!(
-            !mgr.search("coding", &SearchOptions::default())
+            mgr.search("nickname", &SearchOptions::default())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            mgr.search("programming", &SearchOptions::default())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            mgr.search("coding", &SearchOptions::default())
                 .unwrap()
                 .is_empty()
         );
