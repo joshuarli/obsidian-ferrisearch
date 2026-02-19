@@ -1,6 +1,5 @@
 import { Setting } from 'obsidian'
 import type FerrisearchPlugin from '../main'
-import { getCtrlKeyLabel } from '../tools/utils'
 import type { FerrisearchSettings } from './utils'
 import { htmlDescription, needsARestart, saveSettings } from './utils'
 
@@ -10,17 +9,6 @@ export function injectSettingsBehavior(
   containerEl: HTMLElement,
 ) {
   new Setting(containerEl).setName('Behavior').setHeading()
-
-  // Show previous query results
-  new Setting(containerEl)
-    .setName('Show previous query results')
-    .setDesc('Re-executes the previous query when opening Ferrisearch.')
-    .addToggle(toggle =>
-      toggle.setValue(settings.showPreviousQueryResults).onChange(async v => {
-        settings.showPreviousQueryResults = v
-        await saveSettings(plugin)
-      }),
-    )
 
   // Respect excluded files
   new Setting(containerEl)
@@ -64,44 +52,6 @@ export function injectSettingsBehavior(
     .addToggle(toggle =>
       toggle.setValue(settings.splitCamelCase).onChange(async v => {
         settings.splitCamelCase = v
-        await saveSettings(plugin)
-      }),
-    )
-
-  // Simpler search
-  new Setting(containerEl)
-    .setName('Simpler search')
-    .setDesc(
-      `Enable this if Obsidian often freezes while making searches.
-        Words shorter than 3 characters won't be used as prefixes; this can reduce search delay but will return fewer results.`,
-    )
-    .addToggle(toggle =>
-      toggle.setValue(settings.simpleSearch).onChange(async v => {
-        settings.simpleSearch = v
-        await saveSettings(plugin)
-      }),
-    )
-
-  // Open in new pane
-  new Setting(containerEl)
-    .setName('Open in new pane')
-    .setDesc('Open and create files in a new pane instead of the current pane.')
-    .addToggle(toggle =>
-      toggle.setValue(settings.openInNewPane).onChange(async v => {
-        settings.openInNewPane = v
-        await saveSettings(plugin)
-      }),
-    )
-
-  // Set Vim like navigation keys
-  new Setting(containerEl)
-    .setName('Set Vim like navigation keys')
-    .setDesc(
-      `Navigate down the results with ${getCtrlKeyLabel()} + J/N, or navigate up with ${getCtrlKeyLabel()} + K/P.`,
-    )
-    .addToggle(toggle =>
-      toggle.setValue(settings.vimLikeNavigationShortcut).onChange(async v => {
-        settings.vimLikeNavigationShortcut = v
         await saveSettings(plugin)
       }),
     )

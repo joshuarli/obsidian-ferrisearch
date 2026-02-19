@@ -4,7 +4,6 @@ import type FerrisearchPlugin from '../main'
 import { enableVerboseLogging } from '../tools/utils'
 import { injectSettingsBehavior } from './settings-behavior'
 import { injectSettingsDanger } from './settings-danger'
-import { injectSettingsIndexing } from './settings-indexing'
 import { injectSettingsUserInterface } from './settings-ui'
 import { injectSettingsWeighting } from './settings-weighting'
 import { type FerrisearchSettings, saveSettings } from './utils'
@@ -40,8 +39,6 @@ export class SettingsTab extends PluginSettingTab {
     // Settings main title
     containerEl.createEl('h1', { text: 'Ferrisearch' })
 
-    injectSettingsIndexing(this.plugin, settings, containerEl)
-    containerEl.createEl('hr')
     injectSettingsBehavior(this.plugin, settings, containerEl)
     containerEl.createEl('hr')
     injectSettingsUserInterface(this.plugin, settings, containerEl)
@@ -72,26 +69,18 @@ export class SettingsTab extends PluginSettingTab {
   }
 }
 
-export function getDefaultSettings(app: App): FerrisearchSettings {
+export function getDefaultSettings(_app?: App): FerrisearchSettings {
   return {
     hideExcluded: false,
     recencyBoost: RecencyCutoff.Disabled,
     downrankedFoldersFilters: [] as string[],
     ignoreDiacritics: true,
-    indexedFileTypes: [] as string[],
-    displayTitle: '',
     splitCamelCase: false,
-    openInNewPane: false,
-    vimLikeNavigationShortcut: app.vault.getConfig('vimMode') as boolean,
 
-    ribbonIcon: true,
     showExcerpt: true,
     maxEmbeds: 5,
     renderLineReturnInExcerpts: true,
-    showCreateButton: false,
     highlight: true,
-    showPreviousQueryResults: true,
-    simpleSearch: false,
     fuzziness: '1',
 
     weightBasename: 10,

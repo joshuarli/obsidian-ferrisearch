@@ -5,7 +5,6 @@ import {
   IndexingStepType,
   indexingStep,
   type ResultNote,
-  SPACE_OR_PUNCTUATION,
   toggleInputComposition,
 } from '../globals'
 import type FerrisearchPlugin from '../main'
@@ -53,12 +52,6 @@ export function renderVaultModal(
   // Create note button slot
   const buttonsDiv = document.createElement('div')
   buttonsDiv.className = 'ferrisearch-input-container__buttons'
-  if (plugin.settings.showCreateButton) {
-    const createBtn = document.createElement('button')
-    createBtn.textContent = 'Create note'
-    createBtn.addEventListener('click', onClickCreateNote)
-    buttonsDiv.appendChild(createBtn)
-  }
   inputContainer.appendChild(buttonsDiv)
   container.appendChild(inputContainer)
 
@@ -84,36 +77,19 @@ export function renderVaultModal(
   // Instructions footer
   const ctrlKey = getCtrlKeyLabel()
   const altKey = getAltKeyLabel()
-  let openInNewPaneKey: string
-  let openInCurrentPaneKey: string
-  let createInNewPaneKey: string
-  let createInCurrentPaneKey: string
-  const openInNewLeafKey = `${ctrlKey} ${altKey} ↵`
-
-  if (plugin.settings.openInNewPane) {
-    openInNewPaneKey = '↵'
-    openInCurrentPaneKey = `${ctrlKey} ↵`
-    createInNewPaneKey = 'Shift ↵'
-    createInCurrentPaneKey = `${ctrlKey} Shift ↵`
-  } else {
-    openInNewPaneKey = `${ctrlKey} ↵`
-    openInCurrentPaneKey = '↵'
-    createInNewPaneKey = `${ctrlKey} Shift ↵`
-    createInCurrentPaneKey = 'Shift ↵'
-  }
 
   const instructions = document.createElement('div')
   instructions.className = 'prompt-instructions'
   const hints = [
     ['↑↓', 'to navigate'],
     [`${altKey} ↑↓`, 'to cycle history'],
-    [openInCurrentPaneKey, 'to open'],
+    ['↵', 'to open'],
     ['Tab', 'to switch to In-File Search'],
-    [openInNewPaneKey, 'to open in a new pane'],
-    [openInNewLeafKey, 'to open in a new split'],
+    [`${ctrlKey} ↵`, 'to open in a new pane'],
+    [`${ctrlKey} ${altKey} ↵`, 'to open in a new split'],
     [`${ctrlKey} o`, 'to open in the background'],
-    [createInCurrentPaneKey, 'to create'],
-    [createInNewPaneKey, 'to create in a new pane'],
+    ['Shift ↵', 'to create'],
+    [`${ctrlKey} Shift ↵`, 'to create in a new pane'],
     [`${altKey} ↵`, 'to insert a link'],
     [`${ctrlKey} g`, 'to toggle excerpts'],
     ['Esc', 'to close'],
@@ -296,13 +272,6 @@ export function renderVaultModal(
     let msg = ''
     if (!resultNotes.length && searchQuery && !searching) {
       msg = 'We found 0 results for your search here.'
-      if (
-        plugin.settings.simpleSearch &&
-        searchQuery.split(SPACE_OR_PUNCTUATION).some(w => w.length < 3)
-      ) {
-        msg +=
-          '<br><span style="color: var(--text-accent); font-size: small">You have enabled "Simpler Search" in the settings, try to type more characters.</span>'
-      }
     } else if (searching) {
       msg = 'Searching...'
     }
@@ -393,10 +362,6 @@ export function renderVaultModal(
     if (!note) return
     openSearchResult(note, true, true)
     modal.close()
-  }
-
-  async function onClickCreateNote(_e?: MouseEvent) {
-    await createNoteAndCloseModal()
   }
 
   async function createNoteAndCloseModal(opt?: { newLeaf: boolean }) {

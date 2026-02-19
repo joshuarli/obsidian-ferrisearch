@@ -72,12 +72,7 @@ export class DocumentsRepository {
 
     const metadata = app.metadataCache.getFileCache(file)
 
-    let displayTitle: string
-    if (this.plugin.settings.displayTitle === '#heading') {
-      displayTitle = metadata?.headings?.find(h => h.level === 1)?.heading ?? ''
-    } else {
-      displayTitle = metadata?.frontmatter?.[this.plugin.settings.displayTitle] ?? ''
-    }
+    const displayTitle = metadata?.headings?.find(h => h.level === 1)?.heading ?? ''
     const tags = getTagsFromMetadata(metadata)
     return {
       basename: file.basename,

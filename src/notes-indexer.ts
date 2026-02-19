@@ -64,6 +64,6 @@ export class NotesIndexer {
   }
 
   public isFilePlaintext(path: string): boolean {
-    return [...this.plugin.settings.indexedFileTypes, 'md'].some(t => path.endsWith(`.${t}`))
+    return path.endsWith('.md')
   }
 }

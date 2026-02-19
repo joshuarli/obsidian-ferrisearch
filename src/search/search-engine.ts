@@ -384,18 +384,10 @@ export class SearchEngine {
     query: Query,
     options?: Partial<{ singleFilePath?: string }>,
   ): Promise<ResultNote[]> {
-    let results: NativeSearchResult[]
-    if (this.plugin.settings.simpleSearch) {
-      results = await this.search(query, {
-        prefixLength: 3,
-        singleFilePath: options?.singleFilePath,
-      })
-    } else {
-      results = await this.search(query, {
-        prefixLength: 1,
-        singleFilePath: options?.singleFilePath,
-      })
-    }
+    const results = await this.search(query, {
+      prefixLength: 1,
+      singleFilePath: options?.singleFilePath,
+    })
 
     const documents = await Promise.all(
       results.map(async result => await this.plugin.documentsRepository.getDocument(result.path)),

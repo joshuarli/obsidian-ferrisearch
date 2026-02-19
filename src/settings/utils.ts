@@ -39,31 +39,16 @@ export interface FerrisearchSettings extends WeightingSettings {
   /** Ignore diacritics when indexing files */
   ignoreDiacritics: boolean
 
-  /** Extensions of plain text files to index, in addition to .md */
-  indexedFileTypes: string[]
-  /** Custom title field */
-  displayTitle: string
-
-  /** Activate the small button on Obsidian's ribbon */
-  ribbonIcon: boolean
   /** Display the small contextual excerpt in search results */
   showExcerpt: boolean
   /** Number of embeds references to display in search results */
   maxEmbeds: number
   /** Render line returns with <br> in excerpts */
   renderLineReturnInExcerpts: boolean
-  /** Enable a "create note" button in the Vault Search modal */
-  showCreateButton: boolean
-  /** Re-execute the last query when opening Ferrisearch */
-  showPreviousQueryResults: boolean
   /** Key for the welcome message when Obsidian is updated */
   welcomeMessage: string
-  /** If a query returns 0 result, try again with more relax conditions */
-  simpleSearch: boolean
   highlight: boolean
   splitCamelCase: boolean
-  openInNewPane: boolean
   verboseLogging: boolean
-  vimLikeNavigationShortcut: boolean
   fuzziness: '0' | '1' | '2'
 }

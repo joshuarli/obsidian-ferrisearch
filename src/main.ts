@@ -26,7 +26,6 @@ export default class FerrisearchPlugin extends Plugin {
   public readonly searchEngine = new SearchEngine(this)
   public readonly searchHistory = new SearchHistory(this)
 
-  private ribbonButton?: HTMLElement
   private refreshIndexCallback?: (ev: FocusEvent) => void
 
   constructor(app: App, manifest: PluginManifest) {
@@ -49,9 +48,11 @@ export default class FerrisearchPlugin extends Plugin {
     registerAPI(this)
 
     const settings = this.settings
-    if (settings.ribbonIcon) {
-      this.addRibbonButton()
-    }
+
+    // Always add ribbon button
+    this.addRibbonIcon('search', 'Ferrisearch', () => {
+      new FerrisearchVaultModal(this).open()
+    })
 
     eventBus.disable('vault')
     eventBus.disable('infile')
@@ -144,18 +145,6 @@ export default class FerrisearchPlugin extends Plugin {
     // Save sidecar and close the native index
     await this.searchEngine.saveSidecar()
     this.searchEngine.close()
-  }
-
-  addRibbonButton(): void {
-    this.ribbonButton = this.addRibbonIcon('search', 'Ferrisearch', _evt => {
-      new FerrisearchVaultModal(this).open()
-    })
-  }
-
-  removeRibbonButton(): void {
-    if (this.ribbonButton) {
-      this.ribbonButton.parentNode?.removeChild(this.ribbonButton)
-    }
   }
 
   private async populateIndex(): Promise<void> {

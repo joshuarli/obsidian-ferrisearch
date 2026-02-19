@@ -11,22 +11,6 @@ export function injectSettingsUserInterface(
 ) {
   new Setting(containerEl).setName('User Interface').setHeading()
 
-  // Show Ribbon Icon
-  new Setting(containerEl)
-    .setName('Show ribbon button')
-    .setDesc('Add a button on the sidebar to open the Vault search modal.')
-    .addToggle(toggle =>
-      toggle.setValue(settings.ribbonIcon).onChange(async v => {
-        settings.ribbonIcon = v
-        await saveSettings(plugin)
-        if (v) {
-          plugin.addRibbonButton()
-        } else {
-          plugin.removeRibbonButton()
-        }
-      }),
-    )
-
   // Show context excerpt
   new Setting(containerEl)
     .setName('Show excerpts')
@@ -63,20 +47,6 @@ export function injectSettingsUserInterface(
     .addToggle(toggle =>
       toggle.setValue(settings.renderLineReturnInExcerpts).onChange(async v => {
         settings.renderLineReturnInExcerpts = v
-        await saveSettings(plugin)
-      }),
-    )
-
-  // Show "Create note" button
-  new Setting(containerEl)
-    .setName('Show "Create note" button')
-    .setDesc(
-      htmlDescription(`Shows a button next to the search input, to create a note.
-          Acts the same as the <code>shift enter</code> shortcut.`),
-    )
-    .addToggle(toggle =>
-      toggle.setValue(settings.showCreateButton).onChange(async v => {
-        settings.showCreateButton = v
         await saveSettings(plugin)
       }),
     )

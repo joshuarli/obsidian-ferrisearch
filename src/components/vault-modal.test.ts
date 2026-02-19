@@ -64,21 +64,6 @@ describe('renderVaultModal', () => {
       handle.destroy()
     })
 
-    it('shows create note button when showCreateButton is true', () => {
-      const { container, handle } = setup({ settings: { showCreateButton: true } })
-      const btn = container.querySelector('button')
-      expect(btn).not.toBeNull()
-      expect(btn?.textContent).toBe('Create note')
-      handle.destroy()
-    })
-
-    it('does not show create note button by default', () => {
-      const { container, handle } = setup()
-      const btn = container.querySelector('button')
-      expect(btn).toBeNull()
-      handle.destroy()
-    })
-
     it('sets input value to previousQuery', () => {
       const { container, handle } = setup({ previousQuery: 'hello world' })
       const input = container.querySelector('input.prompt-input') as HTMLInputElement
