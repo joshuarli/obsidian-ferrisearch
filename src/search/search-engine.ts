@@ -1,14 +1,9 @@
-import {
-  RecencyCutoff,
-  type DocumentRef,
-  type IndexedDocument,
-  type ResultNote,
-} from '../globals'
-import { countError, logVerbose, removeDiacritics } from '../tools/utils'
-import { Notice } from 'obsidian'
-import type { Query } from './query'
 import { sortBy } from 'lodash-es'
+import { Notice } from 'obsidian'
+import type { DocumentRef, IndexedDocument, ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
+import { logVerbose, removeDiacritics } from '../tools/utils'
+import type { Query } from './query'
 
 // The napi binding types - loaded at runtime
 interface NativeSearchIndex {
@@ -64,6 +59,7 @@ interface NativeSearchResult {
   content: string
   mtime: number
   tags: string[]
+  isEmbed?: boolean
 }
 
 export class SearchEngine {
@@ -90,7 +86,7 @@ export class SearchEngine {
       console.error('Ferrisearch - Failed to initialize native index', e)
       new Notice(
         'Ferrisearch - Failed to initialize search engine. See console for details.',
-        10000
+        10000,
       )
     }
   }
@@ -119,9 +115,7 @@ export class SearchEngine {
       if (await adapter.exists(sidecarPath)) {
         const data = await adapter.read(sidecarPath)
         const manifest: { path: string; mtime: number }[] = JSON.parse(data)
-        this.indexedDocuments = new Map(
-          manifest.map(o => [o.path, o.mtime])
-        )
+        this.indexedDocuments = new Map(manifest.map(o => [o.path, o.mtime]))
         return true
       }
     } catch (e) {
@@ -140,10 +134,7 @@ export class SearchEngine {
         path,
         mtime,
       }))
-      await this.plugin.app.vault.adapter.write(
-        sidecarPath,
-        JSON.stringify(data)
-      )
+      await this.plugin.app.vault.adapter.write(sidecarPath, JSON.stringify(data))
     } catch (e) {
       console.error('Ferrisearch - Failed to save sidecar manifest', e)
     }
@@ -159,15 +150,11 @@ export class SearchEngine {
     const docsMap = new Map(docs.map(d => [d.path, d.mtime]))
 
     const toAdd = docs.filter(
-      d =>
-        !this.indexedDocuments.has(d.path) ||
-        this.indexedDocuments.get(d.path) !== d.mtime
+      d => !this.indexedDocuments.has(d.path) || this.indexedDocuments.get(d.path) !== d.mtime,
     )
 
     const toRemove = [...this.indexedDocuments]
-      .filter(
-        ([path, mtime]) => !docsMap.has(path) || docsMap.get(path) !== mtime
-      )
+      .filter(([path, mtime]) => !docsMap.has(path) || docsMap.get(path) !== mtime)
       .map(o => ({ path: o[0], mtime: o[1] }))
     return { toAdd, toRemove }
   }
@@ -180,10 +167,7 @@ export class SearchEngine {
     logVerbose('Adding files', paths)
     let documents = (
       await Promise.all(
-        paths.map(
-          async path =>
-            await this.plugin.documentsRepository.getDocument(path)
-        )
+        paths.map(async path => await this.plugin.documentsRepository.getDocument(path)),
       )
     ).filter(d => !!d?.path)
     logVerbose('Sorting documents to first index markdown')
@@ -208,9 +192,7 @@ export class SearchEngine {
       this.nativeIndex.addDocuments(nativeDocs)
       this.nativeIndex.commit()
       // Update sidecar
-      documents.forEach(doc =>
-        this.indexedDocuments.set(doc.path, doc.mtime)
-      )
+      for (const doc of documents) this.indexedDocuments.set(doc.path, doc.mtime)
     } catch (e) {
       console.error('Ferrisearch - Error adding documents', e)
     }
@@ -221,7 +203,7 @@ export class SearchEngine {
    */
   public removeFromPaths(paths: string[]): void {
     if (!this.nativeIndex) return
-    paths.forEach(p => this.indexedDocuments.delete(p))
+    for (const p of paths) this.indexedDocuments.delete(p)
     try {
       this.nativeIndex.removeDocuments(paths)
       this.nativeIndex.commit()
@@ -235,7 +217,7 @@ export class SearchEngine {
    */
   public async search(
     query: Query,
-    options: { prefixLength: number; singleFilePath?: string }
+    options: { prefixLength: number; singleFilePath?: string },
   ): Promise<NativeSearchResult[]> {
     if (!this.nativeIndex) return []
     const settings = this.plugin.settings
@@ -282,27 +264,20 @@ export class SearchEngine {
     // Post-filter: extension filter
     if (query.query.ext?.length) {
       results = results.filter(r => {
-        const ext = '.' + r.path.split('.').pop()
-        return query.query.ext?.some(e =>
-          ext.startsWith(e.startsWith('.') ? e : '.' + e)
-        )
+        const ext = `.${r.path.split('.').pop()}`
+        return query.query.ext?.some(e => ext.startsWith(e.startsWith('.') ? e : `.${e}`))
       })
     }
 
     // Post-filter: path filter
     if (query.query.path) {
       results = results.filter(r =>
-        query.query.path?.some(p =>
-          r.path.toLowerCase().includes(p.toLowerCase())
-        )
+        query.query.path?.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
       )
     }
     if (query.query.exclude.path) {
       results = results.filter(
-        r =>
-          !query.query.exclude.path?.some(p =>
-            r.path.toLowerCase().includes(p.toLowerCase())
-          )
+        r => !query.query.exclude.path?.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
       )
     }
 
@@ -314,26 +289,16 @@ export class SearchEngine {
       return results.filter(r => r.path === options.singleFilePath)
     }
 
-    logVerbose(
-      'searching with downranked folders',
-      settings.downrankedFoldersFilters
-    )
+    logVerbose('searching with downranked folders', settings.downrankedFoldersFilters)
 
     // Hide or downrank excluded files
     if (settings.hideExcluded) {
       results = results.filter(
-        result =>
-          !(
-            this.plugin.app.metadataCache.isUserIgnored &&
-            this.plugin.app.metadataCache.isUserIgnored(result.path)
-          )
+        result => !this.plugin.app.metadataCache.isUserIgnored?.(result.path),
       )
     } else {
       results.forEach(result => {
-        if (
-          this.plugin.app.metadataCache.isUserIgnored &&
-          this.plugin.app.metadataCache.isUserIgnored(result.path)
-        ) {
+        if (this.plugin.app.metadataCache.isUserIgnored?.(result.path)) {
           result.score /= 10
         }
       })
@@ -347,7 +312,7 @@ export class SearchEngine {
         let downrankingFolder = false
         settings.downrankedFoldersFilters.forEach(filter => {
           if (path.startsWith(filter)) {
-            if (path === filter || path.startsWith(filter + '/')) {
+            if (path === filter || path.startsWith(`${filter}/`)) {
               downrankingFolder = true
             }
           }
@@ -394,9 +359,7 @@ export class SearchEngine {
     if (exactTerms.length) {
       logVerbose('Filtering with quoted terms: ', exactTerms)
       const documents = await Promise.all(
-        results.map(async result =>
-          await this.plugin.documentsRepository.getDocument(result.path)
-        )
+        results.map(async result => await this.plugin.documentsRepository.getDocument(result.path)),
       )
       results = results.filter(r => {
         const document = documents.find(d => d.path === r.path)
@@ -405,10 +368,7 @@ export class SearchEngine {
         return exactTerms.every(
           q =>
             content.includes(q) ||
-            removeDiacritics(
-              title,
-              this.plugin.settings.ignoreArabicDiacritics
-            ).includes(q)
+            removeDiacritics(title, this.plugin.settings.ignoreArabicDiacritics).includes(q),
         )
       })
     }
@@ -418,22 +378,17 @@ export class SearchEngine {
     if (exclusions.length) {
       logVerbose('Filtering with exclusions')
       const documents = await Promise.all(
-        results.map(async result =>
-          await this.plugin.documentsRepository.getDocument(result.path)
-        )
+        results.map(async result => await this.plugin.documentsRepository.getDocument(result.path)),
       )
       results = results.filter(r => {
-        const content = (
-          documents.find(d => d.path === r.path)?.content ?? ''
-        ).toLowerCase()
+        const content = (documents.find(d => d.path === r.path)?.content ?? '').toLowerCase()
         return exclusions.every(q => !content.includes(q))
       })
     }
 
     // Dedupe
     results = results.filter(
-      (result, index, arr) =>
-        arr.findIndex(t => t.path === result.path) === index
+      (result, index, arr) => arr.findIndex(t => t.path === result.path) === index,
     )
 
     return results
@@ -444,7 +399,7 @@ export class SearchEngine {
    */
   public async getSuggestions(
     query: Query,
-    options?: Partial<{ singleFilePath?: string }>
+    options?: Partial<{ singleFilePath?: string }>,
   ): Promise<ResultNote[]> {
     let results: NativeSearchResult[]
     if (this.plugin.settings.simpleSearch) {
@@ -460,10 +415,7 @@ export class SearchEngine {
     }
 
     const documents = await Promise.all(
-      results.map(
-        async result =>
-          await this.plugin.documentsRepository.getDocument(result.path)
-      )
+      results.map(async result => await this.plugin.documentsRepository.getDocument(result.path)),
     )
 
     // Inject embeds
@@ -490,7 +442,7 @@ export class SearchEngine {
           mtime: newDoc.mtime,
           tags: [],
           isEmbed: true,
-        } as any)
+        })
         i++
       }
     }
@@ -500,9 +452,7 @@ export class SearchEngine {
       logVerbose('Locating matches for', result.path)
       let note = documents.find(d => d.path === result.path)
       if (!note) {
-        console.warn(
-          `Ferrisearch - Note "${result.path}" not in the live cache`
-        )
+        console.warn(`Ferrisearch - Note "${result.path}" not in the live cache`)
         note = {
           content: '',
           basename: result.path,
@@ -510,24 +460,16 @@ export class SearchEngine {
         } as IndexedDocument
       }
 
-      const foundWords = [
-        ...result.matchedTerms,
-        ...query.getExactTerms(),
-        ...query.getTags(),
-      ]
+      const foundWords = [...result.matchedTerms, ...query.getExactTerms(), ...query.getTags()]
       logVerbose('Matching tokens:', foundWords)
 
-      const matches = this.plugin.textProcessor.getMatches(
-        note.content,
-        foundWords,
-        query
-      )
+      const matches = this.plugin.textProcessor.getMatches(note.content, foundWords, query)
       logVerbose(`Matches for note "${note.path}"`, matches)
       const resultNote: ResultNote = {
         score: result.score,
         foundWords,
         matches,
-        isEmbed: (result as any).isEmbed ?? false,
+        isEmbed: result.isEmbed ?? false,
         ...note,
       }
       return resultNote
@@ -547,23 +489,20 @@ export class SearchEngine {
     return `${configDir}/plugins/ferrisearch/index-manifest.json`
   }
 
-  private loadNativeModule(): any {
+  private loadNativeModule(): NativeSearchIndex {
     // Try to load the native module for the current platform
-    const path = require('path')
+    const path = require('node:path')
     const pluginDir = path.join(
-      (this.plugin.app.vault.adapter as any).basePath,
+      this.plugin.app.vault.adapter.basePath,
       this.plugin.app.vault.configDir,
       'plugins',
-      'ferrisearch'
+      'ferrisearch',
     )
 
     // Try platform-specific names
     const platform = process.platform
     const arch = process.arch
-    const candidates = [
-      `ferrisearch.${platform}-${arch}.node`,
-      `ferrisearch.node`,
-    ]
+    const candidates = [`ferrisearch.${platform}-${arch}.node`, `ferrisearch.node`]
 
     for (const candidate of candidates) {
       try {
@@ -573,8 +512,6 @@ export class SearchEngine {
       }
     }
 
-    throw new Error(
-      `Failed to load native module. Tried: ${candidates.join(', ')}`
-    )
+    throw new Error(`Failed to load native module. Tried: ${candidates.join(', ')}`)
   }
 }

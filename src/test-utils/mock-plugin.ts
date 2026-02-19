@@ -2,8 +2,8 @@ import { mock } from 'bun:test'
 import type FerrisearchPlugin from '../../main'
 
 export function createMockPlugin(overrides?: {
-  settings?: Record<string, any>
-  searchResults?: any[]
+  settings?: Record<string, unknown>
+  searchResults?: unknown[]
 }): FerrisearchPlugin {
   const settings = {
     hideExcluded: false,

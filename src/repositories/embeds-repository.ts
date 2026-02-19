@@ -11,7 +11,7 @@ export class EmbedsRepository {
     if (!this.embeds.has(embed)) {
       this.embeds.set(embed, new Set())
     }
-    this.embeds.get(embed)!.add(notePath)
+    this.embeds.get(embed)?.add(notePath)
   }
 
   public removeFile(filePath: string): void {
@@ -21,7 +21,7 @@ export class EmbedsRepository {
 
   public renameFile(oldPath: string, newPath: string): void {
     if (this.embeds.has(oldPath)) {
-      this.embeds.set(newPath, this.embeds.get(oldPath)!)
+      this.embeds.set(newPath, this.embeds.get(oldPath) ?? new Set())
       this.embeds.delete(oldPath)
     }
     this.embeds.forEach((referencedBy, _key) => {
@@ -42,9 +42,7 @@ export class EmbedsRepository {
   }
 
   public getEmbeds(pathEmbedded: string): string[] {
-    const embeds = this.embeds.has(pathEmbedded)
-      ? [...this.embeds.get(pathEmbedded)!]
-      : []
+    const embeds = this.embeds.has(pathEmbedded) ? [...(this.embeds.get(pathEmbedded) ?? [])] : []
     return embeds
   }
 
@@ -70,25 +68,20 @@ export class EmbedsRepository {
           this.addEmbed(path, embed)
         }
       }
-    } catch (e) {
+    } catch (_e) {
       this.plugin.database.clearCache()
       console.error('Ferrisearch - Error while loading embeds cache')
     }
   }
 
   private addEmbedsForNote(notePath: string): void {
-    const embeds = (
-      this.plugin.app.metadataCache.getCache(notePath)?.embeds ?? []
-    )
+    const embeds = (this.plugin.app.metadataCache.getCache(notePath)?.embeds ?? [])
       .map(embed =>
-        this.plugin.app.metadataCache.getFirstLinkpathDest(
-          getLinkpath(embed.link),
-          notePath
-        )
+        this.plugin.app.metadataCache.getFirstLinkpathDest(getLinkpath(embed.link), notePath),
       )
       .filter(o => !!o)
     for (const embed of embeds) {
-      this.addEmbed(embed!.path, notePath)
+      this.addEmbed(embed?.path, notePath)
     }
   }
 }

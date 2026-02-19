@@ -7,14 +7,11 @@ import {
   type SearchMatch,
   toggleInputComposition,
 } from '../globals'
-import { getCtrlKeyLabel, loopIndex, wait } from '../tools/utils'
-import {
-  FerrisearchInFileModal,
-  FerrisearchVaultModal,
-} from './modals'
+import type FerrisearchPlugin from '../main'
 import { Query } from '../search/query'
 import { openNote } from '../tools/notes'
-import type FerrisearchPlugin from '../main'
+import { getCtrlKeyLabel, loopIndex, wait } from '../tools/utils'
+import { type FerrisearchInFileModal, FerrisearchVaultModal } from './modals'
 import { createInFileResultItem, updateSelection } from './result-items'
 
 interface InFileModalProps {
@@ -27,7 +24,7 @@ interface InFileModalProps {
 
 export function renderInFileModal(
   container: HTMLElement,
-  { plugin, modal, singleFilePath, parent, previousQuery }: InFileModalProps
+  { plugin, modal, singleFilePath, parent, previousQuery }: InFileModalProps,
 ): { destroy(): void } {
   let searchQuery = previousQuery ?? ''
   let groupedOffsets: number[] = []
@@ -137,12 +134,10 @@ export function renderInFileModal(
       const exactTerms = query.getExactTerms()
       if (exactTerms.length) {
         groups = groups.filter(group =>
-          exactTerms.every(exact =>
-            group.some(match => match.match.includes(exact))
-          )
+          exactTerms.every(exact => group.some(match => match.match.includes(exact))),
         )
       }
-      groupedOffsets = groups.map(group => Math.round(group[0]!.offset))
+      groupedOffsets = groups.map(group => Math.round(group[0]?.offset))
     } else {
       groupedOffsets = []
     }
@@ -159,7 +154,7 @@ export function renderInFileModal(
     while (++count < 100) {
       const group = getGroupedMatches(matches, lastOffset, excerptAfter)
       if (!group.length) break
-      lastOffset = group[group.length - 1]!.offset
+      lastOffset = group[group.length - 1]?.offset
       groups.push(group)
     }
     return groups
@@ -168,13 +163,11 @@ export function renderInFileModal(
   function getGroupedMatches(
     matches: SearchMatch[],
     offsetFrom: number,
-    maxLen: number
+    maxLen: number,
   ): SearchMatch[] {
     const first = matches.find(m => m.offset > offsetFrom)
     if (!first) return []
-    return matches.filter(
-      m => m.offset > offsetFrom && m.offset <= first.offset + maxLen
-    )
+    return matches.filter(m => m.offset > offsetFrom && m.offset <= first.offset + maxLen)
   }
 
   // Render
@@ -183,17 +176,17 @@ export function renderInFileModal(
 
     if (groupedOffsets.length && note) {
       for (let i = 0; i < groupedOffsets.length; i++) {
-        const offset = groupedOffsets[i]!
+        const offset = groupedOffsets[i]
         const item = createInFileResultItem(note, plugin, offset, i)
         updateSelection(item, i === selectedIndex)
         item.addEventListener('mousemove', () => {
           setSelectedIndex(i)
         })
-        item.addEventListener('click', (evt) => {
+        item.addEventListener('click', evt => {
           setSelectedIndex(i)
           openSelection(evt.ctrlKey)
         })
-        item.addEventListener('auxclick', (evt) => {
+        item.addEventListener('auxclick', evt => {
           if (evt.button === 1) {
             setSelectedIndex(i)
             openSelection(true)
@@ -232,7 +225,9 @@ export function renderInFileModal(
     const prevEl = resultsDiv.querySelector(`[data-result-id="${prev}"]`) as HTMLElement | null
     if (prevEl) updateSelection(prevEl, false)
     // Update new
-    const newEl = resultsDiv.querySelector(`[data-result-id="${selectedIndex}"]`) as HTMLElement | null
+    const newEl = resultsDiv.querySelector(
+      `[data-result-id="${selectedIndex}"]`,
+    ) as HTMLElement | null
     if (newEl) updateSelection(newEl, true)
     scrollIntoView()
   }

@@ -1,5 +1,5 @@
-import { removeDiacritics } from '../tools/utils'
 import { parse } from 'search-query-parser'
+import { removeDiacritics } from '../tools/utils'
 
 const keywords = ['ext', 'path'] as const
 
@@ -13,10 +13,7 @@ export class Query {
   }
   #inQuotes: string[]
 
-  constructor(
-    text = '',
-    options: { ignoreDiacritics: boolean; ignoreArabicDiacritics: boolean }
-  ) {
+  constructor(text = '', options: { ignoreDiacritics: boolean; ignoreArabicDiacritics: boolean }) {
     if (options.ignoreDiacritics) {
       text = removeDiacritics(text, options.ignoreArabicDiacritics)
     }
@@ -45,14 +42,11 @@ export class Query {
     }
     this.query = parsed
 
-    const ext = this.query.text
-      .filter(o => o.startsWith('.'))
-      .map(o => o.slice(1))
+    const ext = this.query.text.filter(o => o.startsWith('.')).map(o => o.slice(1))
     this.query.ext = [...new Set([...ext, ...(this.query.ext ?? [])])]
     this.query.text = this.query.text.filter(o => !o.startsWith('.'))
 
-    this.#inQuotes =
-      text.match(/"([^"]+)"/g)?.map(o => o.replace(/"/g, '')) ?? []
+    this.#inQuotes = text.match(/"([^"]+)"/g)?.map(o => o.replace(/"/g, '')) ?? []
   }
 
   public isEmpty(): boolean {
@@ -82,10 +76,9 @@ export class Query {
   public getExactTerms(): string[] {
     return [
       ...new Set(
-        [
-          ...this.query.text.filter(o => o.split(' ').length > 1),
-          ...this.#inQuotes,
-        ].map(str => str.toLowerCase())
+        [...this.query.text.filter(o => o.split(' ').length > 1), ...this.#inQuotes].map(str =>
+          str.toLowerCase(),
+        ),
       ),
     ]
   }

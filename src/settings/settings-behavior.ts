@@ -1,14 +1,13 @@
 import { Setting } from 'obsidian'
-import type { FerrisearchSettings } from './utils'
-import { saveSettings } from './utils'
-import { htmlDescription, needsARestart } from './utils'
 import type FerrisearchPlugin from '../main'
 import { getCtrlKeyLabel } from '../tools/utils'
+import type { FerrisearchSettings } from './utils'
+import { htmlDescription, needsARestart, saveSettings } from './utils'
 
 export function injectSettingsBehavior(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
-  containerEl: HTMLElement
+  containerEl: HTMLElement,
 ) {
   new Setting(containerEl).setName('Behavior').setHeading()
 
@@ -20,28 +19,28 @@ export function injectSettingsBehavior(
       toggle.setValue(settings.showPreviousQueryResults).onChange(async v => {
         settings.showPreviousQueryResults = v
         await saveSettings(plugin)
-      })
+      }),
     )
 
   // Respect excluded files
   new Setting(containerEl)
     .setName('Respect Obsidian\'s "Excluded Files"')
     .setDesc(
-      `By default, files that are in Obsidian\'s "Options > Files & Links > Excluded Files" list are downranked in results.
-        Enable this option to completely hide them.`
+      `By default, files that are in Obsidian's "Options > Files & Links > Excluded Files" list are downranked in results.
+        Enable this option to completely hide them.`,
     )
     .addToggle(toggle =>
       toggle.setValue(settings.hideExcluded).onChange(async v => {
         settings.hideExcluded = v
         await saveSettings(plugin)
-      })
+      }),
     )
 
   // Downranked files
   new Setting(containerEl)
     .setName('Folders to downrank in search results')
     .setDesc(
-      `Folders to downrank in search results. Files in these folders will be downranked in results. Folders should be comma delimited.`
+      `Folders to downrank in search results. Files in these folders will be downranked in results. Folders should be comma delimited.`,
     )
     .addText(component => {
       component
@@ -60,13 +59,13 @@ export function injectSettingsBehavior(
     .setName('Split CamelCaseWords')
     .setDesc(
       htmlDescription(`Enable this if you want to be able to search for CamelCaseWords as separate words.<br/>
-        ${needsARestart}`)
+        ${needsARestart}`),
     )
     .addToggle(toggle =>
       toggle.setValue(settings.splitCamelCase).onChange(async v => {
         settings.splitCamelCase = v
         await saveSettings(plugin)
-      })
+      }),
     )
 
   // Simpler search
@@ -74,13 +73,13 @@ export function injectSettingsBehavior(
     .setName('Simpler search')
     .setDesc(
       `Enable this if Obsidian often freezes while making searches.
-        Words shorter than 3 characters won't be used as prefixes; this can reduce search delay but will return fewer results.`
+        Words shorter than 3 characters won't be used as prefixes; this can reduce search delay but will return fewer results.`,
     )
     .addToggle(toggle =>
       toggle.setValue(settings.simpleSearch).onChange(async v => {
         settings.simpleSearch = v
         await saveSettings(plugin)
-      })
+      }),
     )
 
   // Open in new pane
@@ -91,27 +90,27 @@ export function injectSettingsBehavior(
       toggle.setValue(settings.openInNewPane).onChange(async v => {
         settings.openInNewPane = v
         await saveSettings(plugin)
-      })
+      }),
     )
 
   // Set Vim like navigation keys
   new Setting(containerEl)
     .setName('Set Vim like navigation keys')
     .setDesc(
-      `Navigate down the results with ${getCtrlKeyLabel()} + J/N, or navigate up with ${getCtrlKeyLabel()} + K/P.`
+      `Navigate down the results with ${getCtrlKeyLabel()} + J/N, or navigate up with ${getCtrlKeyLabel()} + K/P.`,
     )
     .addToggle(toggle =>
       toggle.setValue(settings.vimLikeNavigationShortcut).onChange(async v => {
         settings.vimLikeNavigationShortcut = v
         await saveSettings(plugin)
-      })
+      }),
     )
 
   // Fuzziness
   new Setting(containerEl)
     .setName('Fuzziness')
     .setDesc(
-      "Define the level of fuzziness for the search. The higher the fuzziness, the more results you'll get."
+      "Define the level of fuzziness for the search. The higher the fuzziness, the more results you'll get.",
     )
     .addDropdown(dropdown =>
       dropdown
@@ -127,6 +126,6 @@ export function injectSettingsBehavior(
           }
           settings.fuzziness = v as '0' | '1' | '2'
           await saveSettings(plugin)
-        })
+        }),
     )
 }

@@ -1,29 +1,19 @@
 import { MarkdownView, Notice, Platform, TFile } from 'obsidian'
 import {
+  Action,
   eventBus,
-  indexingStep,
   IndexingStepType,
+  indexingStep,
   type ResultNote,
   SPACE_OR_PUNCTUATION,
-  Action,
   toggleInputComposition,
 } from '../globals'
-import { createNote, openNote } from '../tools/notes'
-import {
-  getCtrlKeyLabel,
-  getAltKeyLabel,
-  getExtension,
-  loopIndex,
-  wait,
-} from '../tools/utils'
-import { FerrisearchInFileModal, type FerrisearchVaultModal } from './modals'
-import { Query } from '../search/query'
 import type FerrisearchPlugin from '../main'
-import {
-  createVaultResultItem,
-  updateSelection,
-  cleanupResultItem,
-} from './result-items'
+import { Query } from '../search/query'
+import { createNote, openNote } from '../tools/notes'
+import { getAltKeyLabel, getCtrlKeyLabel, getExtension, loopIndex, wait } from '../tools/utils'
+import { FerrisearchInFileModal, type FerrisearchVaultModal } from './modals'
+import { cleanupResultItem, createVaultResultItem, updateSelection } from './result-items'
 
 interface VaultModalProps {
   plugin: FerrisearchPlugin
@@ -33,7 +23,7 @@ interface VaultModalProps {
 
 export function renderVaultModal(
   container: HTMLElement,
-  { plugin, modal, previousQuery }: VaultModalProps
+  { plugin, modal, previousQuery }: VaultModalProps,
 ): { destroy(): void } {
   let selectedIndex = 0
   let historySearchIndex = 0
@@ -43,6 +33,7 @@ export function renderVaultModal(
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
   let cancelled = false
   let resultEls: HTMLElement[] = []
+  let currentObserver: IntersectionObserver | null = null
 
   // Build DOM
 
@@ -101,13 +92,13 @@ export function renderVaultModal(
 
   if (plugin.settings.openInNewPane) {
     openInNewPaneKey = '↵'
-    openInCurrentPaneKey = ctrlKey + ' ↵'
+    openInCurrentPaneKey = `${ctrlKey} ↵`
     createInNewPaneKey = 'Shift ↵'
-    createInCurrentPaneKey = ctrlKey + ' Shift ↵'
+    createInCurrentPaneKey = `${ctrlKey} Shift ↵`
   } else {
-    openInNewPaneKey = ctrlKey + ' ↵'
+    openInNewPaneKey = `${ctrlKey} ↵`
     openInCurrentPaneKey = '↵'
-    createInNewPaneKey = ctrlKey + ' Shift ↵'
+    createInNewPaneKey = `${ctrlKey} Shift ↵`
     createInCurrentPaneKey = 'Shift ↵'
   }
 
@@ -254,7 +245,7 @@ export function renderVaultModal(
         for (const entry of entries) {
           if (entry.isIntersecting) {
             const wrapper = entry.target as HTMLElement
-            const idx = parseInt(wrapper.dataset.lazyIdx!, 10)
+            const idx = parseInt(wrapper.dataset.lazyIdx ?? '0', 10)
             const note = resultNotes[idx]
             if (note && !wrapper.dataset.loaded) {
               wrapper.dataset.loaded = '1'
@@ -264,11 +255,11 @@ export function renderVaultModal(
               item.addEventListener('mousemove', () => {
                 setSelectedIndex(idx)
               })
-              item.addEventListener('click', (evt) => {
+              item.addEventListener('click', evt => {
                 setSelectedIndex(idx)
                 onClick(evt)
               })
-              item.addEventListener('auxclick', (evt) => {
+              item.addEventListener('auxclick', evt => {
                 if (evt.button === 1) {
                   setSelectedIndex(idx)
                   openNoteInNewPane()
@@ -281,7 +272,7 @@ export function renderVaultModal(
           }
         }
       },
-      { root: resultsDiv, rootMargin: '500px' }
+      { root: resultsDiv, rootMargin: '500px' },
     )
 
     for (let i = 0; i < resultNotes.length; i++) {
@@ -292,9 +283,7 @@ export function renderVaultModal(
       resultsDiv.appendChild(wrapper)
       observer.observe(wrapper)
     }
-
-    // Store observer for cleanup
-    ;(container as any)._observer = observer
+    currentObserver = observer
 
     // Status message
     renderStatusMessage()
@@ -312,7 +301,8 @@ export function renderVaultModal(
         plugin.settings.simpleSearch &&
         searchQuery.split(SPACE_OR_PUNCTUATION).some(w => w.length < 3)
       ) {
-        msg += '<br><span style="color: var(--text-accent); font-size: small">You have enabled "Simpler Search" in the settings, try to type more characters.</span>'
+        msg +=
+          '<br><span style="color: var(--text-accent); font-size: small">You have enabled "Simpler Search" in the settings, try to type more characters.</span>'
       }
     } else if (searching) {
       msg = 'Searching...'
@@ -425,9 +415,7 @@ export function renderVaultModal(
   function insertLink() {
     const selectedNote = getSelectedNote()
     if (!selectedNote) return
-    const file = plugin.app.vault
-      .getMarkdownFiles()
-      .find(f => f.path === selectedNote.path)
+    const file = plugin.app.vault.getMarkdownFiles().find(f => f.path === selectedNote.path)
     const active = plugin.app.workspace.getActiveFile()
     const view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
     if (!view?.editor) {
@@ -441,14 +429,12 @@ export function renderVaultModal(
         file,
         active.path,
         '',
-        selectedNote.displayTitle
+        selectedNote.displayTitle,
       )
     } else {
       const maybeDisplayTitle =
         selectedNote.displayTitle === '' ? '' : `|${selectedNote.displayTitle}`
-      link = `[[${selectedNote.basename}.${getExtension(
-        selectedNote.path
-      )}${maybeDisplayTitle}]]`
+      link = `[[${selectedNote.basename}.${getExtension(selectedNote.path)}${maybeDisplayTitle}]]`
     }
 
     const cursor = view.editor.getCursor()
@@ -537,8 +523,7 @@ export function renderVaultModal(
       if (debounceTimer !== null) clearTimeout(debounceTimer)
       eventBus.disable('vault')
       unsubIndexing()
-      const observer = (container as any)._observer as IntersectionObserver | undefined
-      if (observer) observer.disconnect()
+      if (currentObserver) currentObserver.disconnect()
       for (const el of resultEls) cleanupResultItem(el)
     },
   }

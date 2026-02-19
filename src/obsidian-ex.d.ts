@@ -9,7 +9,7 @@ declare module 'obsidian' {
   }
 
   interface Vault {
-    getConfig(key: string): any
+    getConfig(key: string): unknown
   }
 
   interface DataAdapter {

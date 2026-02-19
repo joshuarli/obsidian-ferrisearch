@@ -1,21 +1,17 @@
-import { Setting, SliderComponent } from 'obsidian'
-import { getDefaultSettings } from '../settings'
-import type { FerrisearchSettings } from './utils'
-import { saveSettings } from './utils'
-import type { WeightingSettings } from './utils'
-import type FerrisearchPlugin from '../main'
+import { Setting, type SliderComponent } from 'obsidian'
 import { RecencyCutoff } from '../globals'
+import type FerrisearchPlugin from '../main'
+import { getDefaultSettings } from '../settings'
+import type { FerrisearchSettings, WeightingSettings } from './utils'
+import { saveSettings } from './utils'
 
 export function injectSettingsWeighting(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
   containerEl: HTMLElement,
-  refreshDisplay: () => void
+  refreshDisplay: () => void,
 ) {
-  function weightSlider(
-    cb: SliderComponent,
-    key: keyof WeightingSettings
-  ): void {
+  function weightSlider(cb: SliderComponent, key: keyof WeightingSettings): void {
     cb.setLimits(1, 10, 0.5)
       .setValue(settings[key])
       .setDynamicTooltip()
@@ -30,9 +26,7 @@ export function injectSettingsWeighting(
   new Setting(containerEl).setName('Results weighting').setHeading()
 
   new Setting(containerEl)
-    .setName(
-      `File name & declared aliases (default: ${defaultSettings.weightBasename})`
-    )
+    .setName(`File name & declared aliases (default: ${defaultSettings.weightBasename})`)
     .addSlider(cb => weightSlider(cb, 'weightBasename'))
 
   new Setting(containerEl)
@@ -58,12 +52,12 @@ export function injectSettingsWeighting(
   new Setting(containerEl)
     .setName('Header properties fields')
     .setDesc(
-      'You can set custom weights for values of header properties (e.g. "keywords"). Weights under 1.0 will downrank the results.'
+      'You can set custom weights for values of header properties (e.g. "keywords"). Weights under 1.0 will downrank the results.',
     )
 
   for (let i = 0; i < settings.weightCustomProperties.length; i++) {
     const item = settings.weightCustomProperties[i]
-    const el = new Setting(containerEl).setName((i + 1).toString() + '.')
+    const el = new Setting(containerEl).setName(`${(i + 1).toString()}.`)
     el.settingEl.style.paddingLeft = '2em'
 
     el.addText(text => {
@@ -105,7 +99,7 @@ export function injectSettingsWeighting(
   new Setting(containerEl)
     .setName('Recency boost (experimental)')
     .setDesc(
-      'Files that have been modified more recently than [selected cutoff] are given a higher rank.'
+      'Files that have been modified more recently than [selected cutoff] are given a higher rank.',
     )
     .addDropdown(dropdown =>
       dropdown
@@ -119,6 +113,6 @@ export function injectSettingsWeighting(
         .onChange(async v => {
           settings.recencyBoost = v as RecencyCutoff
           await saveSettings(plugin)
-        })
+        }),
     )
 }

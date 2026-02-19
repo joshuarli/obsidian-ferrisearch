@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from 'fs'
+import { copyFileSync, mkdirSync } from 'node:fs'
 
 const prod = Bun.argv.includes('production')
 
@@ -26,7 +26,7 @@ const result = await Bun.build({
   target: 'browser',
   sourcemap: prod ? 'none' : 'inline',
   treeshaking: true,
-  minify: prod
+  minify: prod,
 })
 
 if (!result.success) {

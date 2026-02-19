@@ -1,38 +1,18 @@
-import {
-  App,
-  Notice,
-  Plugin,
-  type PluginManifest,
-  TFile,
-} from 'obsidian'
-import {
-  FerrisearchInFileModal,
-  FerrisearchVaultModal,
-} from './components/modals'
-import {
-  getDefaultSettings,
-  loadSettings,
-  SettingsTab,
-  showExcerpt,
-} from './settings'
-import type { FerrisearchSettings } from './settings/utils'
-import { saveSettings } from './settings/utils'
-import { isPluginDisabled } from './settings/utils'
-import {
-  eventBus,
-  EventNames,
-  indexingStep,
-  IndexingStepType,
-} from './globals'
-import { notifyOnIndexed, registerAPI } from './tools/api'
+import { type App, Notice, Plugin, type PluginManifest, TFile } from 'obsidian'
+import { FerrisearchInFileModal, FerrisearchVaultModal } from './components/modals'
 import { Database } from './database'
-import { SearchEngine } from './search/search-engine'
-import { DocumentsRepository } from './repositories/documents-repository'
-import { logVerbose } from './tools/utils'
+import { EventNames, eventBus, IndexingStepType, indexingStep } from './globals'
 import { NotesIndexer } from './notes-indexer'
-import { TextProcessor } from './tools/text-processing'
+import { DocumentsRepository } from './repositories/documents-repository'
 import { EmbedsRepository } from './repositories/embeds-repository'
+import { SearchEngine } from './search/search-engine'
 import { SearchHistory } from './search/search-history'
+import { getDefaultSettings, loadSettings, SettingsTab, showExcerpt } from './settings'
+import type { FerrisearchSettings } from './settings/utils'
+import { isPluginDisabled } from './settings/utils'
+import { notifyOnIndexed, registerAPI } from './tools/api'
+import { TextProcessor } from './tools/text-processing'
+import { logVerbose } from './tools/utils'
 
 export default class FerrisearchPlugin extends Plugin {
   public settings: FerrisearchSettings = getDefaultSettings(this.app)
@@ -47,7 +27,7 @@ export default class FerrisearchPlugin extends Plugin {
   public readonly searchHistory = new SearchHistory(this)
 
   private ribbonButton?: HTMLElement
-  private refreshIndexCallback?: (ev: FocusEvent) => any
+  private refreshIndexCallback?: (ev: FocusEvent) => void
 
   constructor(app: App, manifest: PluginManifest) {
     super(app, manifest)
@@ -110,7 +90,7 @@ export default class FerrisearchPlugin extends Plugin {
             searchEngine.addFromPaths([file.path])
             this.embedsRepository.refreshEmbedsForNote(file.path)
           }
-        })
+        }),
       )
       this.registerEvent(
         this.app.vault.on('delete', file => {
@@ -119,7 +99,7 @@ export default class FerrisearchPlugin extends Plugin {
           this.documentsRepository.removeDocument(file.path)
           searchEngine.removeFromPaths([file.path])
           this.embedsRepository.removeFile(file.path)
-        })
+        }),
       )
       this.registerEvent(
         this.app.vault.on('modify', async file => {
@@ -128,7 +108,7 @@ export default class FerrisearchPlugin extends Plugin {
             this.notesIndexer.flagNoteForReindex(file)
           }
           this.embedsRepository.refreshEmbedsForNote(file.path)
-        })
+        }),
       )
       this.registerEvent(
         this.app.vault.on('rename', async (file, oldPath) => {
@@ -143,21 +123,19 @@ export default class FerrisearchPlugin extends Plugin {
 
             this.embedsRepository.renameFile(oldPath, file.path)
           }
-        })
+        }),
       )
 
-      this.refreshIndexCallback = this.notesIndexer.refreshIndex.bind(
-        this.notesIndexer
-      )
-      addEventListener('blur', this.refreshIndexCallback!)
+      this.refreshIndexCallback = this.notesIndexer.refreshIndex.bind(this.notesIndexer)
+      if (this.refreshIndexCallback) addEventListener('blur', this.refreshIndexCallback)
 
       await this.populateIndex()
     })
   }
 
   async onunload(): Promise<void> {
-    // @ts-ignore
-    delete globalThis['ferrisearch']
+    // @ts-expect-error
+    delete globalThis.ferrisearch
 
     if (this.refreshIndexCallback) {
       removeEventListener('blur', this.refreshIndexCallback)
@@ -183,9 +161,7 @@ export default class FerrisearchPlugin extends Plugin {
   private async populateIndex(): Promise<void> {
     console.time('Ferrisearch - Indexing total time')
     indexingStep.set(IndexingStepType.ReadingFiles)
-    const files = this.app.vault
-      .getFiles()
-      .filter(f => this.notesIndexer.isFileIndexable(f.path))
+    const files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
 
     const searchEngine = this.searchEngine
@@ -202,24 +178,20 @@ export default class FerrisearchPlugin extends Plugin {
     await this.embedsRepository.loadFromCache()
 
     const diff = searchEngine.getDocumentsToReindex(
-      files.map(f => ({ path: f.path, mtime: f.stat.mtime }))
+      files.map(f => ({ path: f.path, mtime: f.stat.mtime })),
     )
 
     if (diff.toAdd.length) {
-      console.debug(
-        'Ferrisearch - Files to add/update: ' + diff.toAdd.length
-      )
+      console.debug(`Ferrisearch - Files to add/update: ${diff.toAdd.length}`)
     }
     if (diff.toRemove.length) {
-      console.debug(
-        'Ferrisearch - Files to remove: ' + diff.toRemove.length
-      )
+      console.debug(`Ferrisearch - Files to remove: ${diff.toRemove.length}`)
     }
 
     if (diff.toAdd.length >= 1000) {
       new Notice(
         `Ferrisearch: ${diff.toAdd.length} files need to be indexed. Obsidian may experience stutters during the process.`,
-        10_000
+        10_000,
       )
     }
 

@@ -1,9 +1,9 @@
-import { MarkdownView, Modal, TFile } from 'obsidian'
 import type { Modifier } from 'obsidian'
-import { Action, eventBus, EventNames, isInputComposition } from '../globals'
+import { MarkdownView, Modal, type TFile } from 'obsidian'
+import { Action, EventNames, eventBus, isInputComposition } from '../globals'
 import type FerrisearchPlugin from '../main'
-import { renderVaultModal } from './vault-modal'
 import { renderInFileModal } from './infile-modal'
+import { renderVaultModal } from './vault-modal'
 
 abstract class FerrisearchModal extends Modal {
   protected constructor(plugin: FerrisearchPlugin) {
@@ -34,7 +34,7 @@ abstract class FerrisearchModal extends Modal {
       for (const modifier of ['Ctrl', 'Mod'] as const) {
         this.scope.register([modifier], key.k, _e => {
           if (settings.vimLikeNavigationShortcut) {
-            eventBus.emit('arrow-' + key.dir)
+            eventBus.emit(`arrow-${key.dir}`)
           }
         })
       }
@@ -48,7 +48,7 @@ abstract class FerrisearchModal extends Modal {
       for (const modifier of ['Ctrl', 'Mod'] as const) {
         this.scope.register([modifier], key.k, _e => {
           if (settings.vimLikeNavigationShortcut) {
-            eventBus.emit('arrow-' + key.dir)
+            eventBus.emit(`arrow-${key.dir}`)
           }
         })
       }
@@ -60,7 +60,7 @@ abstract class FerrisearchModal extends Modal {
     let openInNewPaneKey: Modifier[]
     let createInCurrentPaneKey: Modifier[]
     let createInNewPaneKey: Modifier[]
-    let openInNewLeafKey: Modifier[] = ['Mod', 'Alt']
+    const openInNewLeafKey: Modifier[] = ['Mod', 'Alt']
     if (settings.openInNewPane) {
       openInCurrentPaneKey = ['Mod']
       openInNewPaneKey = []
@@ -149,9 +149,7 @@ export class FerrisearchVaultModal extends FerrisearchModal {
       ?.editor.getSelection()
 
     plugin.searchHistory.getHistory().then(history => {
-      const previous = plugin.settings.showPreviousQueryResults
-        ? history[0]
-        : null
+      const previous = plugin.settings.showPreviousQueryResults ? history[0] : null
 
       const handle = renderVaultModal(this.modalEl, {
         plugin,
@@ -171,7 +169,7 @@ export class FerrisearchInFileModal extends FerrisearchModal {
     plugin: FerrisearchPlugin,
     file: TFile,
     searchQuery: string = '',
-    parent?: FerrisearchModal
+    parent?: FerrisearchModal,
   ) {
     super(plugin)
 
@@ -179,7 +177,7 @@ export class FerrisearchInFileModal extends FerrisearchModal {
       plugin,
       modal: this,
       singleFilePath: file.path,
-      parent: parent as FerrisearchVaultModal | null ?? null,
+      parent: (parent as FerrisearchVaultModal | null) ?? null,
       previousQuery: searchQuery,
     })
 

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test'
-import { renderVaultModal } from './vault-modal'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
+import { Action, eventBus, IndexingStepType, indexingStep } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
-import { eventBus, indexingStep, IndexingStepType, Action } from '../globals'
+import { renderVaultModal } from './vault-modal'
 
 // Flush microtasks and timers
 async function flush(ms = 400) {
@@ -20,15 +20,15 @@ async function flush(ms = 400) {
 
 function setup(overrides?: {
   previousQuery?: string
-  settings?: Record<string, any>
-  searchResults?: any[]
+  settings?: Record<string, unknown>
+  searchResults?: unknown[]
 }) {
   const container = document.createElement('div')
   const plugin = createMockPlugin({
     settings: overrides?.settings,
     searchResults: overrides?.searchResults,
   })
-  const modal = { close: mock(() => {}) } as any
+  const modal = { close: mock(() => {}) } as unknown
   const handle = renderVaultModal(container, {
     plugin,
     modal,
@@ -68,7 +68,7 @@ describe('renderVaultModal', () => {
       const { container, handle } = setup({ settings: { showCreateButton: true } })
       const btn = container.querySelector('button')
       expect(btn).not.toBeNull()
-      expect(btn!.textContent).toBe('Create note')
+      expect(btn?.textContent).toBe('Create note')
       handle.destroy()
     })
 
@@ -103,7 +103,7 @@ describe('renderVaultModal', () => {
         createMockResultNote({ path: 'a.md', basename: 'a' }),
         createMockResultNote({ path: 'b.md', basename: 'b' }),
       ]
-      const { container, plugin, handle } = setup({ searchResults: notes })
+      const { container, handle } = setup({ searchResults: notes })
 
       // Trigger search via input
       const input = container.querySelector('input.prompt-input') as HTMLInputElement

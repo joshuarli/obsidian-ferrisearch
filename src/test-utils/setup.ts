@@ -19,19 +19,25 @@ mock.module('obsidian', () => ({
     close() {}
   },
   Plugin: class Plugin {},
-  PluginSettingTab: class PluginSettingTab {
-    constructor(_app: any, _plugin: any) {}
-  },
+  PluginSettingTab: class PluginSettingTab {},
   Setting: class Setting {
-    setName() { return this }
-    setDesc() { return this }
-    setHeading() { return this }
-    addToggle() { return this }
+    setName() {
+      return this
+    }
+    setDesc() {
+      return this
+    }
+    setHeading() {
+      return this
+    }
+    addToggle() {
+      return this
+    }
   },
   App: class App {},
   getAllTags: () => [],
   parseFrontMatterAliases: () => [],
-  debounce: (fn: Function, _ms: number) => fn,
+  debounce: (fn: (...args: unknown[]) => unknown, _ms: number) => fn,
 }))
 
 // IntersectionObserver mock — immediately fires with isIntersecting: true
@@ -45,7 +51,7 @@ class MockIntersectionObserver {
   observe(el: Element) {
     this.callback(
       [{ isIntersecting: true, target: el } as IntersectionObserverEntry],
-      this as unknown as IntersectionObserver
+      this as unknown as IntersectionObserver,
     )
   }
 
@@ -55,7 +61,7 @@ class MockIntersectionObserver {
 }
 
 // Always override — happy-dom may provide a non-functional IntersectionObserver
-globalThis.IntersectionObserver = MockIntersectionObserver as any
+globalThis.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver
 
 // Obsidian monkey-patches HTMLElement with addClass/removeClass
 if (!HTMLElement.prototype.addClass) {
@@ -71,5 +77,8 @@ if (!HTMLElement.prototype.removeClass) {
 
 // CSS.escape polyfill if happy-dom doesn't provide it
 if (typeof CSS === 'undefined' || typeof CSS.escape === 'undefined') {
-  (globalThis as any).CSS = { ...(globalThis as any).CSS, escape: (s: string) => s }
+  ;(globalThis as Record<string, unknown>).CSS = {
+    ...((globalThis as Record<string, unknown>).CSS as object),
+    escape: (s: string) => s,
+  }
 }

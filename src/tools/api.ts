@@ -1,7 +1,7 @@
-import type { ResultNote } from '../globals'
-import { Query } from '../search/query'
-import type FerrisearchPlugin from '../main'
 import { FerrisearchVaultModal } from '../components/modals'
+import type { ResultNote } from '../globals'
+import type FerrisearchPlugin from '../main'
+import { Query } from '../search/query'
 
 type ResultNoteApi = {
   score: number
@@ -25,17 +25,11 @@ let notified = false
  */
 let onIndexedCallbacks: Array<() => void> = []
 
-function mapResults(
-  plugin: FerrisearchPlugin,
-  results: ResultNote[]
-): ResultNoteApi[] {
+function mapResults(plugin: FerrisearchPlugin, results: ResultNote[]): ResultNoteApi[] {
   return results.map(result => {
     const { score, path, basename, foundWords, matches, content } = result
 
-    const excerpt = plugin.textProcessor.makeExcerpt(
-      content,
-      matches[0]?.offset ?? -1
-    )
+    const excerpt = plugin.textProcessor.makeExcerpt(content, matches[0]?.offset ?? -1)
 
     const res: ResultNoteApi = {
       score,
@@ -58,7 +52,7 @@ function mapResults(
 
 export function notifyOnIndexed(): void {
   notified = true
-  onIndexedCallbacks.forEach(cb => cb())
+  for (const cb of onIndexedCallbacks) cb()
 }
 
 let registered = false
@@ -77,8 +71,9 @@ export function registerAPI(plugin: FerrisearchPlugin): void {
   const api = getApi(plugin)
 
   // Public api
-  // @ts-ignore
-  globalThis['ferrisearch'] = api
+  // @ts-expect-error
+  globalThis.ferrisearch = api
+  // biome-ignore lint/suspicious/noExplicitAny: Obsidian internal plugin registry
   ;(plugin.app as any).plugins.plugins.ferrisearch.api = api
 }
 

@@ -2,8 +2,8 @@ import {
   type CachedMetadata,
   getAllTags,
   Notice,
-  parseFrontMatterAliases,
   Platform,
+  parseFrontMatterAliases,
 } from 'obsidian'
 import { isSearchMatch, type SearchMatch } from '../globals'
 
@@ -25,13 +25,8 @@ export function getAllIndices(text: string, regex: RegExp): SearchMatch[] {
     .filter(isSearchMatch)
 }
 
-export function extractHeadingsFromCache(
-  cache: CachedMetadata,
-  level: number
-): string[] {
-  return (
-    cache.headings?.filter(h => h.level === level).map(h => h.heading) ?? []
-  )
+export function extractHeadingsFromCache(cache: CachedMetadata, level: number): string[] {
+  return cache.headings?.filter(h => h.level === level).map(h => h.heading) ?? []
 }
 
 export function loopIndex(index: number, nbItems: number): number {
@@ -42,30 +37,20 @@ export function stripMarkdownCharacters(text: string): string {
   return text.replace(/(\*|_)+(.+?)(\*|_)+/g, (_match, _p1, p2) => p2)
 }
 
-export function getAliasesFromMetadata(
-  metadata: CachedMetadata | null
-): string[] {
-  return metadata?.frontmatter
-    ? parseFrontMatterAliases(metadata.frontmatter) ?? []
-    : []
+export function getAliasesFromMetadata(metadata: CachedMetadata | null): string[] {
+  return metadata?.frontmatter ? (parseFrontMatterAliases(metadata.frontmatter) ?? []) : []
 }
 
 export function getTagsFromMetadata(metadata: CachedMetadata | null): string[] {
-  let tags = metadata ? getAllTags(metadata) ?? [] : []
-  tags = [
-    ...new Set(
-      tags.reduce((acc, tag) => {
-        return [
-          ...acc,
-          ...tag
-            .split('/')
-            .filter(t => t)
-            .map(t => (t.startsWith('#') ? t : `#${t}`)),
-          tag,
-        ]
-      }, [] as string[])
-    ),
-  ]
+  let tags = metadata ? (getAllTags(metadata) ?? []) : []
+  const expanded: string[] = []
+  for (const tag of tags) {
+    for (const t of tag.split('/').filter(t => t)) {
+      expanded.push(t.startsWith('#') ? t : `#${t}`)
+    }
+    expanded.push(tag)
+  }
+  tags = [...new Set(expanded)]
   return tags
 }
 
@@ -116,7 +101,8 @@ export function chunkArray<T>(arr: T[], len: number): T[][] {
   const n = arr.length
 
   while (i < n) {
-    chunks.push(arr.slice(i, (i += len)))
+    chunks.push(arr.slice(i, i + len))
+    i += len
   }
 
   return chunks
@@ -140,11 +126,11 @@ export function splitHyphens(text: string): string[] {
   return text.split('-').filter(t => t)
 }
 
-export function logVerbose(...args: any[]): void {
+export function logVerbose(...args: unknown[]): void {
   printVerbose(console.debug, ...args)
 }
 
-export function warnVerbose(...args: any[]): void {
+export function warnVerbose(...args: unknown[]): void {
   printVerbose(console.warn, ...args)
 }
 
@@ -153,7 +139,7 @@ export function enableVerboseLogging(enable: boolean): void {
   verboseLoggingEnabled = enable
 }
 
-function printVerbose(fn: (...args: any[]) => any, ...args: any[]): void {
+function printVerbose(fn: (...args: unknown[]) => void, ...args: unknown[]): void {
   if (verboseLoggingEnabled) {
     fn(...args)
   }
@@ -172,7 +158,7 @@ export const countError = (() => {
       alreadyWarned = true
       new Notice(
         'Ferrisearch - There might be an issue with your index. Try clearing it in settings and restarting Obsidian.',
-        5000
+        5000,
       )
     }
   }

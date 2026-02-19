@@ -19,9 +19,7 @@ export class SearchHistory {
   }
 
   public async getHistory(): Promise<ReadonlyArray<string>> {
-    const data = (await this.plugin.database.getSearchHistory())
-      .reverse()
-      .map(o => o.query)
+    const data = (await this.plugin.database.getSearchHistory()).reverse().map(o => o.query)
     if (this.nextQueryIsEmpty) {
       data.unshift('')
     }

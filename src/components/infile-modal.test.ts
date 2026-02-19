@@ -1,8 +1,8 @@
-import { describe, it, expect, mock } from 'bun:test'
-import { renderInFileModal } from './infile-modal'
+import { describe, expect, it, mock } from 'bun:test'
+import { Action, eventBus } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
-import { eventBus, Action } from '../globals'
+import { renderInFileModal } from './infile-modal'
 
 // Flush microtasks and timers
 async function flush(ms = 400) {
@@ -17,9 +17,9 @@ async function flush(ms = 400) {
 
 function setup(overrides?: {
   previousQuery?: string
-  settings?: Record<string, any>
-  searchResults?: any[]
-  parent?: any
+  settings?: Record<string, unknown>
+  searchResults?: unknown[]
+  parent?: unknown
   singleFilePath?: string
 }) {
   const container = document.createElement('div')
@@ -27,7 +27,7 @@ function setup(overrides?: {
     settings: overrides?.settings,
     searchResults: overrides?.searchResults,
   })
-  const modal = { close: mock(() => {}) } as any
+  const modal = { close: mock(() => {}) } as unknown
   const parent = overrides?.parent ?? null
   const handle = renderInFileModal(container, {
     plugin,
@@ -249,7 +249,7 @@ describe('renderInFileModal', () => {
     })
 
     it('Tab closes modal to switch to vault search', async () => {
-      const { container, modal, handle } = setup()
+      const { modal, handle } = setup()
 
       eventBus.emit(Action.Tab)
       expect(modal.close).toHaveBeenCalled()

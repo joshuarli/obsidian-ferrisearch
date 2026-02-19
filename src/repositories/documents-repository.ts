@@ -1,5 +1,6 @@
 import { normalizePath, TFile } from 'obsidian'
 import type { IndexedDocument } from '../globals'
+import type FerrisearchPlugin from '../main'
 import {
   countError,
   extractHeadingsFromCache,
@@ -9,7 +10,6 @@ import {
   removeDiacritics,
   stripMarkdownCharacters,
 } from '../tools/utils'
-import type FerrisearchPlugin from '../main'
 
 export class DocumentsRepository {
   private documents: Map<string, IndexedDocument> = new Map()
@@ -20,18 +20,13 @@ export class DocumentsRepository {
     try {
       const doc = await this.getAndMapIndexedDocument(path)
       if (!doc.path) {
-        console.error(
-          `Missing .path field in IndexedDocument "${doc.basename}", skipping`
-        )
+        console.error(`Missing .path field in IndexedDocument "${doc.basename}", skipping`)
         return
       }
       this.documents.set(path, doc)
       this.plugin.embedsRepository.refreshEmbedsForNote(path)
     } catch (e) {
-      console.warn(
-        `Ferrisearch: Error while adding "${path}" to live cache`,
-        e
-      )
+      console.warn(`Ferrisearch: Error while adding "${path}" to live cache`, e)
       this.removeDocument(path)
       countError()
     }
@@ -42,8 +37,9 @@ export class DocumentsRepository {
   }
 
   public async getDocument(path: string): Promise<IndexedDocument> {
-    if (this.documents.has(path)) {
-      return this.documents.get(path)!
+    const cached = this.documents.get(path)
+    if (cached) {
+      return cached
     }
     logVerbose('Generating IndexedDocument from', path)
     await this.addDocument(path)
@@ -52,31 +48,35 @@ export class DocumentsRepository {
     if (!document) {
       console.error('Ferrisearch', path, 'cannot be read')
       countError()
+      return {
+        path,
+        basename: path,
+        displayTitle: '',
+        content: '',
+        mtime: 0,
+        tags: [],
+      } as IndexedDocument
     }
 
-    return document!
+    return document
   }
 
-  private async getAndMapIndexedDocument(
-    path: string
-  ): Promise<IndexedDocument> {
+  private async getAndMapIndexedDocument(path: string): Promise<IndexedDocument> {
     path = normalizePath(path)
     const app = this.plugin.app
     const file = app.vault.getAbstractFileByPath(path)
     if (!file) throw new Error(`Invalid file path: "${path}"`)
     if (!(file instanceof TFile)) throw new Error(`Not a TFile: "${path}"`)
 
-    let content: string = await app.vault.cachedRead(file)
+    const content: string = await app.vault.cachedRead(file)
 
     const metadata = app.metadataCache.getFileCache(file)
 
     let displayTitle: string
     if (this.plugin.settings.displayTitle === '#heading') {
-      displayTitle =
-        metadata?.headings?.find(h => h.level === 1)?.heading ?? ''
+      displayTitle = metadata?.headings?.find(h => h.level === 1)?.heading ?? ''
     } else {
-      displayTitle =
-        metadata?.frontmatter?.[this.plugin.settings.displayTitle] ?? ''
+      displayTitle = metadata?.frontmatter?.[this.plugin.settings.displayTitle] ?? ''
     }
     const tags = getTagsFromMetadata(metadata)
     return {
@@ -90,15 +90,9 @@ export class DocumentsRepository {
       tags: tags,
       unmarkedTags: tags.map(t => t.replace('#', '')),
       aliases: getAliasesFromMetadata(metadata).join(''),
-      headings1: metadata
-        ? extractHeadingsFromCache(metadata, 1).join(' ')
-        : '',
-      headings2: metadata
-        ? extractHeadingsFromCache(metadata, 2).join(' ')
-        : '',
-      headings3: metadata
-        ? extractHeadingsFromCache(metadata, 3).join(' ')
-        : '',
+      headings1: metadata ? extractHeadingsFromCache(metadata, 1).join(' ') : '',
+      headings2: metadata ? extractHeadingsFromCache(metadata, 2).join(' ') : '',
+      headings3: metadata ? extractHeadingsFromCache(metadata, 3).join(' ') : '',
     }
   }
 }

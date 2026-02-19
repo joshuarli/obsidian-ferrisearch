@@ -3,7 +3,7 @@
   "name": "Ferrisearch",
   "version": "0.1.0",
   "minAppVersion": "1.7.2",
-  "description": "A blazing-fast search engine for Obsidian, powered by Tantivy",
+  "description": "faster simpler omnisearch",
   "author": "Josh",
   "isDesktopOnly": true
 }

@@ -1,9 +1,9 @@
-import { excerptAfter, excerptBefore, type SearchMatch } from '../globals'
-import { removeDiacritics, warnVerbose } from './utils'
-import type { Query } from '../search/query'
-import { Notice } from 'obsidian'
 import { escapeRegExp } from 'lodash-es'
+import { Notice } from 'obsidian'
+import { excerptAfter, excerptBefore, type SearchMatch } from '../globals'
 import type FerrisearchPlugin from '../main'
+import type { Query } from '../search/query'
+import { removeDiacritics, warnVerbose } from './utils'
 
 export class TextProcessor {
   constructor(private plugin: FerrisearchPlugin) {}
@@ -18,11 +18,8 @@ export class TextProcessor {
     }
     try {
       return text.replace(
-        new RegExp(
-          `(${matches.map(item => escapeRegExp(item.match)).join('|')})`,
-          'giu'
-        ),
-        `<span class="${highlightClass}">$1</span>`
+        new RegExp(`(${matches.map(item => escapeRegExp(item.match)).join('|')})`, 'giu'),
+        `<span class="${highlightClass}">$1</span>`,
       )
     } catch (e) {
       console.error('Ferrisearch - Error in highlightText()', e)
@@ -35,47 +32,38 @@ export class TextProcessor {
 
     strings.sort((a, b) => b.length - a.length)
 
-    const joined = `(${strings
-      .map(s => `\\b${escapeRegExp(s)}\\b|${escapeRegExp(s)}`)
-      .join('|')})`
+    const joined = `(${strings.map(s => `\\b${escapeRegExp(s)}\\b|${escapeRegExp(s)}`).join('|')})`
 
     return new RegExp(`${joined}`, 'gui')
   }
 
-  public getMatches(
-    text: string,
-    words: string[],
-    query?: Query
-  ): SearchMatch[] {
+  public getMatches(text: string, words: string[], query?: Query): SearchMatch[] {
     words = words.map(escapeHTML)
     const reg = this.stringsToRegex(words)
     const originalText = text
     if (this.plugin.settings.ignoreDiacritics) {
       text = removeDiacritics(text, this.plugin.settings.ignoreArabicDiacritics)
     }
-    const startTime = new Date().getTime()
+    const startTime = Date.now()
     let match: RegExpExecArray | null = null
-    let matches: SearchMatch[] = []
+    const matches: SearchMatch[] = []
     let count = 0
-    while ((match = reg.exec(text)) !== null) {
-      if (++count >= 100 || new Date().getTime() - startTime > 50) {
+    while (true) {
+      match = reg.exec(text)
+      if (match === null) break
+      if (++count >= 100 || Date.now() - startTime > 50) {
         warnVerbose('Stopped getMatches at', count, 'results')
         break
       }
       const matchStartIndex = match.index
       const matchEndIndex = matchStartIndex + match[0].length
-      const originalMatch = originalText
-        .substring(matchStartIndex, matchEndIndex)
-        .trim()
+      const originalMatch = originalText.substring(matchStartIndex, matchEndIndex).trim()
       if (originalMatch && match.index >= 0) {
         matches.push({ match: originalMatch, offset: match.index })
       }
     }
 
-    if (
-      query &&
-      (query.query.text.length > 1 || query.getExactTerms().length > 0)
-    ) {
+    if (query && (query.query.text.length > 1 || query.getExactTerms().length > 0)) {
       const best = text.indexOf(query.getBestStringForExcerpt())
       if (best > -1 && matches.find(m => m.offset === best)) {
         matches.unshift({
@@ -123,9 +111,7 @@ export class TextProcessor {
 
       return content
     } catch (e) {
-      new Notice(
-        'Ferrisearch - Error while creating excerpt, see developer console'
-      )
+      new Notice('Ferrisearch - Error while creating excerpt, see developer console')
       console.error(`Ferrisearch - Error while creating excerpt`)
       console.error(e)
       return ''

@@ -1,4 +1,4 @@
-export type EventBusCallback = (...args: any[]) => any
+export type EventBusCallback = (...args: unknown[]) => void
 
 export class EventBus {
   private handlers: Map<string, EventBusCallback> = new Map()
@@ -32,9 +32,9 @@ export class EventBus {
     this.disabled = this.disabled.filter(v => v !== context)
   }
 
-  public emit(event: string, ...args: any[]): void {
+  public emit(event: string, ...args: unknown[]): void {
     const entries = [...this.handlers.entries()].filter(
-      ([k, _]) => !this.disabled.includes(k.split('@')[0])
+      ([k, _]) => !this.disabled.includes(k.split('@')[0]),
     )
     for (const [key, handler] of entries) {
       if (key.endsWith(`@${event}`)) {

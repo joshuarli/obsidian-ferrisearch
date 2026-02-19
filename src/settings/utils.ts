@@ -1,5 +1,5 @@
-import { App, Plugin } from 'obsidian'
-import { K_DISABLE_FERRISEARCH, RecencyCutoff } from '../globals'
+import type { App, Plugin } from 'obsidian'
+import { K_DISABLE_FERRISEARCH, type RecencyCutoff } from '../globals'
 import { settings } from '.'
 
 export function htmlDescription(innerHTML: string): DocumentFragment {

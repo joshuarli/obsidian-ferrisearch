@@ -1,14 +1,13 @@
 import { Notice, Setting } from 'obsidian'
-import type { FerrisearchSettings } from './utils'
-import { saveSettings } from './utils'
-import { htmlDescription, isPluginDisabled, needsARestart } from './utils'
-import type FerrisearchPlugin from '../main'
 import { K_DISABLE_FERRISEARCH } from '../globals'
+import type FerrisearchPlugin from '../main'
+import type { FerrisearchSettings } from './utils'
+import { htmlDescription, isPluginDisabled, needsARestart, saveSettings } from './utils'
 
 export function injectSettingsDanger(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
-  containerEl: HTMLElement
+  containerEl: HTMLElement,
 ) {
   new Setting(containerEl).setName('Danger Zone').setHeading()
 
@@ -17,23 +16,21 @@ export function injectSettingsDanger(
     .setName('Ignore diacritics')
     .setDesc(
       htmlDescription(`Normalize diacritics in search terms. Words like "brulee" or "zlutoucky" will be indexed without diacritics.<br/>
-      ${needsARestart}`)
+      ${needsARestart}`),
     )
     .addToggle(toggle =>
       toggle.setValue(settings.ignoreDiacritics).onChange(async v => {
         settings.ignoreDiacritics = v
         await saveSettings(plugin)
-      })
+      }),
     )
 
-  new Setting(containerEl)
-    .setName('Ignore Arabic diacritics (beta)')
-    .addToggle(toggle =>
-      toggle.setValue(settings.ignoreArabicDiacritics).onChange(async v => {
-        settings.ignoreArabicDiacritics = v
-        await saveSettings(plugin)
-      })
-    )
+  new Setting(containerEl).setName('Ignore Arabic diacritics (beta)').addToggle(toggle =>
+    toggle.setValue(settings.ignoreArabicDiacritics).onChange(async v => {
+      settings.ignoreArabicDiacritics = v
+      await saveSettings(plugin)
+    }),
+  )
 
   // Disable Ferrisearch
   const disableDesc = new DocumentFragment()
@@ -53,7 +50,7 @@ export function injectSettingsDanger(
           plugin.app.saveLocalStorage(K_DISABLE_FERRISEARCH) // No value = unset
           new Notice('Ferrisearch - Enabled. Please restart Obsidian.')
         }
-      })
+      }),
     )
 
   // Clear index
@@ -62,7 +59,7 @@ export function injectSettingsDanger(
     .setDesc(
       htmlDescription(`Erase all Ferrisearch index data.
         Use this if results are inconsistent, missing, or appear outdated.<br>
-        ${needsARestart}`)
+        ${needsARestart}`),
     )
     .addButton(btn => {
       btn.setButtonText('Clear index')

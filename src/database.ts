@@ -52,9 +52,7 @@ export class Database {
     return []
   }
 
-  async saveEmbeds(
-    data: { embedded: string; referencedBy: string[] }[]
-  ): Promise<void> {
+  async saveEmbeds(data: { embedded: string; referencedBy: string[] }[]): Promise<void> {
     try {
       const path = `${this.basePath}/embeds-cache.json`
       await this.plugin.app.vault.adapter.write(path, JSON.stringify(data))

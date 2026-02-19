@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test'
-import {
-  createVaultResultItem,
-  createInFileResultItem,
-  updateSelection,
-  cleanupResultItem,
-} from './result-items'
+import { describe, expect, it, mock } from 'bun:test'
+import { showExcerpt } from '../settings/index'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
-import { showExcerpt } from '../settings/index'
+import {
+  cleanupResultItem,
+  createInFileResultItem,
+  createVaultResultItem,
+  updateSelection,
+} from './result-items'
 
 describe('createVaultResultItem', () => {
   it('creates element with correct class names', () => {
@@ -45,7 +45,7 @@ describe('createVaultResultItem', () => {
     const el = createVaultResultItem(note, plugin, true)
     const flair = el.querySelector('.suggestion-flair')
     expect(flair).not.toBeNull()
-    expect(flair!.innerHTML).toContain('svg')
+    expect(flair?.innerHTML).toContain('svg')
   })
 
   it('does not show glyph by default', () => {
@@ -61,9 +61,9 @@ describe('createVaultResultItem', () => {
     const el = createVaultResultItem(note, plugin)
     const counter = el.querySelector('.ferrisearch-result__counter')
     expect(counter).not.toBeNull()
-    expect(counter!.innerHTML).toContain('1')
-    expect(counter!.innerHTML).toContain('match')
-    expect(counter!.innerHTML).not.toContain('matches')
+    expect(counter?.innerHTML).toContain('1')
+    expect(counter?.innerHTML).toContain('match')
+    expect(counter?.innerHTML).not.toContain('matches')
   })
 
   it('displays match counter with plural "matches"', () => {
@@ -77,8 +77,8 @@ describe('createVaultResultItem', () => {
     })
     const el = createVaultResultItem(note, plugin)
     const counter = el.querySelector('.ferrisearch-result__counter')
-    expect(counter!.innerHTML).toContain('3')
-    expect(counter!.innerHTML).toContain('matches')
+    expect(counter?.innerHTML).toContain('3')
+    expect(counter?.innerHTML).toContain('matches')
   })
 
   it('does not show counter when matches is empty', () => {
@@ -108,7 +108,7 @@ describe('createVaultResultItem', () => {
     const el = createVaultResultItem(note, plugin)
     const ext = el.querySelector('.ferrisearch-result__extension')
     expect(ext).not.toBeNull()
-    expect(ext!.textContent).toBe('.md')
+    expect(ext?.textContent).toBe('.md')
   })
 
   it('hides extension when displayTitle is set', () => {
@@ -197,7 +197,7 @@ describe('updateSelection', () => {
 
 describe('cleanupResultItem', () => {
   it('calls stored _unsub function', () => {
-    const el = document.createElement('div') as any
+    const el = document.createElement('div') as HTMLElement & { _unsub?: () => void }
     el._unsub = mock(() => {})
     cleanupResultItem(el)
     expect(el._unsub).toHaveBeenCalledTimes(1)
