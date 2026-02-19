@@ -373,4 +373,149 @@ mod tests {
         assert!(tokens.contains(&"hello".to_string()));
         assert!(tokens.contains(&"world".to_string()));
     }
+
+    #[test]
+    fn test_consecutive_separators() {
+        let tokens = tokenize("foo...bar!!!baz");
+        assert!(tokens.contains(&"foo".to_string()));
+        assert!(tokens.contains(&"bar".to_string()));
+        assert!(tokens.contains(&"baz".to_string()));
+    }
+
+    #[test]
+    fn test_leading_trailing_separators() {
+        let tokens = tokenize("  ...hello world...  ");
+        assert!(tokens.contains(&"hello".to_string()));
+        assert!(tokens.contains(&"world".to_string()));
+        // No empty tokens
+        assert!(!tokens.contains(&"".to_string()));
+    }
+
+    #[test]
+    fn test_only_separators() {
+        let tokens = tokenize("...   !!!");
+        assert!(tokens.is_empty());
+    }
+
+    #[test]
+    fn test_camel_case_single_boundary() {
+        let parts = split_camel_case("fooBar");
+        assert_eq!(parts, vec!["foo", "Bar"]);
+    }
+
+    #[test]
+    fn test_camel_case_all_upper() {
+        // ALL_CAPS has no lowercase->uppercase boundary
+        let parts = split_camel_case("ALLCAPS");
+        assert!(parts.is_empty());
+    }
+
+    #[test]
+    fn test_camel_case_single_char_parts() {
+        // "aB" has lowercase->uppercase boundary
+        let parts = split_camel_case("aB");
+        assert_eq!(parts, vec!["a", "B"]);
+    }
+
+    #[test]
+    fn test_hyphens_leading_trailing() {
+        let parts = split_hyphens("-foo-bar-");
+        // Leading/trailing hyphens produce empty strings that are filtered
+        assert_eq!(parts, vec!["foo", "bar"]);
+    }
+
+    #[test]
+    fn test_hyphens_double() {
+        let parts = split_hyphens("foo--bar");
+        assert_eq!(parts, vec!["foo", "bar"]);
+    }
+
+    #[test]
+    fn test_hyphens_single_segment() {
+        // A single segment with leading hyphen
+        let parts = split_hyphens("-only");
+        assert_eq!(parts, vec!["only"]);
+    }
+
+    #[test]
+    fn test_unicode_tokenization() {
+        // CJK and mixed scripts
+        let tokens = tokenize("hello 世界");
+        assert!(tokens.contains(&"hello".to_string()));
+        assert!(tokens.contains(&"世界".to_string()));
+    }
+
+    #[test]
+    fn test_tab_and_newline_separators() {
+        let tokens = tokenize("foo\tbar\nbaz");
+        assert!(tokens.contains(&"foo".to_string()));
+        assert!(tokens.contains(&"bar".to_string()));
+        assert!(tokens.contains(&"baz".to_string()));
+    }
+
+    #[test]
+    fn test_pipe_separator() {
+        let tokens = tokenize("foo|bar");
+        assert!(tokens.contains(&"foo".to_string()));
+        assert!(tokens.contains(&"bar".to_string()));
+    }
+
+    #[test]
+    fn test_diacritics_removal_mixed() {
+        assert_eq!(remove_diacritics("café résumé"), "cafe resume");
+    }
+
+    #[test]
+    fn test_diacritic_filter_integration() {
+        use tantivy::tokenizer::TokenFilter;
+        let base = FerrisearchTokenizer::new();
+        let mut tokenizer = DiacriticFilter.transform(base);
+        let mut stream = tokenizer.token_stream("café résumé");
+        let mut tokens = Vec::new();
+        while stream.advance() {
+            tokens.push(stream.token().text.clone());
+        }
+        assert!(tokens.contains(&"cafe".to_string()));
+        assert!(tokens.contains(&"resume".to_string()));
+    }
+
+    #[test]
+    fn test_camel_case_in_tokenizer() {
+        // Verify camelCase splits are emitted by the tokenizer
+        let tokens = tokenize("myVariableName");
+        assert!(tokens.contains(&"myvariablename".to_string())); // full lowercased
+        assert!(tokens.contains(&"my".to_string())); // camel split
+        assert!(tokens.contains(&"variable".to_string()));
+        assert!(tokens.contains(&"name".to_string()));
+    }
+
+    #[test]
+    fn test_token_positions_increment() {
+        let mut tokenizer = FerrisearchTokenizer::new();
+        let mut stream = tokenizer.token_stream("hello world");
+        let mut positions = Vec::new();
+        while stream.advance() {
+            positions.push(stream.token().position);
+        }
+        // Positions should be strictly increasing
+        for window in positions.windows(2) {
+            assert!(window[1] > window[0]);
+        }
+    }
+
+    #[test]
+    fn test_token_offsets() {
+        let mut tokenizer = FerrisearchTokenizer::new();
+        let text = "hello world";
+        let mut stream = tokenizer.token_stream(text);
+        let mut found_hello = false;
+        while stream.advance() {
+            if stream.token().text == "hello" {
+                assert_eq!(stream.token().offset_from, 0);
+                assert_eq!(stream.token().offset_to, 5);
+                found_hello = true;
+            }
+        }
+        assert!(found_hello);
+    }
 }

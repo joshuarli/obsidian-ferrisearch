@@ -94,3 +94,64 @@ pub fn build_schema() -> (Schema, FieldHandles) {
 
     (schema, handles)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_schema_returns_all_fields() {
+        let (schema, handles) = build_schema();
+        // Verify all fields exist by looking them up by name
+        assert!(schema.get_field("path").is_ok());
+        assert!(schema.get_field("basename").is_ok());
+        assert!(schema.get_field("display_title").is_ok());
+        assert!(schema.get_field("directory").is_ok());
+        assert!(schema.get_field("aliases").is_ok());
+        assert!(schema.get_field("content").is_ok());
+        assert!(schema.get_field("headings1").is_ok());
+        assert!(schema.get_field("headings2").is_ok());
+        assert!(schema.get_field("headings3").is_ok());
+        assert!(schema.get_field("tags_text").is_ok());
+        assert!(schema.get_field("unmarked_tags").is_ok());
+        assert!(schema.get_field("tags_stored").is_ok());
+        assert!(schema.get_field("mtime").is_ok());
+
+        // Verify handles match schema lookups
+        assert_eq!(handles.path, schema.get_field("path").unwrap());
+        assert_eq!(handles.basename, schema.get_field("basename").unwrap());
+        assert_eq!(handles.content, schema.get_field("content").unwrap());
+        assert_eq!(handles.mtime, schema.get_field("mtime").unwrap());
+    }
+
+    #[test]
+    fn test_text_fields_returns_10_searchable_fields() {
+        let (_schema, handles) = build_schema();
+        let text_fields = handles.text_fields();
+        assert_eq!(text_fields.len(), 10);
+
+        let names: Vec<&str> = text_fields.iter().map(|(name, _)| *name).collect();
+        assert!(names.contains(&"basename"));
+        assert!(names.contains(&"display_title"));
+        assert!(names.contains(&"directory"));
+        assert!(names.contains(&"aliases"));
+        assert!(names.contains(&"content"));
+        assert!(names.contains(&"headings1"));
+        assert!(names.contains(&"headings2"));
+        assert!(names.contains(&"headings3"));
+        assert!(names.contains(&"tags_text"));
+        assert!(names.contains(&"unmarked_tags"));
+    }
+
+    #[test]
+    fn test_text_fields_excludes_non_searchable() {
+        let (_schema, handles) = build_schema();
+        let text_fields = handles.text_fields();
+        let names: Vec<&str> = text_fields.iter().map(|(name, _)| *name).collect();
+        // path, tags_stored, mtime should not be in text_fields
+        assert!(!names.contains(&"path"));
+        assert!(!names.contains(&"tags_stored"));
+        assert!(!names.contains(&"mtime"));
+    }
+
+}

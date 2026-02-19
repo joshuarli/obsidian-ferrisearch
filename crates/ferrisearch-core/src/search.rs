@@ -412,4 +412,200 @@ mod tests {
         assert_eq!(fuzzy_distance("abcdef", 0.1), 1);
         assert_eq!(fuzzy_distance("abcdef", 0.0), 0);
     }
+
+    #[test]
+    fn test_whitespace_only_query() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "content")]);
+        let results = mgr.search("   \t  ", &SearchOptions::default()).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_fuzziness_zero_no_fuzzy() {
+        let mgr = setup_index(vec![make_doc(
+            "a.md",
+            "a",
+            "The restaurant serves excellent cuisine",
+        )]);
+
+        let opts = SearchOptions {
+            fuzziness: "0".to_string(),
+            ..Default::default()
+        };
+
+        // "restaurnt" (typo) should NOT match with fuzziness=0
+        let results = mgr.search("restaurnt", &opts).unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_recency_boost_day() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let mgr = setup_index(vec![
+            {
+                let mut doc = make_doc("recent.md", "recent", "hello world test");
+                doc.mtime = now; // just now
+                doc
+            },
+            {
+                let mut doc = make_doc("old.md", "old", "hello world test");
+                doc.mtime = now - 30 * 24 * 3_600_000; // 30 days ago
+                doc
+            },
+        ]);
+
+        let opts = SearchOptions {
+            recency_boost: "1".to_string(), // Day
+            ..Default::default()
+        };
+
+        let results = mgr.search("hello", &opts).unwrap();
+        assert!(results.len() >= 2);
+        // Recent doc should score higher
+        assert_eq!(results[0].path, "recent.md");
+    }
+
+    #[test]
+    fn test_matched_terms_lowercased() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "Hello World content")]);
+
+        let results = mgr.search("Hello World", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        // matched_terms should be lowercased
+        assert!(results[0].matched_terms.contains(&"hello".to_string()));
+        assert!(results[0].matched_terms.contains(&"world".to_string()));
+    }
+
+    #[test]
+    fn test_get_boost_for_field_all_cases() {
+        let boosts = crate::types::FieldBoosts::default();
+        assert_eq!(get_boost_for_field("basename", &boosts), 10.0);
+        assert_eq!(get_boost_for_field("display_title", &boosts), 10.0);
+        assert_eq!(get_boost_for_field("aliases", &boosts), 10.0);
+        assert_eq!(get_boost_for_field("directory", &boosts), 7.0);
+        assert_eq!(get_boost_for_field("content", &boosts), 1.0);
+        assert_eq!(get_boost_for_field("headings1", &boosts), 6.0);
+        assert_eq!(get_boost_for_field("headings2", &boosts), 5.0);
+        assert_eq!(get_boost_for_field("headings3", &boosts), 4.0);
+        assert_eq!(get_boost_for_field("tags_text", &boosts), 2.0);
+        assert_eq!(get_boost_for_field("unmarked_tags", &boosts), 2.0);
+        // Unknown field should return 1.0
+        assert_eq!(get_boost_for_field("nonexistent_field", &boosts), 1.0);
+    }
+
+    #[test]
+    fn test_headings_search() {
+        let mgr = setup_index(vec![{
+            let mut doc = make_doc("a.md", "a", "body text");
+            doc.headings1 = "Important Heading".to_string();
+            doc
+        }]);
+
+        let results = mgr.search("important", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn test_aliases_search() {
+        let mgr = setup_index(vec![{
+            let mut doc = make_doc("a.md", "a", "body text");
+            doc.aliases = "nickname shortname".to_string();
+            doc
+        }]);
+
+        let results = mgr.search("nickname", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn test_tags_text_search() {
+        let mgr = setup_index(vec![{
+            let mut doc = make_doc("a.md", "a", "body text");
+            doc.tags = vec!["#programming".to_string(), "#rust".to_string()];
+            doc
+        }]);
+
+        let results = mgr.search("programming", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn test_unmarked_tags_search() {
+        let mgr = setup_index(vec![{
+            let mut doc = make_doc("a.md", "a", "body text");
+            doc.unmarked_tags = vec!["coding".to_string()];
+            doc
+        }]);
+
+        let results = mgr.search("coding", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        assert_eq!(results[0].path, "a.md");
+    }
+
+    #[test]
+    fn test_limit_results() {
+        let docs: Vec<DocumentInput> = (0..10)
+            .map(|i| make_doc(&format!("{i}.md"), &format!("{i}"), "common search term"))
+            .collect();
+        let mgr = setup_index(docs);
+
+        let opts = SearchOptions {
+            limit: 3,
+            ..Default::default()
+        };
+
+        let results = mgr.search("common", &opts).unwrap();
+        assert!(results.len() <= 3);
+    }
+
+    #[test]
+    fn test_prefix_search_short_term() {
+        let mgr = setup_index(vec![make_doc(
+            "a.md",
+            "a",
+            "internationalization is important",
+        )]);
+
+        // With prefix_length=1, even short query prefixes should work
+        let opts = SearchOptions {
+            prefix_length: 1,
+            ..Default::default()
+        };
+
+        let results = mgr.search("intern", &opts).unwrap();
+        assert!(!results.is_empty());
+    }
+
+    #[test]
+    fn test_no_results_for_nonexistent_term() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "hello world")]);
+
+        let results = mgr
+            .search("xyzzynonexistent", &SearchOptions::default())
+            .unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_fuzzy_distance_boundary_5_chars() {
+        assert_eq!(fuzzy_distance("abcde", 0.2), 1);
+        assert_eq!(fuzzy_distance("abcde", 0.1), 1);
+        assert_eq!(fuzzy_distance("abcde", 0.0), 0);
+    }
+
+    #[test]
+    fn test_single_char_query() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "x marks the spot")]);
+
+        // Single char "x" - should still work (exact match)
+        let results = mgr.search("x", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+    }
 }

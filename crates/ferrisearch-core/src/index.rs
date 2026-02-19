@@ -308,4 +308,104 @@ mod tests {
             assert!(mgr.has_document("test.md").unwrap());
         }
     }
+
+    #[test]
+    fn test_remove_documents_batch() {
+        let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
+        let docs = vec![
+            make_doc("a.md", "alpha"),
+            make_doc("b.md", "beta"),
+            make_doc("c.md", "gamma"),
+        ];
+        mgr.add_documents(&docs).unwrap();
+        mgr.commit().unwrap();
+        assert_eq!(mgr.document_count().unwrap(), 3);
+
+        mgr.remove_documents(&["a.md".to_string(), "c.md".to_string()]);
+        mgr.commit().unwrap();
+        assert_eq!(mgr.document_count().unwrap(), 1);
+        assert!(!mgr.has_document("a.md").unwrap());
+        assert!(mgr.has_document("b.md").unwrap());
+        assert!(!mgr.has_document("c.md").unwrap());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_document() {
+        let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
+        mgr.add_document(&make_doc("a.md", "alpha")).unwrap();
+        mgr.commit().unwrap();
+
+        // Removing a document that doesn't exist should not error
+        mgr.remove_document("nonexistent.md");
+        mgr.commit().unwrap();
+        assert_eq!(mgr.document_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_add_document_with_all_fields() {
+        let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
+        let doc = DocumentInput {
+            path: "notes/sub/test.md".to_string(),
+            basename: "test".to_string(),
+            display_title: "Test Title".to_string(),
+            aliases: "alias1 alias2".to_string(),
+            content: "Full content here".to_string(),
+            headings1: "Heading One".to_string(),
+            headings2: "Heading Two".to_string(),
+            headings3: "Heading Three".to_string(),
+            tags: vec!["#rust".to_string(), "#code".to_string()],
+            unmarked_tags: vec!["programming".to_string()],
+            mtime: 42000,
+        };
+        mgr.add_document(&doc).unwrap();
+        mgr.commit().unwrap();
+
+        assert_eq!(mgr.document_count().unwrap(), 1);
+        assert!(mgr.has_document("notes/sub/test.md").unwrap());
+    }
+
+    #[test]
+    fn test_upsert_replaces_content() {
+        let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
+        mgr.add_document(&make_doc("a.md", "version one")).unwrap();
+        mgr.commit().unwrap();
+
+        mgr.add_document(&make_doc("a.md", "version two")).unwrap();
+        mgr.commit().unwrap();
+
+        // Should still be 1 document (upsert, not duplicate)
+        assert_eq!(mgr.document_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_diacritics_disabled() {
+        let config = IndexConfig {
+            ignore_diacritics: false,
+            ignore_arabic_diacritics: false,
+        };
+        let mut mgr = IndexManager::new_in_memory(config).unwrap();
+        mgr.add_document(&make_doc("a.md", "hello")).unwrap();
+        mgr.commit().unwrap();
+        assert_eq!(mgr.document_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_disk_index_reopen_add_more() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("index");
+
+        {
+            let mut mgr = IndexManager::new(&path, IndexConfig::default()).unwrap();
+            mgr.add_document(&make_doc("a.md", "alpha")).unwrap();
+            mgr.commit().unwrap();
+        }
+
+        {
+            let mut mgr = IndexManager::new(&path, IndexConfig::default()).unwrap();
+            assert_eq!(mgr.document_count().unwrap(), 1);
+            mgr.add_document(&make_doc("b.md", "beta")).unwrap();
+            mgr.commit().unwrap();
+            assert_eq!(mgr.document_count().unwrap(), 2);
+        }
+    }
 }

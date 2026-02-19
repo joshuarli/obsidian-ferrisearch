@@ -169,3 +169,35 @@ fn default_field_boosts() -> FieldBoosts {
         content: default_content_boost(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_index_config_serde_override() {
+        let config: IndexConfig =
+            serde_json::from_str(r#"{"ignore_diacritics": false, "ignore_arabic_diacritics": true}"#)
+                .unwrap();
+        assert!(!config.ignore_diacritics);
+        assert!(config.ignore_arabic_diacritics);
+    }
+
+    #[test]
+    fn test_search_options_serde_partial() {
+        let opts: SearchOptions =
+            serde_json::from_str(r#"{"fuzziness": "2", "limit": 10}"#).unwrap();
+        assert_eq!(opts.fuzziness, "2");
+        assert_eq!(opts.limit, 10);
+        assert_eq!(opts.prefix_length, 1); // still default
+    }
+
+    #[test]
+    fn test_field_boosts_serde_partial() {
+        let boosts: FieldBoosts =
+            serde_json::from_str(r#"{"basename": 20.0, "content": 5.0}"#).unwrap();
+        assert_eq!(boosts.basename, 20.0);
+        assert_eq!(boosts.content, 5.0);
+        assert_eq!(boosts.display_title, 10.0); // still default
+    }
+}
