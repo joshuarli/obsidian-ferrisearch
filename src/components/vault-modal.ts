@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Platform, TFile } from 'obsidian'
+import { MarkdownView, Notice, Platform, setIcon, TFile } from 'obsidian'
 import {
   Action,
   eventBus,
@@ -33,6 +33,7 @@ export function renderVaultModal(
   let cancelled = false
   let resultEls: HTMLElement[] = []
   let currentObserver: IntersectionObserver | null = null
+  let historyItems: string[] = []
 
   // Build DOM
 
@@ -133,7 +134,7 @@ export function renderVaultModal(
       } else {
         searching = false
         resultNotes = []
-        renderResults()
+        loadHistory()
       }
     }, INPUT_DEBOUNCE_MS)
   }
@@ -198,6 +199,26 @@ export function renderVaultModal(
     return resultNotes[selectedIndex]
   }
 
+  function isShowingHistory(): boolean {
+    return !searchQuery && historyItems.length > 0
+  }
+
+  async function loadHistory() {
+    const history = (await plugin.searchHistory.getHistory()).filter(s => s)
+    historyItems = history.slice(0, 10)
+    selectedIndex = 0
+    renderResults()
+  }
+
+  function selectHistoryItem(idx: number) {
+    const query = historyItems[idx]
+    if (!query) return
+    searchQuery = query
+    input.value = query
+    historyItems = []
+    updateResults()
+  }
+
   // Render results
   function renderResults() {
     // Cleanup old items
@@ -206,6 +227,38 @@ export function renderVaultModal(
 
     // Clear container (keep statusMsgDiv)
     resultsDiv.innerHTML = ''
+
+    // Show history when search is empty
+    if (isShowingHistory()) {
+      for (let i = 0; i < historyItems.length; i++) {
+        const wrapper = document.createElement('div')
+        wrapper.dataset.lazyIdx = i.toString()
+
+        const item = document.createElement('div')
+        item.className = 'suggestion-item ferrisearch-result'
+
+        const icon = document.createElement('span')
+        icon.className = 'ferrisearch-result__history-icon'
+        setIcon(icon, 'history')
+        item.appendChild(icon)
+
+        const text = document.createElement('span')
+        text.textContent = historyItems[i]
+        item.appendChild(text)
+
+        updateSelection(item, i === selectedIndex)
+
+        item.addEventListener('mousemove', () => setSelectedIndex(i))
+        item.addEventListener('click', () => {
+          setSelectedIndex(i)
+          selectHistoryItem(i)
+        })
+
+        wrapper.appendChild(item)
+        resultsDiv.appendChild(wrapper)
+      }
+      return
+    }
 
     // Intersection observer for lazy loading
     const observer = new IntersectionObserver(
@@ -331,6 +384,10 @@ export function renderVaultModal(
   }
 
   function openNoteAndCloseModal() {
+    if (isShowingHistory()) {
+      selectHistoryItem(selectedIndex)
+      return
+    }
     const note = getSelectedNote()
     if (!note) return
     openSearchResult(note)
@@ -410,10 +467,17 @@ export function renderVaultModal(
   }
 
   function moveIndex(dir: 1 | -1) {
+    const total = isShowingHistory() ? historyItems.length : resultNotes.length
+    if (!total) return
     const prev = selectedIndex
-    selectedIndex = loopIndex(selectedIndex + dir, resultNotes.length)
+    selectedIndex = loopIndex(selectedIndex + dir, total)
     updateSelectionUI(prev, selectedIndex)
-    scrollIntoView()
+    if (isShowingHistory()) {
+      const wrapper = resultsDiv.querySelector(`[data-lazy-idx="${selectedIndex}"]`)
+      wrapper?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
+    } else {
+      scrollIntoView()
+    }
   }
 
   async function prevSearchHistory() {
@@ -456,7 +520,7 @@ export function renderVaultModal(
         updateResults()
       } else {
         searching = false
-        renderResults()
+        loadHistory()
       }
     }
   })
