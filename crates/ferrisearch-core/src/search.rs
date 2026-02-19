@@ -3,7 +3,7 @@ use tantivy::query::{
     BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, RegexQuery, TermQuery,
 };
 use tantivy::schema::{IndexRecordOption, Value};
-use tantivy::{DocAddress, ReloadPolicy, Score, Searcher, Term};
+use tantivy::{DocAddress, ReloadPolicy, Searcher, Term};
 
 use crate::index::{IndexError, IndexManager};
 use crate::types::{SearchOptions, SearchResult};

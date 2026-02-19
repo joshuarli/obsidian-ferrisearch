@@ -1,6 +1,5 @@
 import { EventBus } from './tools/event-bus'
 import { writable } from 'svelte/store'
-import type { TFile } from 'obsidian'
 
 export const regexLineSplit = /\r?\n|\r|((\.|\?|!)( |\r?\n|\r))/g
 export const regexYaml = /^---\s*\n(.*?)\n?^---\s?/ms
@@ -98,16 +97,6 @@ export function toggleInputComposition(toggle: boolean): void {
 
 export function isInputComposition(): boolean {
   return inComposition
-}
-
-export type TextExtractorApi = {
-  extractText: (file: TFile) => Promise<string>
-  canFileBeExtracted: (filePath: string) => boolean
-}
-
-export type AIImageAnalyzerAPI = {
-  analyzeImage: (file: TFile) => Promise<string>
-  canBeAnalyzed: (file: TFile) => boolean
 }
 
 export const SEPARATORS =

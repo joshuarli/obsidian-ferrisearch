@@ -149,6 +149,12 @@ fn default_content_boost() -> f32 {
     1.0
 }
 
+impl Default for FieldBoosts {
+    fn default() -> Self {
+        default_field_boosts()
+    }
+}
+
 fn default_field_boosts() -> FieldBoosts {
     FieldBoosts {
         basename: default_basename_boost(),
