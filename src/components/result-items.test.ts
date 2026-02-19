@@ -25,20 +25,6 @@ describe('createVaultResultItem', () => {
     expect(el.dataset.resultId).toBe('my/note.md')
   })
 
-  it('adds embed class when isEmbed is true', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ isEmbed: true })
-    const el = createVaultResultItem(note, plugin)
-    expect(el.className).toContain('ferrisearch-result__embed')
-  })
-
-  it('does not add embed class for regular notes', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ isEmbed: false })
-    const el = createVaultResultItem(note, plugin)
-    expect(el.className).not.toContain('ferrisearch-result__embed')
-  })
-
   it('displays match counter with singular "match"', () => {
     const plugin = createMockPlugin()
     const note = createMockResultNote({ matches: [{ match: 'test', offset: 0 }] })
@@ -102,18 +88,11 @@ describe('createVaultResultItem', () => {
     expect(el.querySelector('.ferrisearch-result__extension')).toBeNull()
   })
 
-  it('creates excerpt body for non-embed notes', () => {
+  it('creates excerpt body', () => {
     const plugin = createMockPlugin()
-    const note = createMockResultNote({ isEmbed: false })
+    const note = createMockResultNote()
     const el = createVaultResultItem(note, plugin)
     expect(el.querySelector('.ferrisearch-result__body')).not.toBeNull()
-  })
-
-  it('does not create excerpt body for embed notes', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ isEmbed: true })
-    const el = createVaultResultItem(note, plugin)
-    expect(el.querySelector('.ferrisearch-result__body')).toBeNull()
   })
 
   it('excerpt visibility reacts to showExcerpt Observable', () => {

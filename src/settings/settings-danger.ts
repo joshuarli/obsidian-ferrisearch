@@ -56,8 +56,9 @@ export function injectSettingsDanger(
     )
     .addButton(btn => {
       btn.setButtonText('Clear index')
-      btn.onClick(async () => {
-        await plugin.database.clearCache()
+      btn.onClick(() => {
+        plugin.searchEngine.close()
+        new Notice('Ferrisearch - Index cleared. Please restart Obsidian.')
       })
     })
 }

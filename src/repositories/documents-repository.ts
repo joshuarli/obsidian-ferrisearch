@@ -24,7 +24,6 @@ export class DocumentsRepository {
         return
       }
       this.documents.set(path, doc)
-      this.plugin.embedsRepository.refreshEmbedsForNote(path)
     } catch (e) {
       console.warn(`Ferrisearch: Error while adding "${path}" to live cache`, e)
       this.removeDocument(path)

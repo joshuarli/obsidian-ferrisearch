@@ -2,7 +2,7 @@ import { Setting } from 'obsidian'
 import type FerrisearchPlugin from '../main'
 import { showExcerpt } from '.'
 import type { FerrisearchSettings } from './utils'
-import { htmlDescription, saveSettings } from './utils'
+import { saveSettings } from './utils'
 
 export function injectSettingsUserInterface(
   plugin: FerrisearchPlugin,
@@ -22,23 +22,6 @@ export function injectSettingsUserInterface(
         showExcerpt.set(v)
       }),
     )
-
-  // Show embeds
-  new Setting(containerEl)
-    .setName('Show embed references')
-    .setDesc(
-      htmlDescription(`Some results are <a href="https://help.obsidian.md/Linking+notes+and+files/Embed+files">embedded</a> in other notes.<br>
-            This setting controls the maximum number of embeds to show in the search results. Set to 0 to disable.`),
-    )
-    .addSlider(cb => {
-      cb.setLimits(0, 10, 1)
-        .setValue(settings.maxEmbeds)
-        .setDynamicTooltip()
-        .onChange(async v => {
-          settings.maxEmbeds = v
-          await saveSettings(plugin)
-        })
-    })
 
   // Keep line returns in excerpts
   new Setting(containerEl)

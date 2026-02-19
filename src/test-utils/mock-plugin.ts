@@ -12,7 +12,6 @@ export function createMockPlugin(overrides?: {
     ignoreDiacritics: true,
     splitCamelCase: false,
     showExcerpt: true,
-    maxEmbeds: 5,
     renderLineReturnInExcerpts: true,
     highlight: true,
     fuzziness: '1',

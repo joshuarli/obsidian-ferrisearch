@@ -78,7 +78,6 @@ export function getDefaultSettings(): FerrisearchSettings {
     splitCamelCase: false,
 
     showExcerpt: true,
-    maxEmbeds: 5,
     renderLineReturnInExcerpts: true,
     highlight: true,
     fuzziness: '1',

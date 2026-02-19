@@ -8,7 +8,7 @@ const unsubscribers = new WeakMap<HTMLElement, () => void>()
 
 export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugin): HTMLElement {
   const el = document.createElement('div')
-  el.className = `suggestion-item ferrisearch-result${note.isEmbed ? ' ferrisearch-result__embed' : ''}`
+  el.className = 'suggestion-item ferrisearch-result'
   el.dataset.resultId = note.path
 
   const wrapper = document.createElement('div')
@@ -24,12 +24,7 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
   const matchesTitle = plugin.textProcessor.getMatches(title, note.foundWords)
 
   const iconSpan = document.createElement('span')
-  if (note.isEmbed) {
-    iconSpan.title = 'The document above is embedded in this note'
-    setIcon(iconSpan, 'corner-down-right')
-  } else {
-    setIcon(iconSpan, 'file')
-  }
+  setIcon(iconSpan, 'file')
   titleSpan.appendChild(iconSpan)
 
   const titleText = document.createElement('span')
@@ -69,22 +64,20 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
   }
 
   // Excerpt body (reactive)
-  if (!note.isEmbed) {
-    const bodyDiv = document.createElement('div')
-    bodyDiv.className = 'ferrisearch-result__body'
-    bodyDiv.innerHTML = plugin.textProcessor.highlightText(
-      plugin.textProcessor.makeExcerpt(note.content, note.matches[0]?.offset ?? -1),
-      note.matches,
-    )
+  const bodyDiv = document.createElement('div')
+  bodyDiv.className = 'ferrisearch-result__body'
+  bodyDiv.innerHTML = plugin.textProcessor.highlightText(
+    plugin.textProcessor.makeExcerpt(note.content, note.matches[0]?.offset ?? -1),
+    note.matches,
+  )
 
-    unsubscribers.set(
-      el,
-      showExcerpt.subscribe(v => {
-        bodyDiv.style.display = v ? '' : 'none'
-      }),
-    )
-    wrapper.appendChild(bodyDiv)
-  }
+  unsubscribers.set(
+    el,
+    showExcerpt.subscribe(v => {
+      bodyDiv.style.display = v ? '' : 'none'
+    }),
+  )
+  wrapper.appendChild(bodyDiv)
 
   el.appendChild(wrapper)
   return el

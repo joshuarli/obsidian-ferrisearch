@@ -9,7 +9,6 @@ export function createMockResultNote(overrides: Partial<ResultNote> = {}): Resul
     content: 'This is the full content of the test note with some searchable text.',
     foundWords: ['test'],
     matches: [{ match: 'test', offset: 42 }],
-    isEmbed: false,
     ...overrides,
   }
 }

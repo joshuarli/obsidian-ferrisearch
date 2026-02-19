@@ -63,7 +63,6 @@ interface NativeSearchResult {
   content: string
   mtime: number
   tags: string[]
-  isEmbed?: boolean
 }
 
 export class SearchEngine {
@@ -307,35 +306,11 @@ export class SearchEngine {
     return results
   }
 
-  public async getSuggestions(
-    query: Query,
-    options?: { singleFilePath?: string },
-  ): Promise<ResultNote[]> {
+  public getSuggestions(query: Query, options?: { singleFilePath?: string }): ResultNote[] {
     const results = this.search(query, {
       prefixLength: 1,
       singleFilePath: options?.singleFilePath,
     })
-
-    // Inject embeds (only these need a document fetch — they aren't in the search results)
-    const maxEmbeds = this.plugin.settings.maxEmbeds
-    for (let i = 0; i < results.length; i++) {
-      const embeds = this.plugin.embedsRepository.getEmbeds(results[i].path).slice(0, maxEmbeds)
-      for (const embed of embeds) {
-        const doc = await this.plugin.documentsRepository.getDocument(embed)
-        results.splice(i + 1, 0, {
-          path: doc.path,
-          score: 0,
-          matchedTerms: [],
-          basename: doc.basename,
-          displayTitle: doc.displayTitle,
-          content: doc.content,
-          mtime: doc.mtime,
-          tags: [],
-          isEmbed: true,
-        })
-        i++
-      }
-    }
 
     return results.map(result => {
       logVerbose('Locating matches for', result.path)
@@ -353,7 +328,6 @@ export class SearchEngine {
         content: result.content,
         foundWords,
         matches,
-        isEmbed: result.isEmbed ?? false,
       }
     })
   }

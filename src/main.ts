@@ -1,10 +1,8 @@
 import { type App, Notice, Plugin, type PluginManifest, TFile } from 'obsidian'
 import { FerrisearchInFileModal, FerrisearchVaultModal } from './components/modals'
-import { Database } from './database'
 import { eventBus, IndexingStepType, indexingStep } from './globals'
 import { NotesIndexer } from './notes-indexer'
 import { DocumentsRepository } from './repositories/documents-repository'
-import { EmbedsRepository } from './repositories/embeds-repository'
 import { SearchEngine } from './search/search-engine'
 import { SearchHistory } from './search/search-history'
 import { getDefaultSettings, loadSettings, SettingsTab } from './settings'
@@ -18,8 +16,6 @@ export default class FerrisearchPlugin extends Plugin {
   public settings: FerrisearchSettings = getDefaultSettings()
 
   public readonly documentsRepository: DocumentsRepository
-  public readonly embedsRepository = new EmbedsRepository(this)
-  public readonly database = new Database(this)
 
   public readonly notesIndexer = new NotesIndexer(this)
   public readonly textProcessor = new TextProcessor(this)
@@ -84,7 +80,6 @@ export default class FerrisearchPlugin extends Plugin {
           if (this.notesIndexer.isFileIndexable(file.path)) {
             logVerbose('Indexing new file', file.path)
             searchEngine.addFromPaths([file.path])
-            this.embedsRepository.refreshEmbedsForNote(file.path)
           }
         }),
       )
@@ -94,7 +89,6 @@ export default class FerrisearchPlugin extends Plugin {
           logVerbose('Removing file', file.path)
           this.documentsRepository.removeDocument(file.path)
           searchEngine.removeFromPaths([file.path])
-          this.embedsRepository.removeFile(file.path)
         }),
       )
       this.registerEvent(
@@ -103,7 +97,6 @@ export default class FerrisearchPlugin extends Plugin {
           if (this.notesIndexer.isFileIndexable(file.path)) {
             this.notesIndexer.flagNoteForReindex(file)
           }
-          this.embedsRepository.refreshEmbedsForNote(file.path)
         }),
       )
       this.registerEvent(
@@ -116,8 +109,6 @@ export default class FerrisearchPlugin extends Plugin {
 
             searchEngine.removeFromPaths([oldPath])
             await searchEngine.addFromPaths([file.path])
-
-            this.embedsRepository.renameFile(oldPath, file.path)
           }
         }),
       )
@@ -158,9 +149,6 @@ export default class FerrisearchPlugin extends Plugin {
       console.timeEnd('Ferrisearch - Loading index from sidecar')
     }
 
-    // Load embeds from cache
-    await this.embedsRepository.loadFromCache()
-
     const diff = searchEngine.getDocumentsToReindex(
       files.map(f => ({ path: f.path, mtime: f.stat.mtime })),
     )
@@ -181,9 +169,7 @@ export default class FerrisearchPlugin extends Plugin {
     if (diff.toRemove.length || diff.toAdd.length) {
       indexingStep.set(IndexingStepType.WritingCache)
 
-      // Save sidecar manifest and embeds
       await searchEngine.saveSidecar()
-      await this.embedsRepository.writeToCache()
     }
 
     console.timeEnd('Ferrisearch - Indexing total time')

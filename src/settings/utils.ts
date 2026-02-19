@@ -39,8 +39,6 @@ export interface FerrisearchSettings extends WeightingSettings {
 
   /** Display the small contextual excerpt in search results */
   showExcerpt: boolean
-  /** Number of embeds references to display in search results */
-  maxEmbeds: number
   /** Render line returns with <br> in excerpts */
   renderLineReturnInExcerpts: boolean
   /** Key for the welcome message when Obsidian is updated */
