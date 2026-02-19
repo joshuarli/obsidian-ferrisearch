@@ -30,7 +30,6 @@ export async function saveSettings(plugin: Plugin): Promise<void> {
 }
 
 export interface FerrisearchSettings extends WeightingSettings {
-  weightCustomProperties: { name: string; weight: number }[]
   /** Respect the "excluded files" Obsidian setting by downranking results ignored files */
   hideExcluded: boolean
   /** Boost more recent files */

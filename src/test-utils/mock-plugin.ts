@@ -30,7 +30,6 @@ export function createMockPlugin(overrides?: {
     weightH2: 5,
     weightH3: 4,
     weightUnmarkedTags: 2,
-    weightCustomProperties: [],
     welcomeMessage: '',
     verboseLogging: false,
     ...overrides?.settings,

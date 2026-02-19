@@ -46,7 +46,7 @@ export class SettingsTab extends PluginSettingTab {
     containerEl.createEl('hr')
     injectSettingsUserInterface(this.plugin, settings, containerEl)
     containerEl.createEl('hr')
-    injectSettingsWeighting(this.plugin, settings, containerEl, this.display)
+    injectSettingsWeighting(this.plugin, settings, containerEl)
     containerEl.createEl('hr')
     injectSettingsDanger(this.plugin, settings, containerEl)
     containerEl.createEl('hr')
@@ -100,7 +100,6 @@ export function getDefaultSettings(app: App): FerrisearchSettings {
     weightH2: 5,
     weightH3: 4,
     weightUnmarkedTags: 2,
-    weightCustomProperties: [] as { name: string; weight: number }[],
 
     welcomeMessage: '',
     verboseLogging: false,

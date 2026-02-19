@@ -9,7 +9,6 @@ export function injectSettingsWeighting(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
   containerEl: HTMLElement,
-  refreshDisplay: () => void,
 ) {
   function weightSlider(cb: SliderComponent, key: keyof WeightingSettings): void {
     cb.setLimits(1, 10, 0.5)
@@ -48,53 +47,6 @@ export function injectSettingsWeighting(
   new Setting(containerEl)
     .setName(`Tags (default: ${defaultSettings.weightUnmarkedTags})`)
     .addSlider(cb => weightSlider(cb, 'weightUnmarkedTags'))
-
-  new Setting(containerEl)
-    .setName('Header properties fields')
-    .setDesc(
-      'You can set custom weights for values of header properties (e.g. "keywords"). Weights under 1.0 will downrank the results.',
-    )
-
-  for (let i = 0; i < settings.weightCustomProperties.length; i++) {
-    const item = settings.weightCustomProperties[i]
-    const el = new Setting(containerEl).setName(`${(i + 1).toString()}.`)
-    el.settingEl.style.paddingLeft = '2em'
-
-    el.addText(text => {
-      text
-        .setPlaceholder('Property name')
-        .setValue(item.name)
-        .onChange(async v => {
-          item.name = v
-          await saveSettings(plugin)
-        })
-    })
-      .addSlider(cb => {
-        cb.setLimits(0.1, 5, 0.1)
-          .setValue(item.weight)
-          .setDynamicTooltip()
-          .onChange(async v => {
-            item.weight = v
-            await saveSettings(plugin)
-          })
-      })
-      .addButton(btn => {
-        btn.setButtonText('Remove')
-        btn.onClick(async () => {
-          settings.weightCustomProperties.splice(i, 1)
-          await saveSettings(plugin)
-          refreshDisplay()
-        })
-      })
-  }
-
-  new Setting(containerEl).addButton(btn => {
-    btn.setButtonText('Add a new property')
-    btn.onClick(_cb => {
-      settings.weightCustomProperties.push({ name: '', weight: 1 })
-      refreshDisplay()
-    })
-  })
 
   new Setting(containerEl)
     .setName('Recency boost (experimental)')

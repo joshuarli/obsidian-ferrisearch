@@ -328,18 +328,6 @@ export class SearchEngine {
         }
       }
 
-      // Custom property boost
-      const metadata = this.plugin.app.metadataCache.getCache(path)
-      if (metadata) {
-        for (const { name, weight } of settings.weightCustomProperties) {
-          const values = metadata?.frontmatter?.[name]
-          if (values && result.matchedTerms.some(t => values.includes(t))) {
-            logVerbose(`Boosting field "${name}" x${weight} for ${path}`)
-            result.score *= weight
-          }
-        }
-      }
-
       // Tag boost
       for (const tag of tags) {
         if ((result.tags ?? []).includes(tag)) {
