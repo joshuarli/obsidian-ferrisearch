@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/ferrisearch-core", "napi"]
+resolver = "2"
