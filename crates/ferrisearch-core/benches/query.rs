@@ -1,17 +1,19 @@
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use ferrisearch_core::index::IndexManager;
 use ferrisearch_core::types::{DocumentInput, IndexConfig, SearchOptions};
 
-/// Locate the bench/corpus/content/ directory relative to the workspace root.
+const ITERATIONS: usize = 1000;
+
+// ── Corpus loading ─────────────────────────────────────────────────────────
+
 fn corpus_dir() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
     workspace.join("bench/corpus/content")
 }
 
-/// Recursively collect all .md files under a directory.
 fn collect_md_files(dir: &std::path::Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     let entries = match std::fs::read_dir(dir) {
@@ -29,7 +31,6 @@ fn collect_md_files(dir: &std::path::Path) -> Vec<PathBuf> {
     files
 }
 
-/// Parse YAML frontmatter value for a given key (simple single-line values only).
 fn frontmatter_value<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
     for line in frontmatter.lines() {
         if let Some(rest) = line.strip_prefix(key) {
@@ -41,7 +42,6 @@ fn frontmatter_value<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
     None
 }
 
-/// Load GitHub docs corpus into DocumentInput structs.
 fn load_corpus() -> Vec<DocumentInput> {
     let dir = corpus_dir();
     if !dir.exists() {
@@ -66,7 +66,6 @@ fn load_corpus() -> Vec<DocumentInput> {
                 .to_string_lossy()
                 .to_string();
 
-            // Split frontmatter from body
             let (frontmatter, body) = if content.starts_with("---\n") {
                 match content[4..].find("\n---\n") {
                     Some(end) => (&content[4..4 + end], &content[4 + end + 5..]),
@@ -80,7 +79,6 @@ fn load_corpus() -> Vec<DocumentInput> {
                 .unwrap_or(&basename)
                 .to_string();
 
-            // Extract markdown headings
             let mut h1 = Vec::new();
             let mut h2 = Vec::new();
             let mut h3 = Vec::new();
@@ -112,104 +110,159 @@ fn load_corpus() -> Vec<DocumentInput> {
         .collect()
 }
 
-/// Build an in-memory index from the corpus. Done once, shared across benchmarks.
 fn build_index(docs: &[DocumentInput]) -> IndexManager {
     let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
     for chunk in docs.chunks(500) {
         mgr.add_documents(chunk).unwrap();
     }
     mgr.commit().unwrap();
-    eprintln!("Index built: {} documents", mgr.document_count().unwrap());
     mgr
 }
 
-fn bench_queries(c: &mut Criterion) {
+// ── Benchmark harness ──────────────────────────────────────────────────────
+
+struct BenchResult {
+    name: String,
+    query: String,
+    median: Duration,
+    p95: Duration,
+    p99: Duration,
+}
+
+fn bench(name: &str, query: &str, mgr: &IndexManager, opts: &SearchOptions) -> BenchResult {
+    // Warmup
+    for _ in 0..50 {
+        let _ = mgr.search(query, opts);
+    }
+
+    let mut times = Vec::with_capacity(ITERATIONS);
+    for _ in 0..ITERATIONS {
+        let start = Instant::now();
+        let _ = mgr.search(query, opts);
+        times.push(start.elapsed());
+    }
+    times.sort();
+
+    BenchResult {
+        name: name.into(),
+        query: query.into(),
+        median: times[ITERATIONS / 2],
+        p95: times[ITERATIONS * 95 / 100],
+        p99: times[ITERATIONS * 99 / 100],
+    }
+}
+
+fn fmt_us(d: Duration) -> String {
+    let us = d.as_micros();
+    if us >= 1000 {
+        format!("{:.2} ms", us as f64 / 1000.0)
+    } else {
+        format!("{us} us")
+    }
+}
+
+/// Parse a duration string like "3.25 ms" or "348 us" back into microseconds.
+fn parse_us(s: &str) -> Option<f64> {
+    let s = s.trim();
+    if let Some(rest) = s.strip_suffix(" ms") {
+        rest.trim().parse::<f64>().ok().map(|v| v * 1000.0)
+    } else if let Some(rest) = s.strip_suffix(" us") {
+        rest.trim().parse::<f64>().ok()
+    } else {
+        None
+    }
+}
+
+/// Load previous results from bench/results.md, keyed by benchmark name.
+fn load_previous(path: &std::path::Path) -> std::collections::HashMap<String, f64> {
+    let mut prev = std::collections::HashMap::new();
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return prev,
+    };
+    for line in content.lines() {
+        if !line.starts_with("| ") || line.starts_with("| Benchmark") || line.starts_with("|---") {
+            continue;
+        }
+        let cols: Vec<&str> = line.split('|').collect();
+        // cols: ["", " name ", " query ", " median ", " p95 ", " p99 ", " change? ", ""]
+        if cols.len() >= 5 {
+            let name = cols[1].trim().to_string();
+            if let Some(us) = parse_us(cols[3]) {
+                prev.insert(name, us);
+            }
+        }
+    }
+    prev
+}
+
+fn fmt_change(
+    current_us: f64,
+    prev: &std::collections::HashMap<String, f64>,
+    name: &str,
+) -> String {
+    match prev.get(name) {
+        Some(&old_us) if old_us > 0.0 => {
+            let pct = (current_us - old_us) / old_us * 100.0;
+            if pct.abs() < 1.0 {
+                "~".into()
+            } else {
+                format!("{pct:+.0}%")
+            }
+        }
+        _ => String::new(),
+    }
+}
+
+fn main() {
     let docs = load_corpus();
+    let doc_count = docs.len();
     let mgr = build_index(&docs);
-    let doc_count = mgr.document_count().unwrap();
 
     let default_opts = SearchOptions::default();
     let fuzzy_opts = SearchOptions {
         fuzziness: "2".into(),
         ..Default::default()
     };
-    let no_fuzzy_opts = SearchOptions {
-        fuzziness: "0".into(),
-        ..Default::default()
-    };
+    // Load previous results before overwriting
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace = manifest.parent().unwrap().parent().unwrap();
+    let results_path = workspace.join("bench/results.md");
+    let prev = load_previous(&results_path);
 
-    let mut group = c.benchmark_group("query");
-    group.significance_level(0.05).sample_size(200);
+    let results = vec![
+        bench("single_term", "repository", &mgr, &default_opts),
+        bench("multi_term", "pull request", &mgr, &default_opts),
+        bench("phrase", "\"pull request\"", &mgr, &default_opts),
+        bench("phrase+term", "\"pull request\" merge", &mgr, &default_opts),
+        bench("fuzzy", "repositry", &mgr, &fuzzy_opts),
+        bench("short", "git", &mgr, &default_opts),
+        bench("rare", "graphql", &mgr, &default_opts),
+        bench("no_results", "xyzzyplugh", &mgr, &default_opts),
+    ];
 
-    // ── Single term ────────────────────────────────────────────────────
-    for term in ["repository", "workflow", "authentication", "deploy"] {
-        group.bench_with_input(BenchmarkId::new("single_term", term), &term, |b, term| {
-            b.iter(|| mgr.search(term, &default_opts).unwrap());
-        });
+    let mut out = String::new();
+    out.push_str(&format!(
+        "# Query Benchmarks\n\n{doc_count} documents, {ITERATIONS} iterations per query\n\n"
+    ));
+    out.push_str("| Benchmark | Query | Median | p95 | p99 | vs last |\n");
+    out.push_str("|-----------|-------|--------|-----|-----|--------|\n");
+    for r in &results {
+        let median_us = r.median.as_micros() as f64;
+        let change = fmt_change(median_us, &prev, &r.name);
+        out.push_str(&format!(
+            "| {} | `{}` | {} | {} | {} | {} |\n",
+            r.name,
+            r.query,
+            fmt_us(r.median),
+            fmt_us(r.p95),
+            fmt_us(r.p99),
+            change,
+        ));
     }
 
-    // ── Multi-term (AND) ───────────────────────────────────────────────
-    for query in [
-        "pull request",
-        "github actions",
-        "secret scanning",
-        "code review",
-    ] {
-        group.bench_with_input(BenchmarkId::new("multi_term", query), &query, |b, query| {
-            b.iter(|| mgr.search(query, &default_opts).unwrap());
-        });
-    }
+    print!("{out}");
 
-    // ── Phrase queries ─────────────────────────────────────────────────
-    for phrase in [
-        "\"pull request\"",
-        "\"github actions\"",
-        "\"secret scanning\"",
-        "\"code review\"",
-    ] {
-        group.bench_with_input(BenchmarkId::new("phrase", phrase), &phrase, |b, phrase| {
-            b.iter(|| mgr.search(phrase, &default_opts).unwrap());
-        });
-    }
-
-    // ── Phrase + term ──────────────────────────────────────────────────
-    group.bench_function("phrase_plus_term", |b| {
-        b.iter(|| mgr.search("\"pull request\" merge", &default_opts).unwrap());
-    });
-
-    // ── Fuzzy queries ──────────────────────────────────────────────────
-    for term in ["repositry", "deploymnt", "authentcation"] {
-        group.bench_with_input(BenchmarkId::new("fuzzy", term), &term, |b, term| {
-            b.iter(|| mgr.search(term, &fuzzy_opts).unwrap());
-        });
-    }
-
-    // ── No-fuzzy (exact + prefix only) ─────────────────────────────────
-    group.bench_function("no_fuzzy", |b| {
-        b.iter(|| mgr.search("repository", &no_fuzzy_opts).unwrap());
-    });
-
-    // ── Short queries ──────────────────────────────────────────────────
-    for term in ["a", "pr", "git"] {
-        group.bench_with_input(BenchmarkId::new("short", term), &term, |b, term| {
-            b.iter(|| mgr.search(term, &default_opts).unwrap());
-        });
-    }
-
-    // ── Rare term (few matches) ────────────────────────────────────────
-    group.bench_function("rare_term", |b| {
-        b.iter(|| mgr.search("graphql", &default_opts).unwrap());
-    });
-
-    // ── No results ─────────────────────────────────────────────────────
-    group.bench_function("no_results", |b| {
-        b.iter(|| mgr.search("xyzzyplugh", &default_opts).unwrap());
-    });
-
-    group.finish();
-
-    eprintln!("\nCorpus: {doc_count} documents");
+    std::fs::write(&results_path, &out).expect("failed to write bench/results.md");
+    eprintln!("\nWrote {}", results_path.display());
 }
-
-criterion_group!(benches, bench_queries);
-criterion_main!(benches);
