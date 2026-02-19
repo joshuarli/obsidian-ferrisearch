@@ -18,10 +18,9 @@ pub struct FieldHandles {
 }
 
 impl FieldHandles {
-    /// Primary searchable text fields (excludes tags, aliases, path, tags_stored, mtime).
-    pub fn text_fields(&self) -> [(&'static str, Field); 7] {
+    /// Primary searchable text fields (excludes basename, tags, aliases, path, tags_stored, mtime).
+    pub fn text_fields(&self) -> [(&'static str, Field); 6] {
         [
-            ("basename", self.basename),
             ("display_title", self.display_title),
             ("directory", self.directory),
             ("content", self.content),
@@ -121,9 +120,10 @@ mod tests {
     fn test_text_fields_returns_searchable_fields() {
         let (_, handles) = build_schema();
         let fields = handles.text_fields();
-        assert_eq!(fields.len(), 7);
+        assert_eq!(fields.len(), 6);
         let names: Vec<&str> = fields.iter().map(|(n, _)| *n).collect();
         assert!(!names.contains(&"path"));
+        assert!(!names.contains(&"basename"));
         assert!(!names.contains(&"aliases"));
         assert!(!names.contains(&"tags_text"));
         assert!(!names.contains(&"unmarked_tags"));

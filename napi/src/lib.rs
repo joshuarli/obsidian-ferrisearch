@@ -7,10 +7,10 @@ use ferrisearch_core::types;
 /// A document to be indexed. Maps to a single Obsidian note.
 ///
 /// **Searched fields** (queries match against these via exact, prefix, and fuzzy):
-///   `basename`, `display_title`, `directory` (derived from path), `content`, `headings1-3`
+///   `display_title`, `directory` (derived from path), `content`, `headings1-3`
 ///
 /// **Indexed but not searched** (stored for retrieval/filtering, not matched by queries):
-///   `aliases`, `tags`, `unmarked_tags`
+///   `basename`, `aliases`, `tags`, `unmarked_tags`
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct DocumentInput {
@@ -18,7 +18,7 @@ pub struct DocumentInput {
     /// Used as the unique document key for upsert/delete. Also used to derive the
     /// `directory` search field (everything before the last `/`).
     pub path: String,
-    /// Filename without extension, e.g. "my-note". Searched with high boost (10x).
+    /// Filename without extension, e.g. "my-note". Indexed and stored but not searched.
     pub basename: String,
     /// User-facing title from frontmatter `title:` field, or the basename if absent.
     /// Searched with high boost (10x).

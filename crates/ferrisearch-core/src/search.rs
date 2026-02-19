@@ -315,11 +315,11 @@ mod tests {
     use super::*;
     use crate::types::{DocumentInput, FieldBoosts, IndexConfig, SearchOptions};
 
-    fn make_doc(path: &str, basename: &str, content: &str) -> DocumentInput {
+    fn make_doc(path: &str, title: &str, content: &str) -> DocumentInput {
         DocumentInput {
             path: path.into(),
-            basename: basename.into(),
-            display_title: String::new(),
+            basename: title.into(),
+            display_title: title.into(),
             aliases: String::new(),
             content: content.into(),
             headings1: String::new(),
@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn basename_boost() {
+    fn display_title_boost() {
         let mgr = setup_index(vec![
             make_doc(
                 "notes/rust.md",
