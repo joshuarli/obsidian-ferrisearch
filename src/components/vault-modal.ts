@@ -113,12 +113,16 @@ export function renderVaultModal(
     if (debounceTimer !== null) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
       debounceTimer = null
-      if (searchQuery) {
-        updateResults()
-      } else {
+      if (!searchQuery) {
         searching = false
         resultNotes = []
         loadHistory()
+      } else if (searchQuery.length < plugin.settings.minQueryLength) {
+        searching = false
+        resultNotes = []
+        renderResults()
+      } else {
+        updateResults()
       }
     }, INPUT_DEBOUNCE_MS)
   }
@@ -280,8 +284,10 @@ export function renderVaultModal(
   function renderStatusMessage() {
     resultsDiv.querySelector('.ferrisearch-status-msg')?.remove()
 
-    const msg =
-      !resultNotes.length && searchQuery && !searching
+    const belowMin = searchQuery && searchQuery.length < plugin.settings.minQueryLength
+    const msg = belowMin
+      ? `Type at least ${plugin.settings.minQueryLength} characters to search`
+      : !resultNotes.length && searchQuery && !searching
         ? 'We found 0 results for your search here.'
         : searching
           ? 'Searching...'

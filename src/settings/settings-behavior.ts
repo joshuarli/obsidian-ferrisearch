@@ -56,6 +56,22 @@ export function injectSettingsBehavior(
       }),
     )
 
+  // Minimum query length
+  new Setting(containerEl)
+    .setName('Minimum query length')
+    .setDesc(
+      'Minimum number of characters before a search is triggered. Increase to reduce latency on short queries.',
+    )
+    .addText(component =>
+      component.setValue(String(settings.minQueryLength)).onChange(async v => {
+        const n = parseInt(v, 10)
+        if (Number.isInteger(n) && n >= 0) {
+          settings.minQueryLength = n
+          await saveSettings(plugin)
+        }
+      }),
+    )
+
   // Fuzziness
   new Setting(containerEl)
     .setName('Fuzziness')

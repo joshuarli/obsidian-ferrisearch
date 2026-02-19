@@ -104,7 +104,7 @@ export function renderInFileModal(
 
   // Search
   async function updateResults() {
-    if (!searchQuery) {
+    if (!searchQuery || searchQuery.length < plugin.settings.minQueryLength) {
       note = undefined
       groupedOffsets = []
       selectedIndex = 0
@@ -171,9 +171,12 @@ export function renderInFileModal(
         resultsDiv.appendChild(item)
       }
     } else {
+      const belowMin = searchQuery && searchQuery.length < plugin.settings.minQueryLength
       const msgDiv = document.createElement('div')
       msgDiv.style.textAlign = 'center'
-      msgDiv.textContent = 'We found 0 results for your search here.'
+      msgDiv.textContent = belowMin
+        ? `Type at least ${plugin.settings.minQueryLength} characters to search`
+        : 'We found 0 results for your search here.'
       resultsDiv.appendChild(msgDiv)
     }
   }

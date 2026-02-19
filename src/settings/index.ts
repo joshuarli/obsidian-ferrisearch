@@ -82,6 +82,7 @@ export function getDefaultSettings(): FerrisearchSettings {
     renderLineReturnInExcerpts: true,
     highlight: true,
     fuzziness: '1',
+    minQueryLength: 3,
 
     weightBasename: 10,
     weightDirectory: 7,

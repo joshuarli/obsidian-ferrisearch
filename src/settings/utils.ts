@@ -51,4 +51,6 @@ export interface FerrisearchSettings extends WeightingSettings {
   splitCamelCase: boolean
   verboseLogging: boolean
   fuzziness: '0' | '1' | '2'
+  /** Minimum number of characters before a search is triggered */
+  minQueryLength: number
 }
