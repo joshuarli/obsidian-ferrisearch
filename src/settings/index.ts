@@ -78,7 +78,6 @@ export function getDefaultSettings(app: App): FerrisearchSettings {
     recencyBoost: RecencyCutoff.Disabled,
     downrankedFoldersFilters: [] as string[],
     ignoreDiacritics: true,
-    ignoreArabicDiacritics: false,
     indexedFileTypes: [] as string[],
     displayTitle: '',
     splitCamelCase: false,

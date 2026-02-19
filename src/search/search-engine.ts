@@ -79,7 +79,6 @@ export class SearchEngine {
       const { SearchIndex } = this.loadNativeModule()
       this.nativeIndex = new SearchIndex(indexPath, {
         ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
-        ignoreArabicDiacritics: this.plugin.settings.ignoreArabicDiacritics,
       })
       console.log('Ferrisearch - Native search index initialized')
     } catch (e) {
@@ -365,11 +364,7 @@ export class SearchEngine {
         const document = documents.find(d => d.path === r.path)
         const title = document?.path.toLowerCase() ?? ''
         const content = (document?.cleanedContent ?? '').toLowerCase()
-        return exactTerms.every(
-          q =>
-            content.includes(q) ||
-            removeDiacritics(title, this.plugin.settings.ignoreArabicDiacritics).includes(q),
-        )
+        return exactTerms.every(q => content.includes(q) || removeDiacritics(title).includes(q))
       })
     }
 

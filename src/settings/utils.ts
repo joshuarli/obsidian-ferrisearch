@@ -39,7 +39,6 @@ export interface FerrisearchSettings extends WeightingSettings {
   downrankedFoldersFilters: string[]
   /** Ignore diacritics when indexing files */
   ignoreDiacritics: boolean
-  ignoreArabicDiacritics: boolean
 
   /** Extensions of plain text files to index, in addition to .md */
   indexedFileTypes: string[]

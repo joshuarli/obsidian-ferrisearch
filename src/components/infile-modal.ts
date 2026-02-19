@@ -122,7 +122,6 @@ export function renderInFileModal(
 
     const query = new Query(searchQuery, {
       ignoreDiacritics: plugin.settings.ignoreDiacritics,
-      ignoreArabicDiacritics: plugin.settings.ignoreArabicDiacritics,
     })
     const results = await plugin.searchEngine.getSuggestions(query, {
       singleFilePath,

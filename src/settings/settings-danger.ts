@@ -25,13 +25,6 @@ export function injectSettingsDanger(
       }),
     )
 
-  new Setting(containerEl).setName('Ignore Arabic diacritics (beta)').addToggle(toggle =>
-    toggle.setValue(settings.ignoreArabicDiacritics).onChange(async v => {
-      settings.ignoreArabicDiacritics = v
-      await saveSettings(plugin)
-    }),
-  )
-
   // Disable Ferrisearch
   const disableDesc = new DocumentFragment()
   disableDesc.createSpan({}, span => {

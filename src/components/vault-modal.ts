@@ -209,7 +209,6 @@ export function renderVaultModal(
     const searchId = ++currentSearchId
     const query = new Query(searchQuery, {
       ignoreDiacritics: plugin.settings.ignoreDiacritics,
-      ignoreArabicDiacritics: plugin.settings.ignoreArabicDiacritics,
     })
     try {
       const results = await plugin.searchEngine.getSuggestions(query)

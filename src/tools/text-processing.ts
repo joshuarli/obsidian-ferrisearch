@@ -42,7 +42,7 @@ export class TextProcessor {
     const reg = this.stringsToRegex(words)
     const originalText = text
     if (this.plugin.settings.ignoreDiacritics) {
-      text = removeDiacritics(text, this.plugin.settings.ignoreArabicDiacritics)
+      text = removeDiacritics(text)
     }
     const startTime = Date.now()
     let match: RegExpExecArray | null = null

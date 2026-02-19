@@ -10,7 +10,6 @@ export function createMockPlugin(overrides?: {
     recencyBoost: '0',
     downrankedFoldersFilters: [],
     ignoreDiacritics: true,
-    ignoreArabicDiacritics: false,
     indexedFileTypes: [],
     displayTitle: '',
     splitCamelCase: false,

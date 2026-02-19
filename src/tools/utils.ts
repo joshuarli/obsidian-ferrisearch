@@ -58,20 +58,9 @@ const japaneseDiacritics = ['\\u30FC', '\\u309A', '\\u3099']
 const regexpExclude = japaneseDiacritics.join('|')
 const diacriticsRegex = new RegExp(`(?!${regexpExclude})\\p{Diacritic}`, 'gu')
 
-export function removeDiacritics(str: string, arabic = false): string {
+export function removeDiacritics(str: string): string {
   if (str === null || str === undefined) {
     return ''
-  }
-
-  if (arabic) {
-    str = str
-      .replace(/(آ|إ|أ)/g, 'ا')
-      .replace(/(ة)/g, 'ه')
-      .replace(/(ئ|ؤ)/g, 'ء')
-      .replace(/(ى)/g, 'ي')
-    for (let i = 0; i < 10; i++) {
-      str.replace(String.fromCharCode(0x660 + i), String.fromCharCode(48 + i))
-    }
   }
 
   str = str.replaceAll('`', '[__ferrisearch__backtick__]')
