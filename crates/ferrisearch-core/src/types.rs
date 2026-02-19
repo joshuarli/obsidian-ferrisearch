@@ -121,8 +121,7 @@ mod tests {
 
     #[test]
     fn test_index_config_serde_override() {
-        let config: IndexConfig =
-            serde_json::from_str(r#"{"ignore_diacritics": false}"#).unwrap();
+        let config: IndexConfig = serde_json::from_str(r#"{"ignore_diacritics": false}"#).unwrap();
         assert!(!config.ignore_diacritics);
     }
 

@@ -115,11 +115,7 @@ fn split_camel_case(text: &str) -> Vec<String> {
         parts.push(current);
     }
 
-    if parts.len() <= 1 {
-        Vec::new()
-    } else {
-        parts
-    }
+    if parts.len() <= 1 { Vec::new() } else { parts }
 }
 
 // ── Diacritic filter ────────────────────────────────────────────────
@@ -245,7 +241,10 @@ mod tests {
 
     #[test]
     fn camel_case_function() {
-        assert_eq!(split_camel_case("fooBarBAZLorem"), ["foo", "Bar", "BAZLorem"]);
+        assert_eq!(
+            split_camel_case("fooBarBAZLorem"),
+            ["foo", "Bar", "BAZLorem"]
+        );
     }
 
     #[test]

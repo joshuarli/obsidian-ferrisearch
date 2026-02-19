@@ -11,8 +11,8 @@ use crate::tokenizer::{DiacriticFilter, FerrisearchTokenizer};
 use crate::types::{DocumentInput, IndexConfig};
 
 pub struct IndexManager {
-    pub(crate) index: Index,
     writer: IndexWriter,
+    pub(crate) reader: IndexReader,
     pub(crate) fields: FieldHandles,
 }
 
@@ -42,8 +42,18 @@ impl IndexManager {
         };
 
         Self::register_tokenizer(&index, &config);
-        let writer = index.writer(50_000_000)?;
-        Ok(Self { index, writer, fields })
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()?;
+        // Single thread: Obsidian vaults are small enough that multi-threaded
+        // indexing adds overhead without benefit.
+        let writer = index.writer_with_num_threads(1, 50_000_000)?;
+        Ok(Self {
+            writer,
+            reader,
+            fields,
+        })
     }
 
     /// Create an in-memory index (for testing).
@@ -51,28 +61,30 @@ impl IndexManager {
         let (schema, fields) = build_schema();
         let index = Index::create_in_ram(schema);
         Self::register_tokenizer(&index, &config);
-        let writer = index.writer(15_000_000)?;
-        Ok(Self { index, writer, fields })
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()?;
+        // Single thread — see new() comment
+        let writer = index.writer_with_num_threads(1, 15_000_000)?;
+        Ok(Self {
+            writer,
+            reader,
+            fields,
+        })
     }
 
     fn register_tokenizer(index: &Index, config: &IndexConfig) {
         if config.ignore_diacritics {
-            index
-                .tokenizers()
-                .register("ferrisearch", DiacriticFilter.transform(FerrisearchTokenizer::new()));
+            index.tokenizers().register(
+                "ferrisearch",
+                DiacriticFilter.transform(FerrisearchTokenizer::new()),
+            );
         } else {
             index
                 .tokenizers()
                 .register("ferrisearch", FerrisearchTokenizer::new());
         }
-    }
-
-    pub(crate) fn reader(&self) -> Result<IndexReader, IndexError> {
-        Ok(self
-            .index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::Manual)
-            .try_into()?)
     }
 
     /// Add a single document (upsert: removes existing document with same path first).
@@ -97,8 +109,15 @@ impl IndexManager {
         // Tags stored as JSON for post-search retrieval
         use std::collections::BTreeMap;
         use tantivy::schema::OwnedValue;
-        let tags_array: Vec<OwnedValue> = doc.tags.iter().map(|t| OwnedValue::Str(t.clone())).collect();
-        d.add_object(f.tags_stored, BTreeMap::from([("tags".into(), OwnedValue::Array(tags_array))]));
+        let tags_array: Vec<OwnedValue> = doc
+            .tags
+            .iter()
+            .map(|t| OwnedValue::Str(t.clone()))
+            .collect();
+        d.add_object(
+            f.tags_stored,
+            BTreeMap::from([("tags".into(), OwnedValue::Array(tags_array))]),
+        );
 
         d.add_u64(f.mtime, doc.mtime);
         self.writer.add_document(d)?;
@@ -120,20 +139,22 @@ impl IndexManager {
         }
     }
 
+    /// Commit pending changes and reload the reader so searches see new data.
     pub fn commit(&mut self) -> Result<(), IndexError> {
         self.writer.commit()?;
+        self.reader.reload()?;
         Ok(())
     }
 
     pub fn has_document(&self, path: &str) -> Result<bool, IndexError> {
-        let searcher = self.reader()?.searcher();
+        let searcher = self.reader.searcher();
         let term = Term::from_field_text(self.fields.path, path);
         let count = searcher.search(&TermQuery::new(term, IndexRecordOption::Basic), &Count)?;
         Ok(count > 0)
     }
 
     pub fn document_count(&self) -> Result<u64, IndexError> {
-        Ok(self.reader()?.searcher().num_docs())
+        Ok(self.reader.searcher().num_docs())
     }
 
     fn delete_by_path(&mut self, path: &str) {
@@ -178,7 +199,8 @@ mod tests {
     #[test]
     fn add_and_count() {
         let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
-        mgr.add_document(&make_doc("notes/test.md", "hello world")).unwrap();
+        mgr.add_document(&make_doc("notes/test.md", "hello world"))
+            .unwrap();
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 1);
     }
@@ -186,7 +208,8 @@ mod tests {
     #[test]
     fn has_document() {
         let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
-        mgr.add_document(&make_doc("notes/test.md", "hello world")).unwrap();
+        mgr.add_document(&make_doc("notes/test.md", "hello world"))
+            .unwrap();
         mgr.commit().unwrap();
         assert!(mgr.has_document("notes/test.md").unwrap());
         assert!(!mgr.has_document("notes/other.md").unwrap());
@@ -195,11 +218,13 @@ mod tests {
     #[test]
     fn upsert() {
         let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
-        mgr.add_document(&make_doc("notes/test.md", "version 1")).unwrap();
+        mgr.add_document(&make_doc("notes/test.md", "version 1"))
+            .unwrap();
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 1);
 
-        mgr.add_document(&make_doc("notes/test.md", "version 2")).unwrap();
+        mgr.add_document(&make_doc("notes/test.md", "version 2"))
+            .unwrap();
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 1);
     }
@@ -207,7 +232,8 @@ mod tests {
     #[test]
     fn remove_document() {
         let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
-        mgr.add_document(&make_doc("notes/test.md", "hello world")).unwrap();
+        mgr.add_document(&make_doc("notes/test.md", "hello world"))
+            .unwrap();
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 1);
 
@@ -243,7 +269,8 @@ mod tests {
 
         {
             let mut mgr = IndexManager::new(&path, IndexConfig::default()).unwrap();
-            mgr.add_document(&make_doc("test.md", "hello world")).unwrap();
+            mgr.add_document(&make_doc("test.md", "hello world"))
+                .unwrap();
             mgr.commit().unwrap();
         }
 
@@ -320,7 +347,9 @@ mod tests {
 
     #[test]
     fn diacritics_disabled() {
-        let config = IndexConfig { ignore_diacritics: false };
+        let config = IndexConfig {
+            ignore_diacritics: false,
+        };
         let mut mgr = IndexManager::new_in_memory(config).unwrap();
         mgr.add_document(&make_doc("a.md", "hello")).unwrap();
         mgr.commit().unwrap();

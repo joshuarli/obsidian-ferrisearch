@@ -40,30 +40,34 @@ pub fn build_schema() -> (Schema, FieldHandles) {
 
     let path = b.add_text_field("path", STRING | STORED);
 
-    let indexed_stored = TextOptions::default()
-        .set_indexing_options(
-            TextFieldIndexing::default()
-                .set_tokenizer("ferrisearch")
-                .set_index_option(IndexRecordOption::WithFreqsAndPositions),
-        )
+    let indexing = TextFieldIndexing::default()
+        .set_tokenizer("ferrisearch")
+        .set_index_option(IndexRecordOption::WithFreqsAndPositions);
+    let indexing_no_norms = indexing.clone().set_fieldnorms(false);
+
+    // Content: stored + fieldnorms (length normalization matters for long text)
+    let content_opts = TextOptions::default()
+        .set_indexing_options(indexing)
         .set_stored();
 
-    let indexed = TextOptions::default().set_indexing_options(
-        TextFieldIndexing::default()
-            .set_tokenizer("ferrisearch")
-            .set_index_option(IndexRecordOption::WithFreqsAndPositions),
-    );
+    // Short fields: stored, no fieldnorms (length normalization is noise)
+    let short_stored = TextOptions::default()
+        .set_indexing_options(indexing_no_norms.clone())
+        .set_stored();
 
-    let basename = b.add_text_field("basename", indexed_stored.clone());
-    let display_title = b.add_text_field("display_title", indexed_stored.clone());
-    let directory = b.add_text_field("directory", indexed.clone());
-    let aliases = b.add_text_field("aliases", indexed.clone());
-    let content = b.add_text_field("content", indexed_stored);
-    let headings1 = b.add_text_field("headings1", indexed.clone());
-    let headings2 = b.add_text_field("headings2", indexed.clone());
-    let headings3 = b.add_text_field("headings3", indexed.clone());
-    let tags_text = b.add_text_field("tags_text", indexed.clone());
-    let unmarked_tags = b.add_text_field("unmarked_tags", indexed);
+    // Short fields: not stored, no fieldnorms
+    let short = TextOptions::default().set_indexing_options(indexing_no_norms);
+
+    let basename = b.add_text_field("basename", short_stored.clone());
+    let display_title = b.add_text_field("display_title", short_stored);
+    let directory = b.add_text_field("directory", short.clone());
+    let aliases = b.add_text_field("aliases", short.clone());
+    let content = b.add_text_field("content", content_opts);
+    let headings1 = b.add_text_field("headings1", short.clone());
+    let headings2 = b.add_text_field("headings2", short.clone());
+    let headings3 = b.add_text_field("headings3", short.clone());
+    let tags_text = b.add_text_field("tags_text", short.clone());
+    let unmarked_tags = b.add_text_field("unmarked_tags", short);
     let tags_stored = b.add_json_field("tags_stored", STORED);
     let mtime = b.add_u64_field("mtime", STORED | FAST);
 

@@ -1,16 +1,16 @@
 repos:
   - repo: local
     hooks:
-      - id: biome-check
-        name: biome check
-        entry: bunx biome check --max-diagnostics=50
+      - id: biome
+        name: biome
+        entry: bunx biome check --write --max-diagnostics=50
         language: system
         types_or: [ts, javascript]
         pass_filenames: false
 
       - id: cargo-fmt
         name: cargo fmt
-        entry: cargo fmt --all -- --check
+        entry: cargo fmt --all
         language: system
         types: [rust]
         pass_filenames: false

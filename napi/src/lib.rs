@@ -46,7 +46,9 @@ pub struct IndexConfig {
 
 impl From<IndexConfig> for types::IndexConfig {
     fn from(c: IndexConfig) -> Self {
-        Self { ignore_diacritics: c.ignore_diacritics.unwrap_or(true) }
+        Self {
+            ignore_diacritics: c.ignore_diacritics.unwrap_or(true),
+        }
     }
 }
 
@@ -142,11 +144,15 @@ pub struct SearchIndex {
 
 impl SearchIndex {
     fn inner(&self) -> Result<&IndexManager> {
-        self.inner.as_ref().ok_or_else(|| Error::from_reason("Index is closed"))
+        self.inner
+            .as_ref()
+            .ok_or_else(|| Error::from_reason("Index is closed"))
     }
 
     fn inner_mut(&mut self) -> Result<&mut IndexManager> {
-        self.inner.as_mut().ok_or_else(|| Error::from_reason("Index is closed"))
+        self.inner
+            .as_mut()
+            .ok_or_else(|| Error::from_reason("Index is closed"))
     }
 }
 
@@ -193,11 +199,18 @@ impl SearchIndex {
 
     #[napi]
     pub fn document_count(&self) -> Result<f64> {
-        self.inner()?.document_count().map(|c| c as f64).map_err(map_err)
+        self.inner()?
+            .document_count()
+            .map(|c| c as f64)
+            .map_err(map_err)
     }
 
     #[napi]
-    pub fn search(&self, query: String, options: Option<SearchOptions>) -> Result<Vec<SearchResult>> {
+    pub fn search(
+        &self,
+        query: String,
+        options: Option<SearchOptions>,
+    ) -> Result<Vec<SearchResult>> {
         let opts = options.map(Into::into).unwrap_or_default();
         let results = self.inner()?.search(&query, &opts).map_err(map_err)?;
         Ok(results.into_iter().map(Into::into).collect())
