@@ -76,9 +76,15 @@ fn parse_query(input: &str) -> ParsedQuery {
     ParsedQuery { terms, phrases }
 }
 
+/// If exact+prefix returns fewer than this many results, retry with fuzzy.
+const FUZZY_RESULT_THRESHOLD: usize = 5;
+
 impl IndexManager {
     /// Search the index with the given query string and options.
     /// Supports quoted phrases: `"quick brown"` requires adjacent terms.
+    ///
+    /// Uses two-phase search: first exact+prefix only (fast), then adds fuzzy
+    /// on content if too few results are found.
     pub fn search(
         &self,
         query_str: &str,
@@ -110,12 +116,62 @@ impl IndexManager {
             .cloned()
             .collect();
 
-        // For each query term, build an OR across all text fields.
-        // - All fields get exact match (TermQuery)
-        // - All fields except directory get prefix match (PhrasePrefixQuery)
-        // - Only content gets fuzzy match (FuzzyTermQuery) — fuzzy on short
-        //   fields like title/headings/directory is noise
-        // Then combine all term queries with AND (every term must match somewhere).
+        // Phase 1: exact + prefix only (no fuzzy)
+        let query = self.build_search_query(&parsed, options, 0.0);
+        let mut results = searcher.search(&*query, &TopDocs::with_limit(options.limit))?;
+
+        // Phase 2: if too few results and fuzzy is enabled, retry with fuzzy on content
+        if results.len() < FUZZY_RESULT_THRESHOLD && fuzziness > 0.0 && !parsed.terms.is_empty() {
+            let query = self.build_search_query(&parsed, options, fuzziness);
+            results = searcher.search(&*query, &TopDocs::with_limit(options.limit))?;
+        }
+
+        // Recency boost (applied post-hoc)
+        let recency_decay = match options.recency_boost.as_str() {
+            "1" => Some(-3.0_f64), // Day
+            "2" => Some(-0.3_f64), // Week
+            "3" => Some(-0.1_f64), // Month
+            _ => None,
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0);
+
+        let mut search_results: Vec<SearchResult> = results
+            .into_iter()
+            .filter_map(|(score, addr)| {
+                let mut r = self
+                    .doc_to_result(&searcher, addr, score as f64, &all_words)
+                    .ok()?;
+                if let Some(decay) = recency_decay {
+                    let days = (now - r.mtime as f64) / (24.0 * 3_600_000.0);
+                    r.score *= 1.0 + (decay * days / 1000.0).exp();
+                }
+                Some(r)
+            })
+            .collect();
+
+        if recency_decay.is_some() {
+            search_results.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+
+        Ok(search_results)
+    }
+
+    /// Build the complete search query. When `fuzziness > 0`, fuzzy sub-queries
+    /// are added on the content field only (typos in prose, not titles/paths).
+    fn build_search_query(
+        &self,
+        parsed: &ParsedQuery,
+        options: &SearchOptions,
+        fuzziness: f32,
+    ) -> Box<dyn Query> {
+        // For each term: exact on all fields, prefix on non-directory, fuzzy on content
         let mut must_clauses: Vec<(Occur, Box<dyn Query>)> = parsed
             .terms
             .iter()
@@ -152,7 +208,7 @@ impl IndexManager {
                             ));
                         }
 
-                        // Fuzzy match (content only — typos in prose, not titles/paths)
+                        // Fuzzy match (content only)
                         if *name == "content" && fuzziness > 0.0 {
                             let dist = fuzzy_distance(lower, fuzziness);
                             if dist > 0 {
@@ -203,13 +259,13 @@ impl IndexManager {
             ));
         }
 
-        let mut final_query: Box<dyn Query> = Box::new(BooleanQuery::new(must_clauses));
+        let mut query: Box<dyn Query> = Box::new(BooleanQuery::new(must_clauses));
 
         // Optional single-file filter
         if let Some(ref file_path) = options.single_file_path {
             let path_term = Term::from_field_text(self.fields.path, file_path);
-            final_query = Box::new(BooleanQuery::new(vec![
-                (Occur::Must, final_query),
+            query = Box::new(BooleanQuery::new(vec![
+                (Occur::Must, query),
                 (
                     Occur::Must,
                     Box::new(TermQuery::new(path_term, IndexRecordOption::Basic)),
@@ -217,43 +273,7 @@ impl IndexManager {
             ]));
         }
 
-        let results = searcher.search(&*final_query, &TopDocs::with_limit(options.limit))?;
-
-        // Recency boost (applied post-hoc)
-        let recency_decay = match options.recency_boost.as_str() {
-            "1" => Some(-3.0_f64), // Day
-            "2" => Some(-0.3_f64), // Week
-            "3" => Some(-0.1_f64), // Month
-            _ => None,
-        };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
-            .unwrap_or(0.0);
-
-        let mut search_results: Vec<SearchResult> = results
-            .into_iter()
-            .filter_map(|(score, addr)| {
-                let mut r = self
-                    .doc_to_result(&searcher, addr, score as f64, &all_words)
-                    .ok()?;
-                if let Some(decay) = recency_decay {
-                    let days = (now - r.mtime as f64) / (24.0 * 3_600_000.0);
-                    r.score *= 1.0 + (decay * days / 1000.0).exp();
-                }
-                Some(r)
-            })
-            .collect();
-
-        if recency_decay.is_some() {
-            search_results.sort_by(|a, b| {
-                b.score
-                    .partial_cmp(&a.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
-
-        Ok(search_results)
+        query
     }
 
     fn doc_to_result(

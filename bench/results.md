@@ -4,11 +4,11 @@
 
 | Benchmark | Query | Median | p95 | p99 | vs last |
 |-----------|-------|--------|-----|-----|--------|
-| single_term | `repository` | 446 us | 478 us | 546 us | -35% |
-| multi_term | `pull request` | 705 us | 755 us | 811 us | -37% |
-| phrase | `"pull request"` | 242 us | 261 us | 294 us | +3% |
-| phrase+term | `"pull request" merge` | 557 us | 597 us | 674 us | -26% |
-| fuzzy | `repositry` | 966 us | 1.02 ms | 1.07 ms | -38% |
-| short | `git` | 292 us | 315 us | 357 us | -4% |
-| rare | `graphql` | 328 us | 357 us | 402 us | -33% |
-| no_results | `xyzzyplugh` | 171 us | 198 us | 233 us | -45% |
+| single_term | `repository` | 194 us | 229 us | 264 us | -57% |
+| multi_term | `pull request` | 262 us | 312 us | 377 us | -63% |
+| phrase | `"pull request"` | 248 us | 284 us | 319 us | +2% |
+| phrase+term | `"pull request" merge` | 349 us | 397 us | 479 us | -37% |
+| fuzzy | `repositry` | 1.03 ms | 1.12 ms | 1.26 ms | +7% |
+| short | `git` | 294 us | 367 us | 441 us | ~ |
+| rare | `graphql` | 158 us | 195 us | 218 us | -52% |
+| no_results | `xyzzyplugh` | 214 us | 225 us | 250 us | +25% |
