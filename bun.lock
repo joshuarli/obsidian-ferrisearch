@@ -5,17 +5,17 @@
     "": {
       "name": "ferrisearch",
       "dependencies": {
-        "lodash-es": "4.17.21",
-        "search-query-parser": "^1.6.0",
+        "lodash-es": "latest",
+        "search-query-parser": "latest",
       },
       "devDependencies": {
-        "@biomejs/biome": "^2.4.2",
-        "@happy-dom/global-registrator": "^20.6.3",
+        "@biomejs/biome": "latest",
+        "@happy-dom/global-registrator": "latest",
         "@types/bun": "latest",
-        "@types/lodash-es": "^4.17.12",
-        "happy-dom": "^20.6.3",
-        "obsidian": "1.7.2",
-        "typescript": "^5.8.2",
+        "@types/lodash-es": "latest",
+        "happy-dom": "latest",
+        "obsidian": "latest",
+        "typescript": "latest",
       },
     },
   },
@@ -72,11 +72,11 @@
 
     "happy-dom": ["happy-dom@20.6.3", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.18.3" } }, "sha512-QAMY7d228dHs8gb9NG4SJ3OxQo4r+NGN8pOXGZ3SGfQf/XYuuYubrtZ25QVY2WoUQdskhRXSXb4R4mcRk+hV1w=="],
 
-    "lodash-es": ["lodash-es@4.17.21", "", {}, "sha512-mKnC+QJ9pWVzv+C4/U3rRsHapFfHvQFoFB92e52xeyGMcX6/OlIl78je1u8vePzYZSkkogMPJ2yjxxsb89cxyw=="],
+    "lodash-es": ["lodash-es@4.17.23", "", {}, "sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg=="],
 
     "moment": ["moment@2.29.4", "", {}, "sha512-5LC9SOxjSc2HF6vO2CyuTDNivEdoz2IvyJJGj6X8DJ0eFyfszE0QiEd+iXmBvUP3WHxSjFH/vIsA0EN00cgr8w=="],
 
-    "obsidian": ["obsidian@1.7.2", "", { "dependencies": { "@types/codemirror": "5.60.8", "moment": "2.29.4" }, "peerDependencies": { "@codemirror/state": "^6.0.0", "@codemirror/view": "^6.0.0" } }, "sha512-k9hN9brdknJC+afKr5FQzDRuEFGDKbDjfCazJwpgibwCAoZNYHYV8p/s3mM8I6AsnKrPKNXf8xGuMZ4enWelZQ=="],
+    "obsidian": ["obsidian@1.12.2", "", { "dependencies": { "@types/codemirror": "5.60.8", "moment": "2.29.4" }, "peerDependencies": { "@codemirror/state": "6.5.0", "@codemirror/view": "6.38.6" } }, "sha512-DGAzpt6vo+sMDET/o8Zj26Bj2hbHrFsNUU8TtnzCyerO/OHksMFQnU9QEnPHVsOMstt/WnHXfC56j2r1syObWg=="],
 
     "search-query-parser": ["search-query-parser@1.6.0", "", {}, "sha512-bhf+phLlKF38nuniwLcVHWPArHGdzenlPhPi955CR3vm1QQifXIuPHwAffhjapojdVVzmv4hgIJ6NOX1d/w+Uw=="],
 
