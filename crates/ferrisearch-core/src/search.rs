@@ -1,6 +1,7 @@
 use tantivy::collector::TopDocs;
 use tantivy::query::{
-    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, PhraseQuery, Query, RegexQuery, TermQuery,
+    BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, PhraseQuery, Query,
+    TermQuery,
 };
 use tantivy::schema::{IndexRecordOption, Value};
 use tantivy::{DocAddress, Searcher, Term};
@@ -137,15 +138,13 @@ impl IndexManager {
                         ));
 
                         // Prefix match
-                        if lower.len() >= options.prefix_length
-                            && let Ok(rq) = RegexQuery::from_pattern(
-                                &format!("{}.*", regex::escape(lower)),
-                                *field,
-                            )
-                        {
+                        if lower.len() >= options.prefix_length {
                             queries.push((
                                 Occur::Should,
-                                Box::new(BoostQuery::new(Box::new(rq), boost * 0.8)),
+                                Box::new(BoostQuery::new(
+                                    Box::new(PhrasePrefixQuery::new(vec![term.clone()])),
+                                    boost * 0.8,
+                                )),
                             ));
                         }
 

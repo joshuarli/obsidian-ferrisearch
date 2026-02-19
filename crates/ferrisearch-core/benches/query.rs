@@ -33,10 +33,10 @@ fn collect_md_files(dir: &std::path::Path) -> Vec<PathBuf> {
 
 fn frontmatter_value<'a>(frontmatter: &'a str, key: &str) -> Option<&'a str> {
     for line in frontmatter.lines() {
-        if let Some(rest) = line.strip_prefix(key) {
-            if let Some(value) = rest.strip_prefix(": ") {
-                return Some(value.trim());
-            }
+        if let Some(rest) = line.strip_prefix(key)
+            && let Some(value) = rest.strip_prefix(": ")
+        {
+            return Some(value.trim());
         }
     }
     None
@@ -66,9 +66,9 @@ fn load_corpus() -> Vec<DocumentInput> {
                 .to_string_lossy()
                 .to_string();
 
-            let (frontmatter, body) = if content.starts_with("---\n") {
-                match content[4..].find("\n---\n") {
-                    Some(end) => (&content[4..4 + end], &content[4 + end + 5..]),
+            let (frontmatter, body) = if let Some(rest) = content.strip_prefix("---\n") {
+                match rest.find("\n---\n") {
+                    Some(end) => (&rest[..end], &rest[end + 5..]),
                     None => ("", content.as_str()),
                 }
             } else {

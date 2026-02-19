@@ -172,12 +172,7 @@ export default class FerrisearchPlugin extends Plugin {
       console.debug(`Ferrisearch - Files to remove: ${diff.toRemove.length}`)
     }
 
-    if (diff.toAdd.length >= 1000) {
-      new Notice(
-        `Ferrisearch: ${diff.toAdd.length} files need to be indexed. Obsidian may experience stutters during the process.`,
-        10_000,
-      )
-    }
+    new Notice(`Ferrisearch: adding ${diff.toAdd.length} files to the index.`, 10_000)
 
     indexingStep.set(IndexingStepType.IndexingFiles)
     searchEngine.removeFromPaths(diff.toRemove.map(o => o.path))
