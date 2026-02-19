@@ -16,6 +16,7 @@ export function createMockPlugin(overrides?: {
     renderLineReturnInExcerpts: true,
     highlight: true,
     fuzziness: '1',
+    resultLimit: 10,
     weightBasename: 10,
     weightDirectory: 7,
     weightHeadings: 5,

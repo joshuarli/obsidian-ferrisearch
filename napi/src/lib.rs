@@ -116,7 +116,7 @@ impl From<SearchOptions> for types::SearchOptions {
             field_boosts: o.field_boosts.map(Into::into).unwrap_or_default(),
             fuzziness: o.fuzziness.unwrap_or_else(|| "1".into()),
             prefix_length: o.prefix_length.unwrap_or(1) as usize,
-            limit: o.limit.unwrap_or(50) as usize,
+            limit: o.limit.unwrap_or(10) as usize,
             single_file_path: o.single_file_path,
             recency_boost: o.recency_boost.unwrap_or_else(|| "0".into()),
         }

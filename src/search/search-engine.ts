@@ -192,7 +192,7 @@ export class SearchEngine {
         },
         fuzziness: settings.fuzziness,
         prefixLength: options.prefixLength,
-        limit: 50,
+        limit: settings.resultLimit,
         singleFilePath: options.singleFilePath,
         recencyBoost: settings.recencyBoost,
       })

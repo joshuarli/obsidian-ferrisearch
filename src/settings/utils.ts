@@ -51,4 +51,6 @@ export interface FerrisearchSettings extends WeightingSettings {
   fuzziness: '0' | '1' | '2'
   /** Minimum number of characters before a search is triggered */
   minQueryLength: number
+  /** Maximum number of search results returned */
+  resultLimit: number
 }

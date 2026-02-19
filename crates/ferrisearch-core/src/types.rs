@@ -56,7 +56,7 @@ impl Default for SearchOptions {
             field_boosts: FieldBoosts::default(),
             fuzziness: "1".into(),
             prefix_length: 1,
-            limit: 50,
+            limit: 10,
             single_file_path: None,
             recency_boost: "0".into(),
         }

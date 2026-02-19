@@ -72,6 +72,20 @@ export function injectSettingsBehavior(
       }),
     )
 
+  // Result limit
+  new Setting(containerEl)
+    .setName('Maximum results')
+    .setDesc('Maximum number of search results to return.')
+    .addText(component =>
+      component.setValue(String(settings.resultLimit)).onChange(async v => {
+        const n = parseInt(v, 10)
+        if (Number.isInteger(n) && n >= 1) {
+          settings.resultLimit = n
+          await saveSettings(plugin)
+        }
+      }),
+    )
+
   // Fuzziness
   new Setting(containerEl)
     .setName('Fuzziness')

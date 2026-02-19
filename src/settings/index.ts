@@ -83,6 +83,7 @@ export function getDefaultSettings(): FerrisearchSettings {
     highlight: true,
     fuzziness: '1',
     minQueryLength: 3,
+    resultLimit: 10,
 
     weightBasename: 10,
     weightDirectory: 7,
