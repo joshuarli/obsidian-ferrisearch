@@ -1,7 +1,7 @@
 import { Notice } from 'obsidian'
-import type { DocumentRef, IndexedDocument, ResultNote } from '../globals'
+import type { DocumentRef, ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
-import { logVerbose, removeDiacritics } from '../tools/utils'
+import { logVerbose, removeDiacritics, stripMarkdownCharacters } from '../tools/utils'
 import type { Query } from './query'
 
 // Must match NAPI_VERSION in napi/src/lib.rs
@@ -179,10 +179,10 @@ export class SearchEngine {
     }
   }
 
-  public async search(
+  public search(
     query: Query,
     options: { prefixLength: number; singleFilePath?: string },
-  ): Promise<NativeSearchResult[]> {
+  ): NativeSearchResult[] {
     if (!this.nativeIndex || query.isEmpty()) return []
 
     logVerbose('=== New search ===')
@@ -276,34 +276,24 @@ export class SearchEngine {
 
     logVerbose('Filtered results:', results)
 
-    // Fetch documents once for both exact-term and exclusion filters
+    // Exact-term and exclusion filters — use content already returned by Tantivy
     const exactTerms = query.getExactTerms()
+    if (exactTerms.length) {
+      logVerbose('Filtering with quoted terms:', exactTerms)
+      results = results.filter(r => {
+        const title = removeDiacritics(r.path.toLowerCase())
+        const content = stripMarkdownCharacters(removeDiacritics(r.content)).toLowerCase()
+        return exactTerms.every(q => content.includes(q) || title.includes(q))
+      })
+    }
+
     const exclusions = query.query.exclude.text
-    if (exactTerms.length || exclusions.length) {
-      const docMap = new Map<string, IndexedDocument>()
-      await Promise.all(
-        results.map(async r => {
-          docMap.set(r.path, await this.plugin.documentsRepository.getDocument(r.path))
-        }),
-      )
-
-      if (exactTerms.length) {
-        logVerbose('Filtering with quoted terms:', exactTerms)
-        results = results.filter(r => {
-          const doc = docMap.get(r.path)
-          const title = removeDiacritics(doc?.path.toLowerCase() ?? '')
-          const content = (doc?.cleanedContent ?? '').toLowerCase()
-          return exactTerms.every(q => content.includes(q) || title.includes(q))
-        })
-      }
-
-      if (exclusions.length) {
-        logVerbose('Filtering with exclusions')
-        results = results.filter(r => {
-          const content = (docMap.get(r.path)?.content ?? '').toLowerCase()
-          return exclusions.every(q => !content.includes(q))
-        })
-      }
+    if (exclusions.length) {
+      logVerbose('Filtering with exclusions')
+      results = results.filter(r => {
+        const content = r.content.toLowerCase()
+        return exclusions.every(q => !content.includes(q))
+      })
     }
 
     // Dedupe
@@ -321,33 +311,25 @@ export class SearchEngine {
     query: Query,
     options?: { singleFilePath?: string },
   ): Promise<ResultNote[]> {
-    const results = await this.search(query, {
+    const results = this.search(query, {
       prefixLength: 1,
       singleFilePath: options?.singleFilePath,
     })
 
-    const documents = await Promise.all(
-      results.map(r => this.plugin.documentsRepository.getDocument(r.path)),
-    )
-
-    // Inject embeds
+    // Inject embeds (only these need a document fetch — they aren't in the search results)
     const maxEmbeds = this.plugin.settings.maxEmbeds
-    for (let i = 0; i < documents.length; i++) {
-      const doc = documents[i]
-      if (!doc) continue
-
-      const embeds = this.plugin.embedsRepository.getEmbeds(doc.path).slice(0, maxEmbeds)
+    for (let i = 0; i < results.length; i++) {
+      const embeds = this.plugin.embedsRepository.getEmbeds(results[i].path).slice(0, maxEmbeds)
       for (const embed of embeds) {
-        const newDoc = await this.plugin.documentsRepository.getDocument(embed)
-        documents.splice(i + 1, 0, newDoc)
+        const doc = await this.plugin.documentsRepository.getDocument(embed)
         results.splice(i + 1, 0, {
-          path: newDoc.path,
+          path: doc.path,
           score: 0,
           matchedTerms: [],
-          basename: newDoc.basename,
-          displayTitle: newDoc.displayTitle,
-          content: newDoc.content,
-          mtime: newDoc.mtime,
+          basename: doc.basename,
+          displayTitle: doc.displayTitle,
+          content: doc.content,
+          mtime: doc.mtime,
           tags: [],
           isEmbed: true,
         })
@@ -357,25 +339,22 @@ export class SearchEngine {
 
     return results.map(result => {
       logVerbose('Locating matches for', result.path)
-      const note =
-        documents.find(d => d.path === result.path) ??
-        ({
-          content: '',
-          basename: result.path,
-          path: result.path,
-        } as IndexedDocument)
-
-      if (!documents.find(d => d.path === result.path)) {
-        console.warn(`Ferrisearch - Note "${result.path}" not in the live cache`)
-      }
-
       const foundWords = [...result.matchedTerms, ...query.getExactTerms(), ...query.getTags()]
       logVerbose('Matching tokens:', foundWords)
 
-      const matches = this.plugin.textProcessor.getMatches(note.content, foundWords, query)
-      logVerbose(`Matches for note "${note.path}"`, matches)
+      const matches = this.plugin.textProcessor.getMatches(result.content, foundWords, query)
+      logVerbose(`Matches for note "${result.path}"`, matches)
 
-      return { score: result.score, foundWords, matches, isEmbed: result.isEmbed ?? false, ...note }
+      return {
+        score: result.score,
+        path: result.path,
+        basename: result.basename,
+        displayTitle: result.displayTitle,
+        content: result.content,
+        foundWords,
+        matches,
+        isEmbed: result.isEmbed ?? false,
+      }
     })
   }
 
