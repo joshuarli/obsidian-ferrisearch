@@ -1,6 +1,6 @@
 import type FerrisearchPlugin from '../main'
 
-export interface SearchHistory {
+interface SearchHistory {
   getHistory(): Promise<ReadonlyArray<string>>
   addToHistory(query: string): Promise<void>
 }

@@ -92,7 +92,7 @@ export class TextProcessor {
   }
 }
 
-export function escapeHTML(html: string): string {
+function escapeHTML(html: string): string {
   return html
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

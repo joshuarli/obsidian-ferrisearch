@@ -4,7 +4,7 @@ import type FerrisearchPlugin from '../main'
 import { renderInFileModal } from './infile-modal'
 import { renderVaultModal } from './vault-modal'
 
-export type ActionHandler = (...args: unknown[]) => void
+type ActionHandler = (...args: unknown[]) => void
 
 export interface ModalHandle {
   on(action: string, handler: (...args: unknown[]) => void): void
