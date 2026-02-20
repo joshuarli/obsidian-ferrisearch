@@ -24,24 +24,19 @@ Both paths produce a `NativeSearchIndex` interface — the rest of the TypeScrip
 ```
 src/
   main.ts                  # Plugin entry point (FerrisearchPlugin extends Plugin)
-  globals.ts               # Shared types, enums, Observable, eventBus singleton
-  database.ts              # JSON file storage for embeds cache
+  globals.ts               # Shared types, enums, Observable
   notes-indexer.ts         # Deferred reindexing (flags notes, reindexes on modal open)
   components/
-    modals.ts              # Modal classes (FerrisearchVaultModal, FerrisearchInFileModal)
+    modals.ts              # Modal classes with per-modal action dispatch (on/off/close)
+    modal-helpers.ts       # Shared DOM builders (input, results container, instructions)
     vault-modal.ts         # Vault search UI (history display, lazy-loaded results, min query length gate)
     infile-modal.ts        # In-file search UI (grouped match offsets, min query length gate)
     result-items.ts        # DOM creation for search result items
   search/
-    search-engine.ts       # Wraps native Tantivy index, handles indexing + querying
-    query.ts               # Query parser (uses search-query-parser lib)
-    search-history.ts      # Flat file storage (~/.obsidian/plugins/ferrisearch/search-history.txt)
-  repositories/
-    documents-repository.ts  # In-memory cache of IndexedDocument objects
-    embeds-repository.ts     # Tracks embed relationships between notes
+    search-engine.ts       # Wraps native Tantivy index, handles indexing + querying + document fetching
+    query.ts               # Custom query parser (tokenization, keywords, exclusions, quoted phrases)
+    search-history.ts      # Flat file history via factory function (createSearchHistory)
   tools/
-    api.ts                 # Public API (globalThis.ferrisearch) + URL scheme handler
-    event-bus.ts           # Pub/sub with context-based enable/disable
     notes.ts               # openNote() helper
     text-processing.ts     # Highlight, excerpt, regex match extraction
     utils.ts               # Shared utilities (diacritics, paths, tags, metadata)
@@ -124,7 +119,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 ## Key Patterns
 
 - **No framework for UI.** Modals use plain DOM (`document.createElement`). Each modal is a `renderXxxModal()` function that builds DOM, wires events, and returns `{ destroy() }`.
-- **EventBus** dispatches keyboard actions (Enter, Tab, Arrow keys) from modal key handlers to the active modal's logic. Contexts (`'vault'`, `'infile'`) are enabled/disabled to route events to the correct modal.
+- **Per-modal action dispatch.** Each `FerrisearchModal` has a `Map<string, handler>`. Render functions register handlers via `modal.on(Action.Enter, fn)`. Keyboard events in the base class dispatch to the map. No global event bus — handlers are scoped to each modal instance.
 - **Observable** is a minimal reactive primitive. `showExcerpt` is the only instance — it lets result items reactively show/hide excerpts. Cleanup uses a `WeakMap<HTMLElement, unsubscribe>`.
 - **Lazy loading** via `IntersectionObserver` in vault results. Wrappers get a placeholder height; actual result DOM is created when scrolled into view.
 - **Deferred reindexing.** File modifications are flagged in `NotesIndexer`; actual reindex happens when the search modal opens (`refreshIndex()`), or on window blur.
@@ -138,7 +133,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 |---------|---------|
 | `bun run build` | Production build → `dist/main.js` (CJS, minified, tree-shaken) |
 | `bun run dev` | Watch mode build |
-| `bun test` | Run tests (68 tests across 5 files) |
+| `bun test` | Run tests (57 tests across 4 files) |
 | `bun run lint` | Biome check (lint + format, read-only) |
 | `bun run format` | Biome auto-fix |
 | `bun run build:rust` | Build native module via napi-rs |
@@ -157,7 +152,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 ## Dependencies
 
-- **Runtime:** `search-query-parser` (query parsing with keywords like `ext:`, `path:`, quoted phrases, exclusions)
+- **Runtime:** None (zero runtime dependencies). Query parsing is a custom ~50-line function in `query.ts`.
 - **Dev:** `@biomejs/biome`, `happy-dom`, `@types/bun`, `obsidian`, `typescript`
 - **Native:** Rust crate `ferrisearch-core` using Tantivy 0.25 for full-text search, exposed via `napi-rs` (desktop) and `wasm-bindgen` (mobile). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
 - **WASM:** `wasm-bindgen` 0.2, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `wasm-pack --target web`.
@@ -166,13 +161,13 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 1. **Startup:** `populateIndex()` loads the cached index blob on mobile (instant restore) or sidecar manifest on desktop, diffs against vault files, adds/removes changed documents in the native Tantivy index, saves updated sidecar (+ blob on mobile).
 2. **File events:** Create/delete trigger immediate index updates. Modify flags for deferred reindex. Rename does remove + add.
-3. **Search:** User types in modal → min query length check → debounced (300ms) → `Query` parser → `searchEngine.search()` calls native Tantivy → post-filters (extension, path, exact terms, exclusions, downranked folders, tag boost) → `getSuggestions()` fetches full documents, injects embeds, extracts match offsets → rendered as lazy-loaded DOM.
+3. **Search:** User types in modal → min query length check → `Query` parser → `searchEngine.search()` calls native Tantivy → post-filters (extension, path, exact terms, exclusions, downranked folders, tag boost) → `getSuggestions()` maps results with match offsets → rendered as lazy-loaded DOM.
 4. **History:** When a vault search result is opened, the query is saved to `search-history.txt`. When the modal opens with an empty query, the last 10 history entries are displayed.
 
 ## Settings
 
 Settings are persisted via Obsidian's `plugin.saveData()`. Key settings:
 - **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2), `ignoreDiacritics`, `minQueryLength` (default: 3), `resultLimit` (default: 10)
-- **UI:** `showExcerpt`, `maxEmbeds`, `renderLineReturnInExcerpts`, `highlight`
+- **UI:** `showExcerpt`, `renderLineReturnInExcerpts`, `highlight`
 - **Weighting:** `weightBasename`, `weightDirectory`, `weightHeadings`, `weightUnmarkedTags`
 - **Other:** `recencyBoost` (disabled/day/week/month), `verboseLogging`

@@ -1,10 +1,22 @@
 import { MarkdownView, Modal, type TFile } from 'obsidian'
-import { Action, eventBus, isInputComposition } from '../globals'
+import { Action, isInputComposition } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { renderInFileModal } from './infile-modal'
 import { renderVaultModal } from './vault-modal'
 
+export type ActionHandler = (...args: unknown[]) => void
+
 abstract class FerrisearchModal extends Modal {
+  private handlers = new Map<string, ActionHandler>()
+
+  on(action: string, handler: ActionHandler): void {
+    this.handlers.set(action, handler)
+  }
+
+  off(): void {
+    this.handlers.clear()
+  }
+
   protected constructor(plugin: FerrisearchPlugin) {
     super(plugin.app)
 
@@ -13,14 +25,16 @@ abstract class FerrisearchModal extends Modal {
     this.modalEl.removeClass('modal')
     this.modalEl.tabIndex = -1
 
+    const dispatch = (action: string) => this.handlers.get(action)?.()
+
     // Arrow key navigation
     this.scope.register([], 'ArrowDown', e => {
       e.preventDefault()
-      eventBus.emit(Action.ArrowDown)
+      dispatch(Action.ArrowDown)
     })
     this.scope.register([], 'ArrowUp', e => {
       e.preventDefault()
-      eventBus.emit(Action.ArrowUp)
+      dispatch(Action.ArrowUp)
     })
 
     // Vim-like navigation (Ctrl/Cmd + j/k/n/p)
@@ -31,33 +45,33 @@ abstract class FerrisearchModal extends Modal {
       { k: 'P', dir: 'up' },
     ] as const) {
       for (const mod of ['Ctrl', 'Mod'] as const) {
-        this.scope.register([mod], k, () => eventBus.emit(`arrow-${dir}`))
+        this.scope.register([mod], k, () => dispatch(`arrow-${dir}`))
       }
     }
 
     // Open in new pane
     this.scope.register(['Mod'], 'Enter', e => {
       e.preventDefault()
-      eventBus.emit(Action.OpenInNewPane)
+      dispatch(Action.OpenInNewPane)
     })
 
     // Open in a new leaf
     this.scope.register(['Mod', 'Alt'], 'Enter', e => {
       e.preventDefault()
-      eventBus.emit(Action.OpenInNewLeaf)
+      dispatch(Action.OpenInNewLeaf)
     })
 
     // Insert link
     this.scope.register(['Alt'], 'Enter', e => {
       e.preventDefault()
-      eventBus.emit(Action.InsertLink)
+      dispatch(Action.InsertLink)
     })
 
     // Open in current pane
     this.scope.register([], 'Enter', e => {
       if (!isInputComposition()) {
         e.preventDefault()
-        eventBus.emit(Action.Enter)
+        dispatch(Action.Enter)
       }
     })
 
@@ -65,13 +79,13 @@ abstract class FerrisearchModal extends Modal {
     this.scope.register(['Mod'], 'O', e => {
       if (!isInputComposition()) {
         e.preventDefault()
-        eventBus.emit(Action.OpenInBackground)
+        dispatch(Action.OpenInBackground)
       }
     })
 
     this.scope.register([], 'Tab', e => {
       e.preventDefault()
-      eventBus.emit(Action.Tab)
+      dispatch(Action.Tab)
     })
   }
 }

@@ -1,22 +1,22 @@
-import { MarkdownView, Notice, Platform, setIcon, TFile } from 'obsidian'
-import {
-  Action,
-  eventBus,
-  IndexingStepType,
-  indexingStep,
-  type ResultNote,
-  toggleInputComposition,
-} from '../globals'
+import { MarkdownView, Notice, setIcon, TFile } from 'obsidian'
+import { Action, IndexingStepType, indexingStep, type ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { Query } from '../search/query'
 import { openNote } from '../tools/notes'
-import { getAltKeyLabel, getCtrlKeyLabel, getExtension, loopIndex, wait } from '../tools/utils'
-import { FerrisearchInFileModal, type FerrisearchVaultModal } from './modals'
+import { getAltKeyLabel, getCtrlKeyLabel, getExtension, loopIndex } from '../tools/utils'
+import { createInstructions, createResultsContainer, createSearchInput } from './modal-helpers'
+import { FerrisearchInFileModal } from './modals'
 import { cleanupResultItem, createVaultResultItem, updateSelection } from './result-items'
+
+export interface ModalHandle {
+  on(action: string, handler: (...args: unknown[]) => void): void
+  off(): void
+  close(): void
+}
 
 interface VaultModalProps {
   plugin: FerrisearchPlugin
-  modal: FerrisearchVaultModal
+  modal: ModalHandle
   previousQuery: string
 }
 
@@ -34,19 +34,10 @@ export function renderVaultModal(
   let historyItems: string[] = []
 
   // Build DOM
-
-  const inputContainer = document.createElement('div')
-  inputContainer.className = 'ferrisearch-input-container'
-  const inputField = document.createElement('div')
-  inputField.className = 'ferrisearch-input-field'
-  const input = document.createElement('input')
-  input.type = 'text'
-  input.className = 'prompt-input'
-  input.placeholder = 'Ferrisearch - Vault'
-  input.spellcheck = false
-  inputField.appendChild(input)
-  inputContainer.appendChild(inputField)
-  container.appendChild(inputContainer)
+  const input = createSearchInput(container, 'Ferrisearch - Vault', previousQuery, value => {
+    searchQuery = value
+    onQueryChange()
+  })
 
   // Indexing status
   const statusDiv = document.createElement('div')
@@ -56,18 +47,11 @@ export function renderVaultModal(
   statusDiv.style.display = 'none'
   container.appendChild(statusDiv)
 
-  // Results
-  const resultsDiv = document.createElement('div')
-  resultsDiv.className = 'prompt-results'
-  resultsDiv.addEventListener('mousedown', e => e.preventDefault())
-  container.appendChild(resultsDiv)
+  const resultsDiv = createResultsContainer(container)
 
-  // Instructions
   const ctrlKey = getCtrlKeyLabel()
   const altKey = getAltKeyLabel()
-  const instructions = document.createElement('div')
-  instructions.className = 'prompt-instructions'
-  for (const [cmd, desc] of [
+  createInstructions(container, [
     ['↑↓', 'to navigate'],
     ['↵', 'to open'],
     ['Tab', 'to switch to In-File Search'],
@@ -76,36 +60,7 @@ export function renderVaultModal(
     [`${ctrlKey} o`, 'to open in the background'],
     [`${altKey} ↵`, 'to insert a link'],
     ['Esc', 'to close'],
-  ] as const) {
-    const inst = document.createElement('div')
-    inst.className = 'prompt-instruction'
-    const cmdSpan = document.createElement('span')
-    cmdSpan.className = 'prompt-instruction-command'
-    cmdSpan.textContent = cmd
-    const descSpan = document.createElement('span')
-    descSpan.textContent = desc
-    inst.appendChild(cmdSpan)
-    inst.appendChild(descSpan)
-    instructions.appendChild(inst)
-  }
-  container.appendChild(instructions)
-
-  // Focus
-  if (previousQuery) input.value = previousQuery
-  ;(async () => {
-    if (Platform.isMobileApp) await wait(200)
-    input.focus()
-    if (Platform.isMobileApp) await wait(200)
-    input.select()
-  })()
-
-  // Input handling
-  input.addEventListener('input', () => {
-    searchQuery = input.value
-    onQueryChange()
-  })
-  input.addEventListener('compositionstart', () => toggleInputComposition(true))
-  input.addEventListener('compositionend', () => toggleInputComposition(false))
+  ])
 
   function onQueryChange() {
     if (!searchQuery) {
@@ -436,16 +391,15 @@ export function renderVaultModal(
     }
   }
 
-  // Event bus
-  eventBus.enable('vault')
-  eventBus.on('vault', Action.Enter, openNoteAndCloseModal)
-  eventBus.on('vault', Action.OpenInBackground, openNoteInBackground)
-  eventBus.on('vault', Action.OpenInNewPane, openNoteInNewPane)
-  eventBus.on('vault', Action.InsertLink, insertLink)
-  eventBus.on('vault', Action.Tab, switchToInFileModal)
-  eventBus.on('vault', Action.ArrowUp, () => moveIndex(-1))
-  eventBus.on('vault', Action.ArrowDown, () => moveIndex(1))
-  eventBus.on('vault', Action.OpenInNewLeaf, openNoteInNewLeaf)
+  // Register action handlers on the modal
+  modal.on(Action.Enter, openNoteAndCloseModal)
+  modal.on(Action.OpenInBackground, openNoteInBackground)
+  modal.on(Action.OpenInNewPane, openNoteInNewPane)
+  modal.on(Action.InsertLink, insertLink)
+  modal.on(Action.Tab, switchToInFileModal)
+  modal.on(Action.ArrowUp, () => moveIndex(-1))
+  modal.on(Action.ArrowDown, () => moveIndex(1))
+  modal.on(Action.OpenInNewLeaf, openNoteInNewLeaf)
 
   // Initial load — warm up term dictionaries and refresh deferred changes
   plugin.searchEngine.warmUp()
@@ -462,7 +416,7 @@ export function renderVaultModal(
   return {
     destroy() {
       cancelled = true
-      eventBus.disable('vault')
+      modal.off()
       unsubIndexing()
       currentObserver?.disconnect()
       for (const el of resultEls) cleanupResultItem(el)

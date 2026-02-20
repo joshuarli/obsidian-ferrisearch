@@ -1,5 +1,3 @@
-import { EventBus } from './tools/event-bus'
-
 export class Observable<T> {
   private value: T
   private listeners = new Set<(v: T) => void>()
@@ -24,8 +22,6 @@ export const excerptBefore = 100
 export const excerptAfter = 300
 
 export const K_DISABLE_FERRISEARCH = 'ferrisearch-disabled'
-
-export const eventBus = new EventBus()
 
 export enum IndexingStepType {
   Done,

@@ -1,33 +1,85 @@
-import { type App, Notice, Platform, Plugin, type PluginManifest, TFile } from 'obsidian'
+import { Notice, Platform, Plugin, TFile } from 'obsidian'
 import { FerrisearchInFileModal, FerrisearchVaultModal } from './components/modals'
-import { eventBus, IndexingStepType, indexingStep } from './globals'
+import { IndexingStepType, indexingStep, type ResultNote } from './globals'
 import { NotesIndexer } from './notes-indexer'
-import { DocumentsRepository } from './repositories/documents-repository'
+import { Query } from './search/query'
 import { SearchEngine } from './search/search-engine'
-import { SearchHistory } from './search/search-history'
+import { createSearchHistory } from './search/search-history'
 import { getDefaultSettings, loadSettings, SettingsTab } from './settings'
 import type { FerrisearchSettings } from './settings/utils'
 import { isPluginDisabled } from './settings/utils'
-import { notifyOnIndexed, registerAPI } from './tools/api'
 import { TextProcessor } from './tools/text-processing'
 import { logVerbose } from './tools/utils'
+
+// --- Public API (exposed on globalThis.ferrisearch) ---
+
+type ResultNoteApi = {
+  score: number
+  vault: string
+  path: string
+  basename: string
+  foundWords: string[]
+  matches: { match: string; offset: number }[]
+  excerpt: string
+}
+
+let apiNotified = false
+let onIndexedCallbacks: Array<() => void> = []
+
+function mapApiResults(plugin: FerrisearchPlugin, results: ResultNote[]): ResultNoteApi[] {
+  return results.map(({ score, path, basename, foundWords, matches, content }) => ({
+    score,
+    vault: plugin.app.vault.getName(),
+    path,
+    basename,
+    foundWords,
+    matches: matches.map(({ match, offset }) => ({ match, offset })),
+    excerpt: plugin.textProcessor.makeExcerpt(content, matches[0]?.offset ?? -1),
+  }))
+}
+
+function notifyOnIndexed(): void {
+  apiNotified = true
+  for (const cb of onIndexedCallbacks) cb()
+}
+
+function registerAPI(plugin: FerrisearchPlugin): void {
+  plugin.registerObsidianProtocolHandler('ferrisearch', params => {
+    new FerrisearchVaultModal(plugin, params.query).open()
+  })
+
+  const api = {
+    async search(q: string): Promise<ResultNoteApi[]> {
+      const query = new Query(q, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
+      return mapApiResults(plugin, await plugin.searchEngine.getSuggestions(query))
+    },
+    registerOnIndexed(cb: () => void): void {
+      onIndexedCallbacks.push(cb)
+      if (apiNotified) cb()
+    },
+    unregisterOnIndexed(cb: () => void): void {
+      onIndexedCallbacks = onIndexedCallbacks.filter(o => o !== cb)
+    },
+    refreshIndex: plugin.notesIndexer.refreshIndex,
+  }
+
+  // @ts-expect-error
+  globalThis.ferrisearch = api
+  // biome-ignore lint/suspicious/noExplicitAny: Obsidian internal plugin registry
+  ;(plugin.app as any).plugins.plugins.ferrisearch.api = api
+}
+
+// --- Plugin ---
 
 export default class FerrisearchPlugin extends Plugin {
   public settings: FerrisearchSettings = getDefaultSettings()
 
-  public readonly documentsRepository: DocumentsRepository
-
   public readonly notesIndexer = new NotesIndexer(this)
   public readonly textProcessor = new TextProcessor(this)
   public readonly searchEngine = new SearchEngine(this)
-  public readonly searchHistory = new SearchHistory(this)
+  public readonly searchHistory = createSearchHistory(this)
 
   private refreshIndexCallback?: (ev: FocusEvent) => void
-
-  constructor(app: App, manifest: PluginManifest) {
-    super(app, manifest)
-    this.documentsRepository = new DocumentsRepository(this)
-  }
 
   async onload(): Promise<void> {
     try {
@@ -58,9 +110,6 @@ export default class FerrisearchPlugin extends Plugin {
     this.addRibbonIcon('search', 'Ferrisearch', () => {
       new FerrisearchVaultModal(this).open()
     })
-
-    eventBus.disable('vault')
-    eventBus.disable('infile')
 
     // Commands to display Ferrisearch modals
     this.addCommand({
@@ -98,7 +147,6 @@ export default class FerrisearchPlugin extends Plugin {
         this.app.vault.on('delete', file => {
           if (!(file instanceof TFile)) return
           logVerbose('Removing file', file.path)
-          this.documentsRepository.removeDocument(file.path)
           searchEngine.removeFromPaths([file.path])
         }),
       )
@@ -115,9 +163,6 @@ export default class FerrisearchPlugin extends Plugin {
           if (!(file instanceof TFile)) return
           if (this.notesIndexer.isFileIndexable(file.path)) {
             logVerbose('Renaming file', file.path)
-            this.documentsRepository.removeDocument(oldPath)
-            await this.documentsRepository.addDocument(file.path)
-
             searchEngine.removeFromPaths([oldPath])
             await searchEngine.addFromPaths([file.path])
           }

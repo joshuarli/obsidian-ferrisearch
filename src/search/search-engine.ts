@@ -1,13 +1,20 @@
-import { Notice, Platform } from 'obsidian'
+import { Notice, normalizePath, Platform, TFile } from 'obsidian'
 // WASM glue code — bundled into main.js (~23KB), only used on mobile.
 // Build requires: just build-wasm (or build-all)
 import {
   SearchIndex as WasmSearchIndex,
   initSync as wasmInitSync,
 } from '../../wasm/pkg/ferrisearch_wasm.js'
-import type { DocumentRef, ResultNote } from '../globals'
+import type { DocumentRef, IndexedDocument, ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
-import { logVerbose, removeDiacritics, stripMarkdownCharacters } from '../tools/utils'
+import {
+  extractHeadingsFromCache,
+  getAliasesFromMetadata,
+  getTagsFromMetadata,
+  logVerbose,
+  removeDiacritics,
+  stripMarkdownCharacters,
+} from '../tools/utils'
 import type { Query } from './query'
 
 // Must match NAPI_VERSION in napi/src/lib.rs
@@ -196,9 +203,8 @@ export class SearchEngine {
     if (!this.nativeIndex) return
     logVerbose('Adding files', paths)
 
-    const documents = (
-      await Promise.all(paths.map(p => this.plugin.documentsRepository.getDocument(p)))
-    ).filter(d => !!d?.path)
+    const results = await Promise.all(paths.map(p => this.getIndexedDocument(p)))
+    const documents = results.filter((d): d is IndexedDocument => d !== null)
 
     logVerbose('Sorting documents to first index markdown')
     documents.sort((a, b) =>
@@ -266,22 +272,22 @@ export class SearchEngine {
     logVerbose(`Found ${results.length} results`, results)
 
     // Post-filter: extension
-    if (query.query.ext?.length) {
+    if (query.query.ext.length) {
       results = results.filter(r => {
         const ext = `.${r.path.slice(r.path.lastIndexOf('.') + 1)}`
-        return query.query.ext?.some(e => ext.startsWith(e.startsWith('.') ? e : `.${e}`))
+        return query.query.ext.some(e => ext.startsWith(e.startsWith('.') ? e : `.${e}`))
       })
     }
 
     // Post-filter: path include/exclude
-    if (query.query.path) {
+    if (query.query.path.length) {
       results = results.filter(r =>
-        query.query.path?.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
+        query.query.path.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
       )
     }
-    if (query.query.exclude.path) {
+    if (query.query.exclude.path.length) {
       results = results.filter(
-        r => !query.query.exclude.path?.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
+        r => !query.query.exclude.path.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
       )
     }
 
@@ -423,6 +429,41 @@ export class SearchEngine {
         ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
       }) as unknown as NativeSearchIndex
       return false
+    }
+  }
+
+  private async getIndexedDocument(path: string): Promise<IndexedDocument | null> {
+    try {
+      path = normalizePath(path)
+      const { app } = this.plugin
+      const file = app.vault.getAbstractFileByPath(path)
+      if (!file || !(file instanceof TFile)) return null
+
+      const content = await app.vault.cachedRead(file)
+      const metadata = app.metadataCache.getFileCache(file)
+      const tags = getTagsFromMetadata(metadata)
+
+      return {
+        basename: file.basename,
+        displayTitle: metadata?.headings?.find(h => h.level === 1)?.heading ?? '',
+        content,
+        cleanedContent: stripMarkdownCharacters(removeDiacritics(content)),
+        path: file.path,
+        mtime: file.stat.mtime,
+        tags,
+        unmarkedTags: tags.map(t => t.replace('#', '')),
+        aliases: getAliasesFromMetadata(metadata).join(''),
+        headings: metadata
+          ? [
+              ...extractHeadingsFromCache(metadata, 1),
+              ...extractHeadingsFromCache(metadata, 2),
+              ...extractHeadingsFromCache(metadata, 3),
+            ].join(' ')
+          : '',
+      }
+    } catch (e) {
+      console.warn(`Ferrisearch: Error reading "${path}"`, e)
+      return null
     }
   }
 

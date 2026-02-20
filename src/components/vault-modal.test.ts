@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
-import { Action, eventBus, IndexingStepType, indexingStep } from '../globals'
+import { Action, IndexingStepType, indexingStep } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
+import type { ModalHandle } from './vault-modal'
 import { renderVaultModal } from './vault-modal'
 
 // Flush microtasks and timers
@@ -18,6 +19,25 @@ async function flush(ms = 400) {
   }
 }
 
+function createMockModal(): ModalHandle & {
+  close: ReturnType<typeof mock>
+  dispatch(action: string): void
+} {
+  const handlers = new Map<string, (...args: unknown[]) => void>()
+  return {
+    close: mock(() => {}),
+    on(action: string, handler: (...args: unknown[]) => void) {
+      handlers.set(action, handler)
+    },
+    off() {
+      handlers.clear()
+    },
+    dispatch(action: string) {
+      handlers.get(action)?.()
+    },
+  }
+}
+
 function setup(overrides?: {
   previousQuery?: string
   settings?: Record<string, unknown>
@@ -28,7 +48,7 @@ function setup(overrides?: {
     settings: overrides?.settings,
     searchResults: overrides?.searchResults,
   })
-  const modal = { close: mock(() => {}) } as unknown
+  const modal = createMockModal()
   const handle = renderVaultModal(container, {
     plugin,
     modal,
@@ -129,7 +149,7 @@ describe('renderVaultModal', () => {
         createMockResultNote({ path: 'b.md', basename: 'b' }),
         createMockResultNote({ path: 'c.md', basename: 'c' }),
       ]
-      const { container, handle } = setup({ searchResults: notes })
+      const { container, modal, handle } = setup({ searchResults: notes })
 
       const input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
@@ -141,7 +161,7 @@ describe('renderVaultModal', () => {
       expect(firstItem?.classList.contains('is-selected')).toBe(true)
 
       // Arrow down
-      eventBus.emit(Action.ArrowDown)
+      modal.dispatch(Action.ArrowDown)
       const secondItem = container.querySelector('[data-result-id="b.md"]')
       expect(secondItem?.classList.contains('is-selected')).toBe(true)
       expect(firstItem?.classList.contains('is-selected')).toBe(false)
@@ -154,14 +174,14 @@ describe('renderVaultModal', () => {
         createMockResultNote({ path: 'a.md', basename: 'a' }),
         createMockResultNote({ path: 'b.md', basename: 'b' }),
       ]
-      const { container, handle } = setup({ searchResults: notes })
+      const { container, modal, handle } = setup({ searchResults: notes })
 
       const input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      eventBus.emit(Action.ArrowUp)
+      modal.dispatch(Action.ArrowUp)
       const lastItem = container.querySelector('[data-result-id="b.md"]')
       expect(lastItem?.classList.contains('is-selected')).toBe(true)
 
@@ -169,7 +189,7 @@ describe('renderVaultModal', () => {
     })
   })
 
-  describe('actions via eventBus', () => {
+  describe('actions', () => {
     it('Enter closes modal when results exist', async () => {
       const notes = [createMockResultNote()]
       const { container, modal, handle } = setup({ searchResults: notes })
@@ -179,7 +199,7 @@ describe('renderVaultModal', () => {
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      eventBus.emit(Action.Enter)
+      modal.dispatch(Action.Enter)
       expect(modal.close).toHaveBeenCalled()
 
       handle.destroy()
@@ -194,7 +214,7 @@ describe('renderVaultModal', () => {
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      eventBus.emit(Action.Tab)
+      modal.dispatch(Action.Tab)
       expect(modal.close).toHaveBeenCalled()
 
       handle.destroy()
@@ -209,7 +229,7 @@ describe('renderVaultModal', () => {
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      eventBus.emit(Action.Tab)
+      modal.dispatch(Action.Tab)
       expect(modal.close).not.toHaveBeenCalled()
 
       handle.destroy()
@@ -229,7 +249,7 @@ describe('renderVaultModal', () => {
   })
 
   describe('destroy()', () => {
-    it('disables eventBus for vault context', async () => {
+    it('clears handlers so actions no longer fire', async () => {
       const notes = [createMockResultNote()]
       const { container, modal, handle } = setup({ searchResults: notes })
 
@@ -241,7 +261,7 @@ describe('renderVaultModal', () => {
       handle.destroy()
       modal.close.mockClear()
 
-      eventBus.emit(Action.Enter)
+      modal.dispatch(Action.Enter)
       expect(modal.close).not.toHaveBeenCalled()
     })
 

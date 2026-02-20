@@ -1,32 +1,19 @@
 import type FerrisearchPlugin from '../main'
 
-export class SearchHistory {
-  private filePath: string
+export interface SearchHistory {
+  getHistory(): Promise<ReadonlyArray<string>>
+  addToHistory(query: string): Promise<void>
+}
 
-  constructor(private plugin: FerrisearchPlugin) {
-    const configDir = plugin.app.vault.configDir
-    this.filePath = `${configDir}/plugins/ferrisearch/search-history.txt`
-  }
+export function createSearchHistory(plugin: FerrisearchPlugin): SearchHistory {
+  const filePath = `${plugin.app.vault.configDir}/plugins/ferrisearch/search-history.txt`
 
-  public async addToHistory(query: string): Promise<void> {
-    if (!query) return
-    let lines = await this.readFile()
-    lines = lines.filter(s => s !== query)
-    lines.unshift(query)
-    lines = lines.slice(0, 10)
-    await this.writeFile(lines)
-  }
-
-  public async getHistory(): Promise<ReadonlyArray<string>> {
-    return this.readFile()
-  }
-
-  private async readFile(): Promise<string[]> {
+  async function readFile(): Promise<string[]> {
     try {
-      const adapter = this.plugin.app.vault.adapter
-      if (await adapter.exists(this.filePath)) {
-        const raw = await adapter.read(this.filePath)
-        return raw.split('\n').filter(s => s)
+      const adapter = plugin.app.vault.adapter
+      if (await adapter.exists(filePath)) {
+        const raw = await adapter.read(filePath)
+        return raw.split('\n').filter(Boolean)
       }
     } catch (e) {
       console.warn('Ferrisearch - Failed to read search history', e)
@@ -34,11 +21,21 @@ export class SearchHistory {
     return []
   }
 
-  private async writeFile(lines: string[]): Promise<void> {
-    try {
-      await this.plugin.app.vault.adapter.write(this.filePath, lines.join('\n'))
-    } catch (e) {
-      console.error('Ferrisearch - Failed to save search history', e)
-    }
+  return {
+    async getHistory() {
+      return readFile()
+    },
+    async addToHistory(query: string) {
+      if (!query) return
+      let lines = await readFile()
+      lines = lines.filter(s => s !== query)
+      lines.unshift(query)
+      lines = lines.slice(0, 10)
+      try {
+        await plugin.app.vault.adapter.write(filePath, lines.join('\n'))
+      } catch (e) {
+        console.error('Ferrisearch - Failed to save search history', e)
+      }
+    },
   }
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it, mock } from 'bun:test'
-import { Action, eventBus } from '../globals'
+import { Action } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
+import type { ModalHandle } from './infile-modal'
 import { renderInFileModal } from './infile-modal'
 
 // Flush microtasks and timers
@@ -12,6 +13,25 @@ async function flush(ms = 400) {
   await new Promise(r => setTimeout(r, ms))
   for (let i = 0; i < 5; i++) {
     await Promise.resolve()
+  }
+}
+
+function createMockModal(): ModalHandle & {
+  close: ReturnType<typeof mock>
+  dispatch(action: string): void
+} {
+  const handlers = new Map<string, (...args: unknown[]) => void>()
+  return {
+    close: mock(() => {}),
+    on(action: string, handler: (...args: unknown[]) => void) {
+      handlers.set(action, handler)
+    },
+    off() {
+      handlers.clear()
+    },
+    dispatch(action: string) {
+      handlers.get(action)?.()
+    },
   }
 }
 
@@ -27,7 +47,7 @@ function setup(overrides?: {
     settings: overrides?.settings,
     searchResults: overrides?.searchResults,
   })
-  const modal = { close: mock(() => {}) } as unknown
+  const modal = createMockModal()
   const parent = overrides?.parent ?? null
   const handle = renderInFileModal(container, {
     plugin,
@@ -163,7 +183,7 @@ describe('renderInFileModal', () => {
           { match: 'c', offset: 1000 },
         ],
       })
-      const { container, handle } = setup({ searchResults: [note] })
+      const { container, modal, handle } = setup({ searchResults: [note] })
 
       const input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
@@ -175,7 +195,7 @@ describe('renderInFileModal', () => {
       expect(first?.classList.contains('is-selected')).toBe(true)
 
       // Arrow down
-      eventBus.emit(Action.ArrowDown)
+      modal.dispatch(Action.ArrowDown)
       const second = container.querySelector('[data-result-id="1"]')
       expect(second?.classList.contains('is-selected')).toBe(true)
       expect(first?.classList.contains('is-selected')).toBe(false)
@@ -190,14 +210,14 @@ describe('renderInFileModal', () => {
           { match: 'b', offset: 500 },
         ],
       })
-      const { container, handle } = setup({ searchResults: [note] })
+      const { container, modal, handle } = setup({ searchResults: [note] })
 
       const input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      eventBus.emit(Action.ArrowUp)
+      modal.dispatch(Action.ArrowUp)
       const last = container.querySelector('[data-result-id="1"]')
       expect(last?.classList.contains('is-selected')).toBe(true)
 
@@ -205,7 +225,7 @@ describe('renderInFileModal', () => {
     })
   })
 
-  describe('actions via eventBus', () => {
+  describe('actions', () => {
     it('Enter closes modal when results exist', async () => {
       const note = createMockResultNote({
         matches: [{ match: 'a', offset: 10 }],
@@ -217,7 +237,7 @@ describe('renderInFileModal', () => {
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      eventBus.emit(Action.Enter)
+      modal.dispatch(Action.Enter)
       // openSelection is async — give it a tick
       await flush(50)
       expect(modal.close).toHaveBeenCalled()
@@ -240,7 +260,7 @@ describe('renderInFileModal', () => {
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      eventBus.emit(Action.Enter)
+      modal.dispatch(Action.Enter)
       await flush(50)
       expect(modal.close).toHaveBeenCalled()
       expect(parentModal.close).toHaveBeenCalled()
@@ -251,7 +271,7 @@ describe('renderInFileModal', () => {
     it('Tab closes modal to switch to vault search', async () => {
       const { modal, handle } = setup()
 
-      eventBus.emit(Action.Tab)
+      modal.dispatch(Action.Tab)
       expect(modal.close).toHaveBeenCalled()
 
       handle.destroy()
@@ -259,7 +279,7 @@ describe('renderInFileModal', () => {
   })
 
   describe('destroy()', () => {
-    it('disables eventBus for infile context', async () => {
+    it('clears handlers so actions no longer fire', async () => {
       const note = createMockResultNote({
         matches: [{ match: 'a', offset: 10 }],
       })
@@ -273,7 +293,7 @@ describe('renderInFileModal', () => {
       handle.destroy()
       modal.close.mockClear()
 
-      eventBus.emit(Action.Enter)
+      modal.dispatch(Action.Enter)
       await flush(50)
       expect(modal.close).not.toHaveBeenCalled()
     })

@@ -12,13 +12,9 @@ export class NotesIndexer {
   }
 
   public async refreshIndex(): Promise<void> {
-    for (const file of this.notesToReindex) {
-      logVerbose('Updating file', file.path)
-      await this.plugin.documentsRepository.addDocument(file.path)
-    }
-
     const paths = [...this.notesToReindex].map(n => n.path)
     if (paths.length) {
+      for (const path of paths) logVerbose('Updating file', path)
       this.plugin.searchEngine.removeFromPaths(paths)
       await this.plugin.searchEngine.addFromPaths(paths)
       this.notesToReindex.clear()

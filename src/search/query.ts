@@ -1,47 +1,74 @@
-import { parse } from 'search-query-parser'
 import { removeDiacritics } from '../tools/utils'
 
-const keywords = ['ext', 'path'] as const
+type ParsedQuery = {
+  text: string[]
+  ext: string[]
+  path: string[]
+  exclude: {
+    text: string[]
+    ext: string[]
+    path: string[]
+  }
+}
 
-type Keywords = {
-  [K in (typeof keywords)[number]]?: string[]
-} & { text: string[] }
+function parseQuery(input: string): ParsedQuery {
+  const result: ParsedQuery = {
+    text: [],
+    ext: [],
+    path: [],
+    exclude: { text: [], ext: [], path: [] },
+  }
+
+  const regex = /-?"([^"]*)"|\S+/g
+  for (let match = regex.exec(input); match; match = regex.exec(input)) {
+    const full = match[0]
+    const quoted = match[1]
+
+    if (quoted !== undefined) {
+      if (!quoted) continue
+      const target = full.startsWith('-') ? result.exclude : result
+      target.text.push(quoted)
+      continue
+    }
+
+    const negated = full.startsWith('-') && full.length > 1
+    const raw = negated ? full.slice(1) : full
+
+    const colonIdx = raw.indexOf(':')
+    if (colonIdx > 0) {
+      const key = raw.slice(0, colonIdx)
+      const value = raw.slice(colonIdx + 1)
+      if ((key === 'ext' || key === 'path') && value) {
+        const target = negated ? result.exclude : result
+        target[key].push(value)
+        continue
+      }
+    }
+
+    const target = negated ? result.exclude : result
+    target.text.push(raw)
+  }
+
+  return result
+}
 
 export class Query {
-  query: Keywords & { exclude: Keywords }
+  query: ParsedQuery
   #inQuotes: string[]
 
   constructor(text = '', options: { ignoreDiacritics: boolean }) {
     if (options.ignoreDiacritics) text = removeDiacritics(text)
-
-    const parsed = parse(text.toLowerCase(), {
-      tokenize: true,
-      keywords: keywords as unknown as string[],
-    }) as unknown as typeof this.query
-
-    parsed.text ??= []
-    parsed.exclude ??= {} as Keywords
-    parsed.exclude.text ??= []
-    if (!Array.isArray(parsed.exclude.text)) parsed.exclude.text = [parsed.exclude.text]
-    parsed.exclude.text = parsed.exclude.text.filter(o => o.length)
-
-    for (const k of keywords) {
-      const v = parsed[k]
-      if (v) parsed[k] = Array.isArray(v) ? v : [v]
-      const e = parsed.exclude[k]
-      if (e) parsed.exclude[k] = Array.isArray(e) ? e : [e]
-    }
-    this.query = parsed
+    this.query = parseQuery(text.toLowerCase())
 
     const ext = this.query.text.filter(o => o.startsWith('.')).map(o => o.slice(1))
-    this.query.ext = [...new Set([...ext, ...(this.query.ext ?? [])])]
+    this.query.ext = [...new Set([...ext, ...this.query.ext])]
     this.query.text = this.query.text.filter(o => !o.startsWith('.'))
 
     this.#inQuotes = text.match(/"([^"]+)"/g)?.map(o => o.replace(/"/g, '')) ?? []
   }
 
   public isEmpty(): boolean {
-    return !this.query.text.length && keywords.every(k => !this.query[k]?.length)
+    return !this.query.text.length && !this.query.ext.length && !this.query.path.length
   }
 
   public segmentsToStr(): string {

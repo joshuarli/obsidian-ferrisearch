@@ -1,24 +1,24 @@
-import { MarkdownView, Platform } from 'obsidian'
-import {
-  Action,
-  eventBus,
-  excerptAfter,
-  type ResultNote,
-  type SearchMatch,
-  toggleInputComposition,
-} from '../globals'
+import { MarkdownView } from 'obsidian'
+import { Action, excerptAfter, type ResultNote, type SearchMatch } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { Query } from '../search/query'
 import { openNote } from '../tools/notes'
-import { getCtrlKeyLabel, loopIndex, wait } from '../tools/utils'
-import { type FerrisearchInFileModal, FerrisearchVaultModal } from './modals'
+import { getCtrlKeyLabel, loopIndex } from '../tools/utils'
+import { createInstructions, createResultsContainer, createSearchInput } from './modal-helpers'
+import { FerrisearchVaultModal } from './modals'
 import { createInFileResultItem, updateSelection } from './result-items'
+
+export interface ModalHandle {
+  on(action: string, handler: (...args: unknown[]) => void): void
+  off(): void
+  close(): void
+}
 
 interface InFileModalProps {
   plugin: FerrisearchPlugin
-  modal: FerrisearchInFileModal
+  modal: ModalHandle
   singleFilePath: string
-  parent: FerrisearchVaultModal | null
+  parent: ModalHandle | null
   previousQuery: string
 }
 
@@ -30,66 +30,23 @@ export function renderInFileModal(
   let groupedOffsets: number[] = []
   let selectedIndex = 0
   let note: ResultNote | undefined
+
   // Build DOM
+  createSearchInput(container, 'Ferrisearch - File', previousQuery, value => {
+    searchQuery = value
+    updateResults()
+  })
 
-  const inputContainer = document.createElement('div')
-  inputContainer.className = 'ferrisearch-input-container'
-  const inputField = document.createElement('div')
-  inputField.className = 'ferrisearch-input-field'
-  const input = document.createElement('input')
-  input.type = 'text'
-  input.className = 'prompt-input'
-  input.placeholder = 'Ferrisearch - File'
-  input.spellcheck = false
-  inputField.appendChild(input)
-  inputContainer.appendChild(inputField)
-  container.appendChild(inputContainer)
+  const resultsDiv = createResultsContainer(container)
 
-  const resultsDiv = document.createElement('div')
-  resultsDiv.className = 'prompt-results'
-  resultsDiv.addEventListener('mousedown', e => e.preventDefault())
-  container.appendChild(resultsDiv)
-
-  // Instructions
   const ctrlKey = getCtrlKeyLabel()
-  const instructions = document.createElement('div')
-  instructions.className = 'prompt-instructions'
-  for (const [cmd, desc] of [
+  createInstructions(container, [
     ['↑↓', 'to navigate'],
     ['↵', 'to open'],
     ['tab', 'to switch to Vault Search'],
     ['esc', parent ? 'to go back to Vault Search' : 'to close'],
     [`${ctrlKey} ↵`, 'to open in a new pane'],
-  ] as const) {
-    const inst = document.createElement('div')
-    inst.className = 'prompt-instruction'
-    const cmdSpan = document.createElement('span')
-    cmdSpan.className = 'prompt-instruction-command'
-    cmdSpan.textContent = cmd
-    const descSpan = document.createElement('span')
-    descSpan.textContent = desc
-    inst.appendChild(cmdSpan)
-    inst.appendChild(descSpan)
-    instructions.appendChild(inst)
-  }
-  container.appendChild(instructions)
-
-  // Focus
-  if (previousQuery) input.value = previousQuery
-  ;(async () => {
-    if (Platform.isMobileApp) await wait(200)
-    input.focus()
-    if (Platform.isMobileApp) await wait(200)
-    input.select()
-  })()
-
-  // Input handling
-  input.addEventListener('input', () => {
-    searchQuery = input.value
-    updateResults()
-  })
-  input.addEventListener('compositionstart', () => toggleInputComposition(true))
-  input.addEventListener('compositionend', () => toggleInputComposition(false))
+  ])
 
   // Search
   async function updateResults() {
@@ -222,13 +179,12 @@ export function renderInFileModal(
     modal.close()
   }
 
-  // Event bus
-  eventBus.enable('infile')
-  eventBus.on('infile', Action.Enter, () => openSelection())
-  eventBus.on('infile', Action.OpenInNewPane, () => openSelection(true))
-  eventBus.on('infile', Action.ArrowUp, () => moveIndex(-1))
-  eventBus.on('infile', Action.ArrowDown, () => moveIndex(1))
-  eventBus.on('infile', Action.Tab, switchToVaultModal)
+  // Register action handlers on the modal
+  modal.on(Action.Enter, () => openSelection())
+  modal.on(Action.OpenInNewPane, () => openSelection(true))
+  modal.on(Action.ArrowUp, () => moveIndex(-1))
+  modal.on(Action.ArrowDown, () => moveIndex(1))
+  modal.on(Action.Tab, switchToVaultModal)
 
   // Initial search
   if (searchQuery) {
@@ -239,7 +195,7 @@ export function renderInFileModal(
 
   return {
     destroy() {
-      eventBus.disable('infile')
+      modal.off()
     },
   }
 }
