@@ -139,8 +139,9 @@ export default class FerrisearchPlugin extends Plugin {
       removeEventListener('blur', this.refreshIndexCallback)
     }
 
-    // Save sidecar and close the native index
+    // Save sidecar + blob (mobile) and close the native index
     await this.searchEngine.saveSidecar()
+    await this.searchEngine.saveIndexBlob()
     this.searchEngine.close()
   }
 
@@ -151,15 +152,24 @@ export default class FerrisearchPlugin extends Plugin {
     indexingStep.set(IndexingStepType.ReadingFiles)
     const files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
-    // Try to load sidecar for differential reindex.
-    // On mobile the Tantivy index is always in-memory (starts empty),
-    // so the sidecar would incorrectly report all files as indexed.
-    console.time('Ferrisearch - Loading index from sidecar')
+
+    // Try to load cached index (blob on mobile, sidecar on desktop)
+    console.time('Ferrisearch - Loading index from cache')
     indexingStep.set(IndexingStepType.LoadingCache)
-    const hasSidecar = Platform.isMobileApp ? false : await searchEngine.loadSidecar()
-    if (hasSidecar) {
-      console.timeEnd('Ferrisearch - Loading index from sidecar')
+    let hasCache: boolean
+    if (Platform.isMobileApp) {
+      // Mobile: try loading the serialized index blob + sidecar
+      hasCache = await searchEngine.loadIndexBlob()
+      if (hasCache) {
+        await searchEngine.loadSidecar()
+      }
+    } else {
+      hasCache = await searchEngine.loadSidecar()
     }
+    if (hasCache) {
+      console.timeEnd('Ferrisearch - Loading index from cache')
+    }
+
     const diff = searchEngine.getDocumentsToReindex(
       files.map(f => ({ path: f.path, mtime: f.stat.mtime })),
     )
@@ -171,7 +181,9 @@ export default class FerrisearchPlugin extends Plugin {
       console.debug(`Ferrisearch - Files to remove: ${diff.toRemove.length}`)
     }
 
-    new Notice(`Ferrisearch: adding ${diff.toAdd.length} files to the index.`, 10_000)
+    if (diff.toAdd.length > 0) {
+      new Notice(`Ferrisearch: adding ${diff.toAdd.length} files to the index.`, 10_000)
+    }
 
     indexingStep.set(IndexingStepType.IndexingFiles)
     searchEngine.removeFromPaths(diff.toRemove.map(o => o.path))
@@ -180,6 +192,7 @@ export default class FerrisearchPlugin extends Plugin {
     if (diff.toRemove.length || diff.toAdd.length) {
       indexingStep.set(IndexingStepType.WritingCache)
       await searchEngine.saveSidecar()
+      await searchEngine.saveIndexBlob()
     }
 
     console.timeEnd('Ferrisearch - Indexing total time')

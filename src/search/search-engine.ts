@@ -379,6 +379,53 @@ export class SearchEngine {
     })
   }
 
+  /**
+   * Serialize the WASM index to a binary blob and save it to disk.
+   * Only applicable on mobile (WASM). No-op on desktop.
+   */
+  async saveIndexBlob(): Promise<void> {
+    if (!Platform.isMobileApp || !this.nativeIndex) return
+    try {
+      const wasmIndex = this.nativeIndex as unknown as WasmSearchIndex
+      const blob = wasmIndex.serializeIndex()
+      await this.plugin.app.vault.adapter.writeBinary(
+        this.getBlobPath(),
+        blob.buffer as ArrayBuffer,
+      )
+      console.log(`Ferrisearch - Saved index blob (${(blob.length / 1024).toFixed(0)} KB)`)
+    } catch (e) {
+      console.error('Ferrisearch - Failed to save index blob', e)
+    }
+  }
+
+  /**
+   * Load the index from a previously saved blob. Returns true if successful.
+   * Only applicable on mobile (WASM). Returns false on desktop.
+   */
+  async loadIndexBlob(): Promise<boolean> {
+    if (!Platform.isMobileApp) return false
+    try {
+      const adapter = this.plugin.app.vault.adapter
+      const blobPath = this.getBlobPath()
+      if (!(await adapter.exists(blobPath))) return false
+
+      const buffer = await adapter.readBinary(blobPath)
+      const blob = new Uint8Array(buffer)
+      this.nativeIndex = WasmSearchIndex.loadFromBlob(blob, {
+        ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
+      }) as unknown as NativeSearchIndex
+      console.log('Ferrisearch - Loaded index from blob')
+      return true
+    } catch (e) {
+      console.warn('Ferrisearch - Failed to load index blob, will reindex', e)
+      // Re-create fresh WASM index
+      this.nativeIndex = new WasmSearchIndex({
+        ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
+      }) as unknown as NativeSearchIndex
+      return false
+    }
+  }
+
   private getIndexPath(): string {
     const configDir = this.plugin.app.vault.configDir
     return `${this.plugin.app.vault.adapter.getBasePath()}/${configDir}/plugins/ferrisearch/tantivy-index`
@@ -386,6 +433,10 @@ export class SearchEngine {
 
   private getSidecarPath(): string {
     return `${this.plugin.app.vault.configDir}/plugins/ferrisearch/index-manifest.json`
+  }
+
+  private getBlobPath(): string {
+    return `${this.plugin.app.vault.configDir}/plugins/ferrisearch/index-blob.bin`
   }
 
   private loadNativeModule(): NativeModule {

@@ -51,13 +51,13 @@ pub fn build_schema() -> (Schema, FieldHandles) {
     let short = TextOptions::default().set_indexing_options(indexing_no_norms);
 
     let basename = b.add_text_field("basename", short_stored.clone());
-    let display_title = b.add_text_field("display_title", short_stored);
+    let display_title = b.add_text_field("display_title", short_stored.clone());
     let directory = b.add_text_field("directory", short.clone());
-    let aliases = b.add_text_field("aliases", short.clone());
+    let aliases = b.add_text_field("aliases", short_stored.clone());
     let content = b.add_text_field("content", content_opts);
-    let headings = b.add_text_field("headings", short.clone());
+    let headings = b.add_text_field("headings", short_stored.clone());
     let tags_text = b.add_text_field("tags_text", short.clone());
-    let unmarked_tags = b.add_text_field("unmarked_tags", short);
+    let unmarked_tags = b.add_text_field("unmarked_tags", short_stored);
     let tags_stored = b.add_json_field("tags_stored", STORED);
     let mtime = b.add_u64_field("mtime", STORED | FAST);
 

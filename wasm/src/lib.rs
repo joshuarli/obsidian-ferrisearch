@@ -90,6 +90,23 @@ impl SearchIndex {
         to_js(&results)
     }
 
+    #[wasm_bindgen(js_name = "serializeIndex")]
+    pub fn serialize_index(&self) -> Result<Vec<u8>, JsError> {
+        self.inner()?.serialize_to_blob().map_err(map_err)
+    }
+
+    #[wasm_bindgen(js_name = "loadFromBlob")]
+    pub fn load_from_blob(blob: &[u8], config: JsValue) -> Result<SearchIndex, JsError> {
+        let cfg: types::IndexConfig = if config.is_undefined() || config.is_null() {
+            types::IndexConfig::default()
+        } else {
+            from_js(config)?
+        };
+        let mut inner = IndexManager::load_from_blob(blob, cfg).map_err(map_err)?;
+        inner.reconstruct_docs_buffer().map_err(map_err)?;
+        Ok(Self { inner: Some(inner) })
+    }
+
     pub fn close(&mut self) {
         self.inner = None;
     }

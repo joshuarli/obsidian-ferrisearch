@@ -182,3 +182,83 @@ fn close_and_rejects_after() {
     idx.close();
     assert!(idx.search("hello", JsValue::NULL).is_err());
 }
+
+#[wasm_bindgen_test]
+fn serialize_and_load_blob() {
+    let mut idx = SearchIndex::new(JsValue::NULL).unwrap();
+
+    let docs = serde_json::json!([
+        {
+            "path": "notes/hello.md", "basename": "hello", "displayTitle": "Hello Note",
+            "aliases": "hi howdy", "content": "Hello world, this is about Rust",
+            "headings": "Introduction Summary", "tags": ["#rust", "#code"],
+            "unmarkedTags": ["programming"], "mtime": 1708300000000.0
+        },
+        {
+            "path": "notes/other.md", "basename": "other", "displayTitle": "Other Note",
+            "aliases": "", "content": "Completely different topic here",
+            "headings": "Overview", "tags": ["#misc"],
+            "unmarkedTags": [], "mtime": 1708400000000.0
+        }
+    ]);
+
+    idx.add_documents(js(&docs)).unwrap();
+    idx.commit().unwrap();
+    assert_eq!(idx.document_count().unwrap(), 2.0);
+
+    // Serialize to blob
+    let blob = idx.serialize_index().unwrap();
+    assert!(!blob.is_empty());
+
+    // Load from blob
+    let loaded = SearchIndex::load_from_blob(&blob, JsValue::NULL).unwrap();
+    assert_eq!(loaded.document_count().unwrap(), 2.0);
+    assert!(loaded.has_document("notes/hello.md").unwrap());
+    assert!(loaded.has_document("notes/other.md").unwrap());
+
+    // Search works on loaded index
+    let results = loaded.search("hello", JsValue::NULL).unwrap();
+    let results: Vec<serde_json::Value> = serde_wasm_bindgen::from_value(results).unwrap();
+    assert!(!results.is_empty());
+    assert_eq!(results[0]["path"], "notes/hello.md");
+}
+
+#[wasm_bindgen_test]
+fn serialize_empty_index() {
+    let mut idx = SearchIndex::new(JsValue::NULL).unwrap();
+    idx.commit().unwrap();
+
+    let blob = idx.serialize_index().unwrap();
+    let loaded = SearchIndex::load_from_blob(&blob, JsValue::NULL).unwrap();
+    assert_eq!(loaded.document_count().unwrap(), 0.0);
+}
+
+#[wasm_bindgen_test]
+fn load_blob_then_add_more_docs() {
+    let mut idx = SearchIndex::new(JsValue::NULL).unwrap();
+
+    let docs = serde_json::json!([{
+        "path": "a.md", "basename": "a", "displayTitle": "Alpha",
+        "aliases": "", "content": "alpha bravo", "headings": "",
+        "tags": [], "unmarkedTags": [], "mtime": 1000.0
+    }]);
+    idx.add_documents(js(&docs)).unwrap();
+    idx.commit().unwrap();
+
+    // Serialize and load
+    let blob = idx.serialize_index().unwrap();
+    let mut loaded = SearchIndex::load_from_blob(&blob, JsValue::NULL).unwrap();
+    assert_eq!(loaded.document_count().unwrap(), 1.0);
+
+    // Add more documents after loading from blob
+    let more_docs = serde_json::json!([{
+        "path": "b.md", "basename": "b", "displayTitle": "Beta",
+        "aliases": "", "content": "charlie delta", "headings": "",
+        "tags": [], "unmarkedTags": [], "mtime": 2000.0
+    }]);
+    loaded.add_documents(js(&more_docs)).unwrap();
+    loaded.commit().unwrap();
+    assert_eq!(loaded.document_count().unwrap(), 2.0);
+    assert!(loaded.has_document("a.md").unwrap());
+    assert!(loaded.has_document("b.md").unwrap());
+}

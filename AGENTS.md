@@ -13,7 +13,7 @@ TypeScript  <-->  │  NAPI-RS   │   │  WASM      │  <-->  Rust/Tantivy (s
 
 **Desktop:** The plugin loads a platform-specific `.node` binary (`ferrisearch.{platform}-{arch}.node`) at runtime via `require()`. Uses mmap-backed on-disk Tantivy index.
 
-**Mobile:** The plugin loads `ferrisearch_wasm_bg.wasm` via Obsidian's file adapter and initializes it with `wasm-bindgen`'s `initSync()`. Uses an in-memory Tantivy index (no filesystem access). Full index rebuild on each plugin load (~2-5s for ~3000 notes).
+**Mobile:** The plugin loads `ferrisearch_wasm_bg.wasm` via Obsidian's file adapter and initializes it with `wasm-bindgen`'s `initSync()`. Uses an in-memory Tantivy index (no filesystem access). On startup, loads a cached binary blob (`index-blob.bin`) to restore the index instantly; only changed files are reindexed via the sidecar manifest diff.
 
 Both paths produce a `NativeSearchIndex` interface — the rest of the TypeScript code is platform-agnostic.
 
@@ -97,7 +97,7 @@ Sub-tokens sharing the parent position is critical for phrase queries: `"variabl
 
 ### Schema (`schema.rs`)
 
-4 fields are searched: `display_title`, `directory`, `content`, `headings`. Others are indexed but not searched (basename, aliases, tags_text, unmarked_tags — disabled for performance). All text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization).
+4 fields are searched: `display_title`, `directory`, `content`, `headings`. Others are indexed but not searched (basename, aliases, tags_text, unmarked_tags — disabled for performance). All text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization). `aliases`, `headings`, and `unmarked_tags` are stored (needed for `reconstruct_docs_buffer` after blob load on mobile).
 
 ### Search (`search.rs`)
 
@@ -117,7 +117,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 **Desktop (filesystem feature):** On `commit()`, force-merges to a single segment (best-effort — background merge policy may already have consolidated). Single-segment means a single FST traversal per query. `warm_up()` pre-loads FST pages into the OS page cache.
 
-**WASM (no filesystem feature):** `new_in_memory()` creates a `RamDirectory`-backed index. `commit()` uses `SingleSegmentIndexWriter` to rebuild the entire index from the document buffer. `IndexSettings::docstore_compress_dedicated_thread` is set to `false` (WASM has no threads). All JS-facing numeric types are `f64` for `serde_wasm_bindgen` compatibility (JS numbers are always f64).
+**WASM (no filesystem feature):** `new_in_memory()` creates a `RamDirectory`-backed index. `commit()` uses `SingleSegmentIndexWriter` to rebuild the entire index from the document buffer. `IndexSettings::docstore_compress_dedicated_thread` is set to `false` (WASM has no threads). All JS-facing numeric types are `f64` for `serde_wasm_bindgen` compatibility (JS numbers are always f64). `serialize_to_blob()` / `load_from_blob()` persist the in-memory index as a binary blob (9-byte header + raw file map) for instant mobile startup. After loading from blob, `reconstruct_docs_buffer()` iterates stored documents to rebuild the buffer needed for future `commit()` calls.
 
 **Feature flag:** `ferrisearch-core` has a `filesystem` feature (default: enabled). It gates `std::path`, mmap-backed constructors, and `IndexError::Io`/`DirectoryOpen` variants. The WASM crate uses `default-features = false` to exclude it.
 
@@ -128,7 +128,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - **Observable** is a minimal reactive primitive. `showExcerpt` is the only instance — it lets result items reactively show/hide excerpts. Cleanup uses a `WeakMap<HTMLElement, unsubscribe>`.
 - **Lazy loading** via `IntersectionObserver` in vault results. Wrappers get a placeholder height; actual result DOM is created when scrolled into view.
 - **Deferred reindexing.** File modifications are flagged in `NotesIndexer`; actual reindex happens when the search modal opens (`refreshIndex()`), or on window blur.
-- **Differential indexing.** A sidecar manifest (`index-manifest.json`) tracks `{path, mtime}` for each indexed document. On startup, only changed/new/removed files are reprocessed. On mobile, the sidecar is skipped (the in-memory index is always empty on startup, and the sidecar synced via iCloud would incorrectly report all files as indexed).
+- **Differential indexing.** A sidecar manifest (`index-manifest.json`) tracks `{path, mtime}` for each indexed document. On startup, only changed/new/removed files are reprocessed. On mobile, the sidecar is loaded after restoring the index from the cached blob, enabling the same differential updates as desktop.
 - **Only `.md` files are indexed** (`isFileIndexable` checks `path.endsWith('.md')`).
 - **Minimum query length.** Both modals skip search and show a message when the query is shorter than `minQueryLength` (default: 3). Configurable in settings.
 
@@ -145,7 +145,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 | `bun run build:all` | Rust + JS build |
 | `just build-wasm` | Build WASM module via wasm-pack |
 | `just build-all` | Rust + WASM + JS build |
-| `cargo test` | Run Rust tests (93 tests) |
+| `cargo test` | Run Rust tests (95 tests) |
 | `just test-wasm` | Run WASM integration tests via wasm-pack (Node.js) |
 | `cargo clippy --all-targets --all-features -- -D warnings` | Rust linter |
 | `cargo bench --bench query` | Query latency benchmarks → `bench/results.md` |
@@ -164,7 +164,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 ## Data Flow
 
-1. **Startup:** `populateIndex()` loads sidecar manifest (desktop only; skipped on mobile), diffs against vault files, adds/removes changed documents in the native Tantivy index, saves updated sidecar + embeds cache.
+1. **Startup:** `populateIndex()` loads the cached index blob on mobile (instant restore) or sidecar manifest on desktop, diffs against vault files, adds/removes changed documents in the native Tantivy index, saves updated sidecar (+ blob on mobile).
 2. **File events:** Create/delete trigger immediate index updates. Modify flags for deferred reindex. Rename does remove + add.
 3. **Search:** User types in modal → min query length check → debounced (300ms) → `Query` parser → `searchEngine.search()` calls native Tantivy → post-filters (extension, path, exact terms, exclusions, downranked folders, tag boost) → `getSuggestions()` fetches full documents, injects embeds, extracts match offsets → rendered as lazy-loaded DOM.
 4. **History:** When a vault search result is opened, the query is saved to `search-history.txt`. When the modal opens with an empty query, the last 10 history entries are displayed.

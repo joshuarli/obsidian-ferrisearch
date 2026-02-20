@@ -30,7 +30,6 @@ pub struct IndexManager {
 pub enum IndexError {
     #[error("Tantivy error: {0}")]
     Tantivy(#[from] tantivy::TantivyError),
-    #[cfg(feature = "filesystem")]
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[cfg(feature = "filesystem")]
@@ -38,6 +37,8 @@ pub enum IndexError {
     DirectoryOpen(#[from] tantivy::directory::error::OpenDirectoryError),
     #[error("Directory read error: {0}")]
     DirectoryRead(#[from] tantivy::directory::error::OpenReadError),
+    #[error("Blob error: {0}")]
+    Blob(String),
 }
 
 impl IndexManager {
@@ -258,6 +259,217 @@ impl IndexManager {
         Ok(())
     }
 
+    // ── Blob persistence (used by WASM for mobile index caching) ─────────
+
+    const BLOB_MAGIC: &'static [u8; 4] = b"FERI";
+    const BLOB_VERSION: u32 = 1;
+
+    /// Serialize the current index to a binary blob.
+    pub fn serialize_to_blob(&self) -> Result<Vec<u8>, IndexError> {
+        use std::path::Path;
+        use tantivy::directory::Directory;
+
+        let dir = self.index.directory();
+
+        // Collect all files: meta.json + segment files
+        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+
+        // meta.json
+        let meta_bytes = dir.atomic_read(Path::new("meta.json"))?;
+        files.push(("meta.json".into(), meta_bytes));
+
+        // Segment files — use atomic_read to get raw bytes (including footer),
+        // since ManagedDirectory::open_read strips the footer.
+        // Skip .del files that may not exist after merges.
+        let metas = self.index.searchable_segment_metas()?;
+        for meta in &metas {
+            for file_path in meta.list_files() {
+                match dir.atomic_read(&file_path) {
+                    Ok(data) => {
+                        files.push((file_path.to_string_lossy().into_owned(), data));
+                    }
+                    Err(tantivy::directory::error::OpenReadError::FileDoesNotExist(_)) => continue,
+                    Err(e) => return Err(e.into()),
+                }
+            }
+        }
+
+        // Build blob: header + file map
+        let mut blob = Vec::new();
+        blob.extend_from_slice(Self::BLOB_MAGIC);
+        blob.extend_from_slice(&Self::BLOB_VERSION.to_le_bytes());
+        blob.push(self.ignore_diacritics as u8);
+
+        // File map
+        blob.extend_from_slice(&(files.len() as u32).to_le_bytes());
+        for (name, data) in &files {
+            let name_bytes = name.as_bytes();
+            blob.extend_from_slice(&(name_bytes.len() as u32).to_le_bytes());
+            blob.extend_from_slice(name_bytes);
+            blob.extend_from_slice(&(data.len() as u64).to_le_bytes());
+            blob.extend_from_slice(data);
+        }
+
+        Ok(blob)
+    }
+
+    /// Load an index from a previously serialized blob.
+    pub fn load_from_blob(blob: &[u8], config: IndexConfig) -> Result<Self, IndexError> {
+        use std::path::Path;
+        use tantivy::directory::{Directory, RamDirectory};
+
+        // Parse header
+        if blob.len() < 9 {
+            return Err(IndexError::Blob("blob too short".into()));
+        }
+        if &blob[0..4] != Self::BLOB_MAGIC {
+            return Err(IndexError::Blob("invalid magic".into()));
+        }
+        let version = u32::from_le_bytes(blob[4..8].try_into().unwrap());
+        if version != Self::BLOB_VERSION {
+            return Err(IndexError::Blob(format!("unsupported version: {version}")));
+        }
+        let stored_diacritics = blob[8] != 0;
+        if stored_diacritics != config.ignore_diacritics {
+            return Err(IndexError::Blob("diacritics config mismatch".into()));
+        }
+
+        // Parse file map directly after header
+        let mut cursor = 9usize;
+        let read_u32 = |c: &mut usize| -> Result<u32, IndexError> {
+            if *c + 4 > blob.len() {
+                return Err(IndexError::Blob("unexpected end of blob".into()));
+            }
+            let val = u32::from_le_bytes(blob[*c..*c + 4].try_into().unwrap());
+            *c += 4;
+            Ok(val)
+        };
+        let read_u64 = |c: &mut usize| -> Result<u64, IndexError> {
+            if *c + 8 > blob.len() {
+                return Err(IndexError::Blob("unexpected end of blob".into()));
+            }
+            let val = u64::from_le_bytes(blob[*c..*c + 8].try_into().unwrap());
+            *c += 8;
+            Ok(val)
+        };
+
+        let file_count = read_u32(&mut cursor)? as usize;
+        let dir = RamDirectory::create();
+
+        for _ in 0..file_count {
+            let name_len = read_u32(&mut cursor)? as usize;
+            if cursor + name_len > blob.len() {
+                return Err(IndexError::Blob("unexpected end of blob".into()));
+            }
+            let name = std::str::from_utf8(&blob[cursor..cursor + name_len])
+                .map_err(|e| IndexError::Blob(format!("invalid filename: {e}")))?;
+            cursor += name_len;
+
+            let data_len = read_u64(&mut cursor)? as usize;
+            if cursor + data_len > blob.len() {
+                return Err(IndexError::Blob("unexpected end of blob".into()));
+            }
+            let data = &blob[cursor..cursor + data_len];
+            cursor += data_len;
+
+            dir.atomic_write(Path::new(name), data)?;
+        }
+
+        let index = Index::open(dir)?;
+        Self::register_tokenizer(&index, &config);
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()?;
+        let (_, fields) = build_schema();
+
+        Ok(Self {
+            #[cfg(feature = "filesystem")]
+            writer: index.writer_with_num_threads(1, 15_000_000)?,
+            index,
+            reader,
+            fields,
+            ignore_diacritics: config.ignore_diacritics,
+            #[cfg(not(feature = "filesystem"))]
+            docs_buffer: Vec::new(),
+        })
+    }
+
+    /// Reconstruct docs_buffer by reading all stored documents from the index.
+    /// Must be called after load_from_blob() before any add/remove/commit operations.
+    /// On desktop (filesystem feature), this is a no-op.
+    pub fn reconstruct_docs_buffer(&mut self) -> Result<(), IndexError> {
+        #[cfg(feature = "filesystem")]
+        {
+            Ok(())
+        }
+        #[cfg(not(feature = "filesystem"))]
+        {
+            self.reconstruct_docs_buffer_impl()
+        }
+    }
+
+    #[cfg(not(feature = "filesystem"))]
+    fn reconstruct_docs_buffer_impl(&mut self) -> Result<(), IndexError> {
+        use tantivy::schema::Value;
+
+        let searcher = self.reader.searcher();
+        let f = &self.fields;
+        let mut buffer = Vec::new();
+
+        for segment_reader in searcher.segment_readers() {
+            let store_reader = segment_reader.get_store_reader(1)?;
+            for doc_id in 0..segment_reader.num_docs() {
+                let doc: tantivy::TantivyDocument = store_reader.get(doc_id)?;
+
+                let text = |field| -> String {
+                    doc.get_first(field)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string()
+                };
+
+                let tags: Vec<String> = doc
+                    .get_first(f.tags_stored)
+                    .and_then(|v| v.as_object())
+                    .and_then(|obj| obj.into_iter().find(|(k, _)| *k == "tags"))
+                    .and_then(|(_, v)| v.as_array())
+                    .map(|arr| {
+                        arr.into_iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // unmarked_tags is stored as space-separated text
+                let unmarked_tags_text = text(f.unmarked_tags);
+                let unmarked_tags: Vec<String> = if unmarked_tags_text.is_empty() {
+                    vec![]
+                } else {
+                    unmarked_tags_text
+                        .split_whitespace()
+                        .map(String::from)
+                        .collect()
+                };
+
+                buffer.push(DocumentInput {
+                    path: text(f.path),
+                    basename: text(f.basename),
+                    display_title: text(f.display_title),
+                    aliases: text(f.aliases),
+                    content: text(f.content),
+                    headings: text(f.headings),
+                    tags,
+                    unmarked_tags,
+                    mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0) as f64,
+                });
+            }
+        }
+
+        self.docs_buffer = buffer;
+        Ok(())
+    }
+
     /// Pre-warm term dictionaries by loading FSTs into the OS page cache.
     /// Call once after initial indexing and when opening the search modal.
     pub fn warm_up(&self) -> Result<(), IndexError> {
@@ -472,6 +684,35 @@ mod tests {
         mgr.add_document(&make_doc("a.md", "hello")).unwrap();
         mgr.commit().unwrap();
         assert_eq!(mgr.document_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn serialize_and_load_blob() {
+        let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
+        mgr.add_documents(&[
+            make_doc("a.md", "alpha bravo"),
+            make_doc("b.md", "charlie delta"),
+        ])
+        .unwrap();
+        mgr.commit().unwrap();
+
+        let blob = mgr.serialize_to_blob().unwrap();
+        assert!(!blob.is_empty());
+
+        let loaded = IndexManager::load_from_blob(&blob, IndexConfig::default()).unwrap();
+        assert_eq!(loaded.document_count().unwrap(), 2);
+        assert!(loaded.has_document("a.md").unwrap());
+        assert!(loaded.has_document("b.md").unwrap());
+    }
+
+    #[test]
+    fn serialize_empty_index() {
+        let mut mgr = IndexManager::new_in_memory(IndexConfig::default()).unwrap();
+        mgr.commit().unwrap();
+
+        let blob = mgr.serialize_to_blob().unwrap();
+        let loaded = IndexManager::load_from_blob(&blob, IndexConfig::default()).unwrap();
+        assert_eq!(loaded.document_count().unwrap(), 0);
     }
 
     #[cfg(feature = "filesystem")]
