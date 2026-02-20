@@ -78,9 +78,6 @@ fn parse_query(input: &str) -> ParsedQuery {
     ParsedQuery { terms, phrases }
 }
 
-/// If exact+prefix returns fewer than this many results, retry with fuzzy.
-const FUZZY_RESULT_THRESHOLD: usize = 5;
-
 impl IndexManager {
     /// Search the index with the given query string and options.
     /// Supports quoted phrases: `"quick brown"` requires adjacent terms.
@@ -125,8 +122,9 @@ impl IndexManager {
         let query = self.build_search_query(&parsed, options, 0.0);
         let mut results = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
 
-        // Phase 2: if too few results and fuzzy is enabled, retry with fuzzy on content
-        if results.len() < FUZZY_RESULT_THRESHOLD && fuzziness > 0.0 && !parsed.terms.is_empty() {
+        // Phase 2: if there's room for more results and fuzzy is enabled, retry with fuzzy
+        let fuzzy_threshold = (options.limit as usize).saturating_sub(5);
+        if results.len() < fuzzy_threshold && fuzziness > 0.0 && !parsed.terms.is_empty() {
             let query = self.build_search_query(&parsed, options, fuzziness);
             results = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
         }
