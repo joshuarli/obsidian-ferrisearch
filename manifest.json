@@ -2,8 +2,8 @@
   "id": "ferrisearch",
   "name": "Ferrisearch",
   "version": "0.1.0",
-  "minAppVersion": "1.7.2",
-  "description": "faster simpler omnisearch",
-  "author": "Josh",
+  "minAppVersion": "1.11.7",
+  "description": "warp speed fuzzy text-only search",
+  "author": "joshuarli",
   "isDesktopOnly": false
 }
