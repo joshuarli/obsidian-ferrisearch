@@ -242,7 +242,7 @@ export default class FerrisearchPlugin extends Plugin {
 
     console.timeEnd('Ferrisearch - Indexing total time')
 
-    if (diff.toAdd.length >= 1000) {
+    if (diff.toAdd.length > 0) {
       new Notice(`Ferrisearch: Your files have been indexed.`)
     }
     indexingStep.set(IndexingStepType.Done)
