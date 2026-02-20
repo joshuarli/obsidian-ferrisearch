@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ["*"]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - run: bun install --frozen-lockfile
+
+      # Lint
+      - run: bunx biome check .
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # Test
+      - run: cargo test --all
+      - run: bun test
+      - run: wasm-pack test --node wasm
+
+  # --- Release (only on version tags) ---
+
+  build-native:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [ci]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            node-file: ferrisearch.darwin-arm64.node
+            lib-path: target/aarch64-apple-darwin/release/libferrisearch_napi.dylib
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            node-file: ferrisearch.darwin-x64.node
+            lib-path: target/x86_64-apple-darwin/release/libferrisearch_napi.dylib
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            node-file: ferrisearch.linux-x64.node
+            lib-path: target/x86_64-unknown-linux-gnu/release/libferrisearch_napi.so
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            node-file: ferrisearch.linux-arm64.node
+            lib-path: target/aarch64-unknown-linux-gnu/release/libferrisearch_napi.so
+            cross-linker: aarch64-linux-gnu-gcc
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            node-file: ferrisearch.win32-x64.node
+            lib-path: target/x86_64-pc-windows-msvc/release/ferrisearch_napi.dll
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            node-file: ferrisearch.win32-arm64.node
+            lib-path: target/aarch64-pc-windows-msvc/release/ferrisearch_napi.dll
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install cross-compilation toolchain
+        if: matrix.cross-linker
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build native binary
+        shell: bash
+        run: cargo build --release -p ferrisearch-napi --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross-linker || '' }}
+      - name: Rename native binary to .node
+        shell: bash
+        run: cp "${{ matrix.lib-path }}" "${{ matrix.node-file }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.node-file }}
+          path: ${{ matrix.node-file }}
+
+  build-plugin:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [ci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - run: bun install --frozen-lockfile
+      - run: cd wasm && wasm-pack build --target web --release
+      - run: bun run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-dist
+          path: |
+            dist/main.js
+            dist/manifest.json
+            dist/styles.css
+            dist/ferrisearch_wasm_bg.wasm
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-native, build-plugin]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect release files
+        run: |
+          mkdir release
+          cp artifacts/plugin-dist/dist/* release/
+          for dir in artifacts/ferrisearch.*.node; do
+            cp "$dir"/*.node release/
+          done
+          ls -lh release/
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --draft release/*
