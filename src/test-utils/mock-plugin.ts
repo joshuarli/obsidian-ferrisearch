@@ -1,5 +1,5 @@
 import { mock } from 'bun:test'
-import type FerrisearchPlugin from '../../main'
+import type FerrisearchPlugin from '../main'
 
 export function createMockPlugin(overrides?: {
   settings?: Record<string, unknown>

@@ -1,4 +1,4 @@
-import type { ResultNote } from '../../globals'
+import type { ResultNote } from '../globals'
 
 export function createMockResultNote(overrides: Partial<ResultNote> = {}): ResultNote {
   return {
