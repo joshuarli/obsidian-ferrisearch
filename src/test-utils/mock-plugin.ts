@@ -10,7 +10,6 @@ export function createMockPlugin(overrides?: {
     recencyBoost: '0',
     downrankedFoldersFilters: [],
     ignoreDiacritics: true,
-    splitCamelCase: false,
     showExcerpt: true,
     renderLineReturnInExcerpts: true,
     highlight: true,
@@ -20,7 +19,6 @@ export function createMockPlugin(overrides?: {
     weightDirectory: 7,
     weightHeadings: 5,
     weightUnmarkedTags: 2,
-    welcomeMessage: '',
     verboseLogging: false,
     ...overrides?.settings,
   }

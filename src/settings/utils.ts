@@ -41,10 +41,7 @@ export interface FerrisearchSettings extends WeightingSettings {
   showExcerpt: boolean
   /** Render line returns with <br> in excerpts */
   renderLineReturnInExcerpts: boolean
-  /** Key for the welcome message when Obsidian is updated */
-  welcomeMessage: string
   highlight: boolean
-  splitCamelCase: boolean
   verboseLogging: boolean
   fuzziness: '0' | '1' | '2'
   /** Minimum number of characters before a search is triggered */

@@ -5,14 +5,8 @@ import { Query } from '../search/query'
 import { openNote } from '../tools/notes'
 import { getCtrlKeyLabel, loopIndex } from '../tools/utils'
 import { createInstructions, createResultsContainer, createSearchInput } from './modal-helpers'
-import { FerrisearchVaultModal } from './modals'
+import { FerrisearchVaultModal, type ModalHandle } from './modals'
 import { createInFileResultItem, updateSelection } from './result-items'
-
-export interface ModalHandle {
-  on(action: string, handler: (...args: unknown[]) => void): void
-  off(): void
-  close(): void
-}
 
 interface InFileModalProps {
   plugin: FerrisearchPlugin

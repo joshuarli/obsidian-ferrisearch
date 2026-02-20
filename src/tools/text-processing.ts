@@ -1,7 +1,6 @@
 import { Notice } from 'obsidian'
 import { excerptAfter, excerptBefore, type SearchMatch } from '../globals'
 import type FerrisearchPlugin from '../main'
-import type { Query } from '../search/query'
 import { escapeRegExp, removeDiacritics, warnVerbose } from './utils'
 
 export class TextProcessor {
@@ -28,7 +27,7 @@ export class TextProcessor {
     return new RegExp(`(${joined})`, 'gui')
   }
 
-  public getMatches(text: string, words: string[], query?: Query): SearchMatch[] {
+  public getMatches(text: string, words: string[]): SearchMatch[] {
     words = words.map(escapeHTML)
     const reg = this.stringsToRegex(words)
     const originalText = text
@@ -49,13 +48,6 @@ export class TextProcessor {
         .trim()
       if (originalMatch && match.index >= 0) {
         matches.push({ match: originalMatch, offset: match.index })
-      }
-    }
-
-    if (query && (query.query.text.length > 1 || query.getExactTerms().length > 0)) {
-      const best = text.indexOf(query.getBestStringForExcerpt())
-      if (best > -1 && matches.find(m => m.offset === best)) {
-        matches.unshift({ offset: best, match: query.getBestStringForExcerpt() })
       }
     }
     return matches

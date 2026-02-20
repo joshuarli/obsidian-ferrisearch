@@ -1,10 +1,4 @@
-import {
-  type CachedMetadata,
-  getAllTags,
-  Notice,
-  Platform,
-  parseFrontMatterAliases,
-} from 'obsidian'
+import { type CachedMetadata, getAllTags, Platform, parseFrontMatterAliases } from 'obsidian'
 
 export function pathWithoutFilename(path: string): string {
   const i = path.lastIndexOf('/')
@@ -88,20 +82,3 @@ export function enableVerboseLogging(enable: boolean): void {
 export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
-
-export const countError = (() => {
-  let counter = 0
-  let alreadyWarned = false
-  setTimeout(() => {
-    if (counter > 0) --counter
-  }, 1000)
-  return (immediate = false) => {
-    if ((++counter >= 5 || immediate) && !alreadyWarned) {
-      alreadyWarned = true
-      new Notice(
-        'Ferrisearch - There might be an issue with your index. Try clearing it in settings and restarting Obsidian.',
-        5000,
-      )
-    }
-  }
-})()

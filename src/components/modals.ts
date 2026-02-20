@@ -6,6 +6,12 @@ import { renderVaultModal } from './vault-modal'
 
 export type ActionHandler = (...args: unknown[]) => void
 
+export interface ModalHandle {
+  on(action: string, handler: (...args: unknown[]) => void): void
+  off(): void
+  close(): void
+}
+
 abstract class FerrisearchModal extends Modal {
   private handlers = new Map<string, ActionHandler>()
 

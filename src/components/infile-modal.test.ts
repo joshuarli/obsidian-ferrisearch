@@ -2,8 +2,8 @@ import { describe, expect, it, mock } from 'bun:test'
 import { Action } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
-import type { ModalHandle } from './infile-modal'
 import { renderInFileModal } from './infile-modal'
+import type { ModalHandle } from './modals'
 
 // Flush microtasks and timers
 async function flush(ms = 400) {

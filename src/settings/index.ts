@@ -75,8 +75,6 @@ export function getDefaultSettings(): FerrisearchSettings {
     recencyBoost: RecencyCutoff.Disabled,
     downrankedFoldersFilters: [] as string[],
     ignoreDiacritics: true,
-    splitCamelCase: false,
-
     showExcerpt: true,
     renderLineReturnInExcerpts: true,
     highlight: true,
@@ -89,7 +87,6 @@ export function getDefaultSettings(): FerrisearchSettings {
     weightHeadings: 5,
     weightUnmarkedTags: 2,
 
-    welcomeMessage: '',
     verboseLogging: false,
   }
 }

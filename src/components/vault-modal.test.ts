@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { Action, IndexingStepType, indexingStep } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
-import type { ModalHandle } from './vault-modal'
+import type { ModalHandle } from './modals'
 import { renderVaultModal } from './vault-modal'
 
 // Flush microtasks and timers

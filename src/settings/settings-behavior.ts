@@ -1,7 +1,7 @@
 import { Setting } from 'obsidian'
 import type FerrisearchPlugin from '../main'
 import type { FerrisearchSettings } from './utils'
-import { htmlDescription, needsARestart, saveSettings } from './utils'
+import { saveSettings } from './utils'
 
 export function injectSettingsBehavior(
   plugin: FerrisearchPlugin,
@@ -41,20 +41,6 @@ export function injectSettingsBehavior(
           await saveSettings(plugin)
         })
     })
-
-  // Split CamelCaseWords
-  new Setting(containerEl)
-    .setName('Split CamelCaseWords')
-    .setDesc(
-      htmlDescription(`Enable this if you want to be able to search for CamelCaseWords as separate words.<br/>
-        ${needsARestart}`),
-    )
-    .addToggle(toggle =>
-      toggle.setValue(settings.splitCamelCase).onChange(async v => {
-        settings.splitCamelCase = v
-        await saveSettings(plugin)
-      }),
-    )
 
   // Minimum query length
   new Setting(containerEl)

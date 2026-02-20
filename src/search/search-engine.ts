@@ -324,7 +324,6 @@ export class SearchEngine {
     }
 
     results.sort((a, b) => b.score - a.score)
-    results = results.slice(0, 50)
 
     logVerbose('Filtered results:', results)
 
