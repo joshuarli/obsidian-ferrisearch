@@ -184,7 +184,7 @@ export default class FerrisearchPlugin extends Plugin {
       removeEventListener('blur', this.refreshIndexCallback)
     }
 
-    // Save sidecar + blob (mobile) and close the native index
+    // Save sidecar + blob (WASM) and close the index
     await this.searchEngine.saveSidecar()
     await this.searchEngine.saveIndexBlob()
     this.searchEngine.close()
@@ -198,12 +198,12 @@ export default class FerrisearchPlugin extends Plugin {
     const files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
 
-    // Try to load cached index (blob on mobile, sidecar on desktop)
+    // Try to load cached index (blob for WASM users, sidecar-only for native)
     console.time('Ferrisearch - Loading index from cache')
     indexingStep.set(IndexingStepType.LoadingCache)
     let hasCache: boolean
-    if (Platform.isMobileApp) {
-      // Mobile: try loading the serialized index blob + sidecar
+    if (!searchEngine.isNative) {
+      // WASM: try loading the serialized index blob + sidecar
       hasCache = await searchEngine.loadIndexBlob()
       if (hasCache) {
         await searchEngine.loadSidecar()

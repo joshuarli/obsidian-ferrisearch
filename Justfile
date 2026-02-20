@@ -26,7 +26,6 @@ build-wasm:
 
 build-all: build-rust build-wasm build
 
-# Build and install to Obsidian vault
 install:
     bash scripts/build-and-install.sh
 

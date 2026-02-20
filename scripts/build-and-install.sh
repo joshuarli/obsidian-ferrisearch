@@ -29,21 +29,25 @@ esac
 
 NODE_FILE="ferrisearch.${PLATFORM}-${ARCH}.node"
 
-# ── Step 1: Build native Rust module ─────────────────────────────────────────
-echo "==> Building native Rust module (release)..."
-cd "$PROJECT_DIR"
-cargo build --release -p ferrisearch-napi
+# ── Step 1: Build native Rust module (darwin-arm64 only) ─────────────────────
+if [ "$PLATFORM" = "darwin" ] && [ "$ARCH" = "arm64" ]; then
+  echo "==> Building native Rust module (release)..."
+  cd "$PROJECT_DIR"
+  cargo build --release -p ferrisearch-napi
 
-# The cdylib is named libferrisearch_napi.dylib/.so
-DYLIB_PATH="$PROJECT_DIR/target/release/libferrisearch_napi.${DYLIB_EXT}"
-if [ ! -f "$DYLIB_PATH" ]; then
-  echo "ERROR: Expected dylib not found at $DYLIB_PATH"
-  exit 1
+  # The cdylib is named libferrisearch_napi.dylib/.so
+  DYLIB_PATH="$PROJECT_DIR/target/release/libferrisearch_napi.${DYLIB_EXT}"
+  if [ ! -f "$DYLIB_PATH" ]; then
+    echo "ERROR: Expected dylib not found at $DYLIB_PATH"
+    exit 1
+  fi
+
+  # Copy the dylib as a .node file (this is what napi-rs CLI does)
+  cp "$DYLIB_PATH" "$PROJECT_DIR/$NODE_FILE"
+  echo "    Built $NODE_FILE ($(du -h "$PROJECT_DIR/$NODE_FILE" | cut -f1 | xargs))"
+else
+  echo "==> Skipping native build (not darwin-arm64, will use WASM)"
 fi
-
-# Copy the dylib as a .node file (this is what napi-rs CLI does)
-cp "$DYLIB_PATH" "$PROJECT_DIR/$NODE_FILE"
-echo "    Built $NODE_FILE ($(du -h "$PROJECT_DIR/$NODE_FILE" | cut -f1 | xargs))"
 
 # ── Step 2: Build WASM module ────────────────────────────────────────────────
 echo "==> Building WASM module (release)..."
@@ -65,7 +69,7 @@ for VAULT in "${VAULT_NAMES[@]}"; do
   cp dist/main.js "$PLUGIN_DIR/"
   cp dist/manifest.json "$PLUGIN_DIR/"
   cp dist/styles.css "$PLUGIN_DIR/"
-  cp "$PROJECT_DIR/$NODE_FILE" "$PLUGIN_DIR/"
+  [ -f "$PROJECT_DIR/$NODE_FILE" ] && cp "$PROJECT_DIR/$NODE_FILE" "$PLUGIN_DIR/"
   cp dist/ferrisearch_wasm_bg.wasm "$PLUGIN_DIR/"
   ls -lh "$PLUGIN_DIR"
   echo ""

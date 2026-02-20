@@ -1,5 +1,5 @@
 import { Notice, normalizePath, Platform, TFile } from 'obsidian'
-// WASM glue code — bundled into main.js (~23KB), only used on mobile.
+// WASM glue code — bundled into main.js (~23KB), used on mobile and non-darwin-arm64 desktop.
 // Build requires: just build-wasm (or build-all)
 import {
   SearchIndex as WasmSearchIndex,
@@ -87,16 +87,30 @@ interface NativeSearchResult {
 export class SearchEngine {
   private nativeIndex: NativeSearchIndex | null = null
   private indexedDocuments = new Map<string, number>()
+  private isNativeEngine = false
 
   constructor(protected plugin: FerrisearchPlugin) {}
 
+  private shouldUseNative(): boolean {
+    return !Platform.isMobileApp && process.platform === 'darwin' && process.arch === 'arm64'
+  }
+
+  public get isNative(): boolean {
+    return this.isNativeEngine
+  }
+
   public async initialize(): Promise<void> {
     try {
-      if (Platform.isMobileApp) {
-        await this.initializeWasm()
-      } else {
-        this.initializeNative()
+      if (this.shouldUseNative()) {
+        try {
+          this.initializeNative()
+          this.isNativeEngine = true
+          return
+        } catch (e) {
+          console.warn('Ferrisearch - Native init failed, falling back to WASM', e)
+        }
       }
+      await this.initializeWasm()
     } catch (e) {
       console.error('Ferrisearch - Failed to initialize search engine', e)
       if (Platform.isMobileApp) {
@@ -386,10 +400,10 @@ export class SearchEngine {
 
   /**
    * Serialize the WASM index to a binary blob and save it to disk.
-   * Only applicable on mobile (WASM). No-op on desktop.
+   * Only applicable when using the WASM engine. No-op with native engine.
    */
   async saveIndexBlob(): Promise<void> {
-    if (!Platform.isMobileApp || !this.nativeIndex) return
+    if (this.isNativeEngine || !this.nativeIndex) return
     try {
       const wasmIndex = this.nativeIndex as unknown as WasmSearchIndex
       const blob = wasmIndex.serializeIndex()
@@ -405,10 +419,10 @@ export class SearchEngine {
 
   /**
    * Load the index from a previously saved blob. Returns true if successful.
-   * Only applicable on mobile (WASM). Returns false on desktop.
+   * Only applicable when using the WASM engine. Returns false with native engine.
    */
   async loadIndexBlob(): Promise<boolean> {
-    if (!Platform.isMobileApp) return false
+    if (this.isNativeEngine) return false
     try {
       const adapter = this.plugin.app.vault.adapter
       const blobPath = this.getBlobPath()
