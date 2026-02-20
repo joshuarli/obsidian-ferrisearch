@@ -92,7 +92,7 @@ jobs:
       - name: Collect release files
         run: |
           mkdir release
-          cp artifacts/plugin-dist/dist/* release/
+          cp artifacts/plugin-dist/* release/
           cp artifacts/ferrisearch.darwin-arm64.node/ferrisearch.darwin-arm64.node release/
           ls -lh release/
       - name: Create release
