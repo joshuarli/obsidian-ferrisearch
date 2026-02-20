@@ -1,5 +1,5 @@
 // Integration tests that run the WASM module in a real wasm32 environment via wasm-bindgen-test.
-// Run with: wasm-pack test --node wasm
+// Run with: just test-wasm
 
 use serde::Serialize;
 use wasm_bindgen::JsValue;

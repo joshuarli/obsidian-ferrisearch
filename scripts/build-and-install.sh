@@ -51,9 +51,10 @@ fi
 
 # ── Step 2: Build WASM module ────────────────────────────────────────────────
 echo "==> Building WASM module (release)..."
-cd "$PROJECT_DIR/wasm"
-wasm-pack build --target web --release
-echo "    Built ferrisearch_wasm_bg.wasm ($(du -h pkg/ferrisearch_wasm_bg.wasm | cut -f1 | xargs))"
+cd "$PROJECT_DIR"
+cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown
+wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm
+echo "    Built ferrisearch_wasm_bg.wasm ($(du -h wasm/pkg/ferrisearch_wasm_bg.wasm | cut -f1 | xargs))"
 
 # ── Step 3: Build TypeScript ─────────────────────────────────────────────────
 echo "==> Building TypeScript (production)..."

@@ -1,23 +1,25 @@
-Ferrisearch is an Obsidian plugin that provides fast full-text search using a Rust/Tantivy backend. It replaces Obsidian's built-in search with two modal UIs: vault-wide search and in-file search. Supports both desktop (via NAPI-RS native bindings) and mobile (via WebAssembly).
+Ferrisearch is an Obsidian plugin that provides fast full-text search using a Rust/Tantivy backend. It replaces Obsidian's built-in search with two modal UIs: vault-wide search and in-file search. Uses WASM as the primary engine across all platforms, with a native NAPI-RS binary only on darwin-arm64 for mmap-backed performance.
 
 ## Architecture
 
 ```
-                  ┌─ Desktop ─┐   ┌── Mobile ──┐
-TypeScript  <-->  │  NAPI-RS   │   │  WASM      │  <-->  Rust/Tantivy (search engine)
-                  │  .node     │   │  .wasm     │
-                  └────────────┘   └────────────┘
-                        ↑                ↑
-                  ferrisearch-core (shared Rust crate)
+                  ┌─ darwin-arm64 ─┐   ┌── All other platforms ──┐
+TypeScript  <-->  │  NAPI-RS       │   │  WASM                   │  <-->  Rust/Tantivy
+                  │  .node         │   │  .wasm                  │
+                  └────────────────┘   └─────────────────────────┘
+                        ↑                          ↑
+                        ferrisearch-core (shared Rust crate)
 ```
 
-**Desktop:** The plugin loads a platform-specific `.node` binary (`ferrisearch.{platform}-{arch}.node`) at runtime via `require()`. Uses mmap-backed on-disk Tantivy index.
+**Hybrid engine selection** (`search-engine.ts`): On darwin-arm64 desktop, the plugin tries to load the native `.node` binary first. If that fails (missing binary, version mismatch), it falls back to WASM. All other platforms (other desktop OS/arch combos, mobile) go straight to WASM. The `shouldUseNative()` predicate and `isNative` getter control this.
 
-**Mobile:** The plugin loads `ferrisearch_wasm_bg.wasm` via Obsidian's file adapter and initializes it with `wasm-bindgen`'s `initSync()`. Uses an in-memory Tantivy index (no filesystem access). On startup, loads a cached binary blob (`index-blob.bin`) to restore the index instantly; only changed files are reindexed via the sidecar manifest diff.
+**Native (darwin-arm64 only):** The plugin loads `ferrisearch.darwin-arm64.node` at runtime via `require()`. Uses mmap-backed on-disk Tantivy index.
+
+**WASM (all other platforms + fallback):** The plugin loads `ferrisearch_wasm_bg.wasm` via Obsidian's file adapter and initializes it with `wasm-bindgen`'s `initSync()`. Uses an in-memory Tantivy index (no filesystem access). On startup, loads a cached binary blob (`index-blob.bin`) to restore the index instantly; only changed files are reindexed via the sidecar manifest diff. Blob persistence applies to all WASM users (mobile and desktop alike).
 
 Both paths produce a `NativeSearchIndex` interface — the rest of the TypeScript code is platform-agnostic.
 
-**NAPI version check (desktop only):** Native `.node` binaries are cached in memory by `dlopen()` — rebuilding the binary on disk does NOT update the in-memory copy until Obsidian restarts. To detect stale binaries, the native module exports `napiVersion()` (Rust: `NAPI_VERSION` in `napi/src/lib.rs`) and the TS layer checks it against `EXPECTED_NAPI_VERSION` in `search-engine.ts`. **Bump both constants whenever the NAPI interface changes** (new methods, renamed/added fields, changed signatures). On mismatch, the plugin shows a "please restart Obsidian" notice and skips initialization.
+**NAPI version check (native only):** Native `.node` binaries are cached in memory by `dlopen()` — rebuilding the binary on disk does NOT update the in-memory copy until Obsidian restarts. To detect stale binaries, the native module exports `napiVersion()` (Rust: `NAPI_VERSION` in `napi/src/lib.rs`) and the TS layer checks it against `EXPECTED_NAPI_VERSION` in `search-engine.ts`. **Bump both constants whenever the NAPI interface changes** (new methods, renamed/added fields, changed signatures). On mismatch, the plugin shows a "please restart Obsidian" notice and skips initialization.
 
 ## Directory Structure
 
@@ -56,9 +58,9 @@ napi/
   build.rs, Cargo.toml
 wasm/
   src/lib.rs               # wasm-bindgen bindings (mirrors napi/ interface, in-memory only)
-  tests/node_test.rs       # WASM integration tests (run via wasm-pack test --node wasm)
+  tests/node_test.rs       # WASM integration tests (run via just test-wasm)
   Cargo.toml               # cdylib+rlib, default-features=false (no filesystem/mmap)
-  pkg/                     # wasm-pack build output (gitignored)
+  pkg/                     # wasm-bindgen build output (gitignored)
 crates/
   ferrisearch-core/src/
     lib.rs                 # Re-exports all modules
@@ -112,7 +114,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 **Desktop (filesystem feature):** On `commit()`, force-merges to a single segment (best-effort — background merge policy may already have consolidated). Single-segment means a single FST traversal per query. `warm_up()` pre-loads FST pages into the OS page cache.
 
-**WASM (no filesystem feature):** `new_in_memory()` creates a `RamDirectory`-backed index. `commit()` uses `SingleSegmentIndexWriter` to rebuild the entire index from the document buffer. `IndexSettings::docstore_compress_dedicated_thread` is set to `false` (WASM has no threads). All JS-facing numeric types are `f64` for `serde_wasm_bindgen` compatibility (JS numbers are always f64). `serialize_to_blob()` / `load_from_blob()` persist the in-memory index as a binary blob (9-byte header + raw file map) for instant mobile startup. After loading from blob, `reconstruct_docs_buffer()` iterates stored documents to rebuild the buffer needed for future `commit()` calls.
+**WASM (no filesystem feature):** `new_in_memory()` creates a `RamDirectory`-backed index. `commit()` uses `SingleSegmentIndexWriter` to rebuild the entire index from the document buffer. `IndexSettings::docstore_compress_dedicated_thread` is set to `false` (WASM has no threads). All JS-facing numeric types are `f64` for `serde_wasm_bindgen` compatibility (JS numbers are always f64). `serialize_to_blob()` / `load_from_blob()` persist the in-memory index as a binary blob (9-byte header + raw file map) for instant WASM startup. After loading from blob, `reconstruct_docs_buffer()` iterates stored documents to rebuild the buffer needed for future `commit()` calls.
 
 **Feature flag:** `ferrisearch-core` has a `filesystem` feature (default: enabled). It gates `std::path`, mmap-backed constructors, and `IndexError::Io`/`DirectoryOpen` variants. The WASM crate uses `default-features = false` to exclude it.
 
@@ -123,7 +125,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - **Observable** is a minimal reactive primitive. `showExcerpt` is the only instance — it lets result items reactively show/hide excerpts. Cleanup uses a `WeakMap<HTMLElement, unsubscribe>`.
 - **Lazy loading** via `IntersectionObserver` in vault results. Wrappers get a placeholder height; actual result DOM is created when scrolled into view.
 - **Deferred reindexing.** File modifications are flagged in `NotesIndexer`; actual reindex happens when the search modal opens (`refreshIndex()`), or on window blur.
-- **Differential indexing.** A sidecar manifest (`index-manifest.json`) tracks `{path, mtime}` for each indexed document. On startup, only changed/new/removed files are reprocessed. On mobile, the sidecar is loaded after restoring the index from the cached blob, enabling the same differential updates as desktop.
+- **Differential indexing.** A sidecar manifest (`index-manifest.json`) tracks `{path, mtime}` for each indexed document. On startup, only changed/new/removed files are reprocessed. For WASM users, the sidecar is loaded after restoring the index from the cached blob, enabling the same differential updates as native.
 - **Only `.md` files are indexed** (`isFileIndexable` checks `path.endsWith('.md')`).
 - **Minimum query length.** Both modals skip search and show a message when the query is shorter than `minQueryLength` (default: 3). Configurable in settings.
 
@@ -138,10 +140,10 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 | `bun run format` | Biome auto-fix |
 | `bun run build:rust` | Build native module via napi-rs |
 | `bun run build:all` | Rust + JS build |
-| `just build-wasm` | Build WASM module via wasm-pack |
+| `just build-wasm` | Build WASM module (cargo build + wasm-bindgen) |
 | `just build-all` | Rust + WASM + JS build |
 | `cargo test` | Run Rust tests (95 tests) |
-| `just test-wasm` | Run WASM integration tests via wasm-pack (Node.js) |
+| `just test-wasm` | Run WASM integration tests via wasm-bindgen-test-runner (Node.js) |
 | `cargo clippy --all-targets --all-features -- -D warnings` | Rust linter |
 | `cargo bench --bench query` | Query latency benchmarks → `bench/results.md` |
 | `scripts/build-and-install.sh` | Build + install to Obsidian vaults |
@@ -155,11 +157,11 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - **Runtime:** None (zero runtime dependencies). Query parsing is a custom ~50-line function in `query.ts`.
 - **Dev:** `@biomejs/biome`, `happy-dom`, `@types/bun`, `obsidian`, `typescript`
 - **Native:** Rust crate `ferrisearch-core` using Tantivy 0.25 for full-text search, exposed via `napi-rs` (desktop) and `wasm-bindgen` (mobile). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
-- **WASM:** `wasm-bindgen` 0.2, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `wasm-pack --target web`.
+- **WASM:** `wasm-bindgen` 0.2, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen --target web`. The `wasm-bindgen-cli` version (currently 0.2.108) must match the resolved crate version in `Cargo.lock`.
 
 ## Data Flow
 
-1. **Startup:** `populateIndex()` loads the cached index blob on mobile (instant restore) or sidecar manifest on desktop, diffs against vault files, adds/removes changed documents in the native Tantivy index, saves updated sidecar (+ blob on mobile).
+1. **Startup:** `populateIndex()` loads the cached index blob for WASM users (instant restore) or sidecar manifest for native, diffs against vault files, adds/removes changed documents in the Tantivy index, saves updated sidecar (+ blob for WASM users).
 2. **File events:** Create/delete trigger immediate index updates. Modify flags for deferred reindex. Rename does remove + add.
 3. **Search:** User types in modal → min query length check → `Query` parser → `searchEngine.search()` calls native Tantivy → post-filters (extension, path, exact terms, exclusions, downranked folders, tag boost) → `getSuggestions()` maps results with match offsets → rendered as lazy-loaded DOM.
 4. **History:** When a vault search result is opened, the query is saved to `search-history.txt`. When the modal opens with an empty query, the last 10 history entries are displayed.

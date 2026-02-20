@@ -17,8 +17,8 @@ jobs:
           components: clippy, rustfmt
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli@0.2.108
       - run: bun install --frozen-lockfile
 
       # Lint
@@ -29,7 +29,7 @@ jobs:
       # Test
       - run: cargo test --all
       - run: bun test
-      - run: wasm-pack test --node wasm
+      - run: WASM_BINDGEN_TEST_ONLY_NODE=1 cargo test -p ferrisearch-wasm --target wasm32-unknown-unknown
 
   # --- Release (only on version tags) ---
 
@@ -65,10 +65,11 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli@0.2.108
       - run: bun install --frozen-lockfile
-      - run: cd wasm && wasm-pack build --target web --release
+      - run: cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown
+      - run: wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm
       - run: bun run build
       - uses: actions/upload-artifact@v4
         with:

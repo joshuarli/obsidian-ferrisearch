@@ -22,7 +22,8 @@ build-rust:
     cargo build --release -p ferrisearch-napi
 
 build-wasm:
-    cd wasm && wasm-pack build --target web --release
+    cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown
+    wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm
 
 build-all: build-rust build-wasm build
 
@@ -30,7 +31,7 @@ install:
     bash scripts/build-and-install.sh
 
 test-wasm:
-    wasm-pack test --node wasm
+    WASM_BINDGEN_TEST_ONLY_NODE=1 cargo test -p ferrisearch-wasm --target wasm32-unknown-unknown
 
 test: test-rust test-ts
 
