@@ -7,7 +7,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-ferrisearch-core = { path = "../crates/ferrisearch-core" }
+ferrisearch-core = { path = "../crates/ferrisearch-core", features = ["filesystem"] }
 napi = "3"
 napi-derive = "3"
 

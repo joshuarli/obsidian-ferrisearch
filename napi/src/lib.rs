@@ -60,7 +60,7 @@ impl From<DocumentInput> for types::DocumentInput {
             headings: d.headings,
             tags: d.tags,
             unmarked_tags: d.unmarked_tags,
-            mtime: d.mtime as u64,
+            mtime: d.mtime,
         }
     }
 }
@@ -113,8 +113,8 @@ impl From<FieldBoosts> for types::FieldBoosts {
 pub struct SearchOptions {
     pub field_boosts: Option<FieldBoosts>,
     pub fuzziness: Option<String>,
-    pub prefix_length: Option<u32>,
-    pub limit: Option<u32>,
+    pub prefix_length: Option<f64>,
+    pub limit: Option<f64>,
     pub single_file_path: Option<String>,
     pub recency_boost: Option<String>,
 }
@@ -124,8 +124,8 @@ impl From<SearchOptions> for types::SearchOptions {
         Self {
             field_boosts: o.field_boosts.map(Into::into).unwrap_or_default(),
             fuzziness: o.fuzziness.unwrap_or_else(|| "1".into()),
-            prefix_length: o.prefix_length.unwrap_or(1) as usize,
-            limit: o.limit.unwrap_or(10) as usize,
+            prefix_length: o.prefix_length.unwrap_or(1.0),
+            limit: o.limit.unwrap_or(10.0),
             single_file_path: o.single_file_path,
             recency_boost: o.recency_boost.unwrap_or_else(|| "0".into()),
         }
@@ -171,7 +171,7 @@ impl From<types::SearchResult> for SearchResult {
             basename: r.basename,
             display_title: r.display_title,
             content: r.content,
-            mtime: r.mtime as f64,
+            mtime: r.mtime,
             tags: r.tags,
             matches: r.matches.into_iter().map(Into::into).collect(),
         }

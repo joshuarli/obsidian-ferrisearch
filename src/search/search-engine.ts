@@ -1,4 +1,10 @@
-import { Notice } from 'obsidian'
+import { Notice, Platform } from 'obsidian'
+// WASM glue code — bundled into main.js (~23KB), only used on mobile.
+// Build requires: just build-wasm (or build-all)
+import {
+  SearchIndex as WasmSearchIndex,
+  initSync as wasmInitSync,
+} from '../../wasm/pkg/ferrisearch_wasm.js'
 import type { DocumentRef, ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { logVerbose, removeDiacritics, stripMarkdownCharacters } from '../tools/utils'
@@ -79,26 +85,61 @@ export class SearchEngine {
 
   public async initialize(): Promise<void> {
     try {
-      const module = this.loadNativeModule()
-
-      // Detect stale native binary cached by dlopen after a plugin update
-      const version = typeof module.napiVersion === 'function' ? module.napiVersion() : 0
-      if (version !== EXPECTED_NAPI_VERSION) {
-        new Notice('Ferrisearch: native module outdated — please restart Obsidian.', 0)
-        return
+      if (Platform.isMobileApp) {
+        await this.initializeWasm()
+      } else {
+        this.initializeNative()
       }
-
-      this.nativeIndex = new module.SearchIndex(this.getIndexPath(), {
-        ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
-      })
-      console.log('Ferrisearch - Native search index initialized')
     } catch (e) {
-      console.error('Ferrisearch - Failed to initialize native index', e)
-      new Notice(
-        'Ferrisearch - Failed to initialize search engine. See console for details.',
-        10000,
-      )
+      console.error('Ferrisearch - Failed to initialize search engine', e)
+      if (Platform.isMobileApp) {
+        // No console on mobile — write error to a file
+        const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e)
+        const logPath = `${this.plugin.app.vault.configDir}/plugins/ferrisearch/error.log`
+        try {
+          await this.plugin.app.vault.adapter.write(
+            logPath,
+            `[${new Date().toISOString()}]\n${msg}\n`,
+          )
+          new Notice('Ferrisearch: error written to .obsidian/plugins/ferrisearch/error.log', 10000)
+        } catch {
+          new Notice(`Ferrisearch init failed: ${e instanceof Error ? e.message : e}`, 15000)
+        }
+      } else {
+        new Notice(
+          'Ferrisearch - Failed to initialize search engine. See console for details.',
+          10000,
+        )
+      }
     }
+  }
+
+  private initializeNative(): void {
+    const module = this.loadNativeModule()
+
+    // Detect stale native binary cached by dlopen after a plugin update
+    const version = typeof module.napiVersion === 'function' ? module.napiVersion() : 0
+    if (version !== EXPECTED_NAPI_VERSION) {
+      new Notice('Ferrisearch: native module outdated — please restart Obsidian.', 0)
+      return
+    }
+
+    this.nativeIndex = new module.SearchIndex(this.getIndexPath(), {
+      ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
+    })
+    console.log('Ferrisearch - Native search index initialized')
+  }
+
+  private async initializeWasm(): Promise<void> {
+    const adapter = this.plugin.app.vault.adapter
+    const wasmPath = `${this.plugin.app.vault.configDir}/plugins/ferrisearch/ferrisearch_wasm_bg.wasm`
+    const wasmBytes = await adapter.readBinary(wasmPath)
+
+    wasmInitSync(wasmBytes)
+    this.nativeIndex = new WasmSearchIndex({
+      ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
+    }) as unknown as NativeSearchIndex
+    console.log('Ferrisearch - WASM search index initialized (in-memory)')
   }
 
   public warmUp(): void {
@@ -317,7 +358,6 @@ export class SearchEngine {
       prefixLength: 1,
       singleFilePath: options?.singleFilePath,
     })
-
     return results.map(result => {
       logVerbose('Locating matches for', result.path)
       const foundWords = [...result.matchedTerms, ...query.getExactTerms(), ...query.getTags()]

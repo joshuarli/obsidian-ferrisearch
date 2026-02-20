@@ -123,12 +123,12 @@ impl IndexManager {
 
         // Phase 1: exact + prefix only (no fuzzy)
         let query = self.build_search_query(&parsed, options, 0.0);
-        let mut results = searcher.search(&*query, &TopDocs::with_limit(options.limit))?;
+        let mut results = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
 
         // Phase 2: if too few results and fuzzy is enabled, retry with fuzzy on content
         if results.len() < FUZZY_RESULT_THRESHOLD && fuzziness > 0.0 && !parsed.terms.is_empty() {
             let query = self.build_search_query(&parsed, options, fuzziness);
-            results = searcher.search(&*query, &TopDocs::with_limit(options.limit))?;
+            results = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
         }
 
         // Recency boost (applied post-hoc)
@@ -138,10 +138,7 @@ impl IndexManager {
             "3" => Some(-0.1_f64), // Month
             _ => None,
         };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as f64)
-            .unwrap_or(0.0);
+        let now = now_epoch_millis();
 
         let mut search_results: Vec<SearchResult> = results
             .into_iter()
@@ -150,7 +147,7 @@ impl IndexManager {
                     .doc_to_result(&searcher, addr, score as f64, &all_words, &matcher)
                     .ok()?;
                 if let Some(decay) = recency_decay {
-                    let days = (now - r.mtime as f64) / (24.0 * 3_600_000.0);
+                    let days = (now - r.mtime) / (24.0 * 3_600_000.0);
                     r.score *= 1.0 + (decay * days / 1000.0).exp();
                 }
                 Some(r)
@@ -203,7 +200,7 @@ impl IndexManager {
                         ));
 
                         // Prefix match (skip directory — exact is sufficient for paths)
-                        if *name != "directory" && lower.len() >= options.prefix_length {
+                        if *name != "directory" && lower.len() >= options.prefix_length as usize {
                             queries.push((
                                 Occur::Should,
                                 Box::new(BoostQuery::new(
@@ -319,7 +316,7 @@ impl IndexManager {
             basename: text(f.basename),
             display_title: text(f.display_title),
             content,
-            mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0),
+            mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0) as f64,
             score,
             matched_terms: query_words.to_vec(),
             tags,
@@ -458,6 +455,22 @@ fn strip_diacritics_with_mapping(text: &str) -> (String, Vec<usize>) {
     (result, byte_map)
 }
 
+/// Current time as milliseconds since Unix epoch.
+/// Uses `js_sys::Date::now()` on WASM (where `std::time::SystemTime` panics).
+fn now_epoch_millis() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0)
+    }
+}
+
 /// Determine fuzzy edit distance based on term length and fuzziness level.
 fn fuzzy_distance(term: &str, fuzziness: f32) -> u8 {
     let len = term.len();
@@ -489,10 +502,7 @@ mod tests {
             headings: String::new(),
             tags: vec![],
             unmarked_tags: vec![],
-            mtime: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            mtime: now_epoch_millis(),
         }
     }
 
@@ -601,7 +611,7 @@ mod tests {
     fn search_returns_stored_fields() {
         let mut doc = make_doc("notes/test.md", "test", "Hello world content");
         doc.display_title = "Test Note".into();
-        doc.mtime = 12345;
+        doc.mtime = 12345.0;
         let mgr = setup_index(vec![doc]);
 
         let r = &mgr.search("hello", &SearchOptions::default()).unwrap()[0];
@@ -609,7 +619,7 @@ mod tests {
         assert_eq!(r.basename, "test");
         assert_eq!(r.display_title, "Test Note");
         assert_eq!(r.content, "Hello world content");
-        assert_eq!(r.mtime, 12345);
+        assert_eq!(r.mtime, 12345.0);
     }
 
     #[test]
@@ -651,15 +661,12 @@ mod tests {
 
     #[test]
     fn recency_boost_day() {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let now = now_epoch_millis();
 
         let mut recent = make_doc("recent.md", "recent", "hello world test");
         recent.mtime = now;
         let mut old = make_doc("old.md", "old", "hello world test");
-        old.mtime = now - 30 * 24 * 3_600_000;
+        old.mtime = now - 30.0 * 24.0 * 3_600_000.0;
 
         let mgr = setup_index(vec![recent, old]);
         let opts = SearchOptions {
@@ -739,7 +746,7 @@ mod tests {
             .collect();
         let mgr = setup_index(docs);
         let opts = SearchOptions {
-            limit: 3,
+            limit: 3.0,
             ..Default::default()
         };
         assert!(mgr.search("common", &opts).unwrap().len() <= 3);
@@ -753,7 +760,7 @@ mod tests {
             "internationalization is important",
         )]);
         let opts = SearchOptions {
-            prefix_length: 1,
+            prefix_length: 1.0,
             ..Default::default()
         };
         assert!(!mgr.search("intern", &opts).unwrap().is_empty());

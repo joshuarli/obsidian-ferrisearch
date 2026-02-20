@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DocumentInput {
     pub path: String,
     pub basename: String,
@@ -10,10 +11,13 @@ pub struct DocumentInput {
     pub headings: String,
     pub tags: Vec<String>,
     pub unmarked_tags: Vec<String>,
-    pub mtime: u64,
+    /// Modification time as Unix epoch milliseconds.
+    /// f64 for JS compatibility (all JS numbers are f64).
+    pub mtime: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MatchInfo {
     pub match_text: String,
     /// UTF-16 code unit offset (for JavaScript string indexing)
@@ -21,6 +25,7 @@ pub struct MatchInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub path: String,
     pub score: f64,
@@ -28,13 +33,13 @@ pub struct SearchResult {
     pub basename: String,
     pub display_title: String,
     pub content: String,
-    pub mtime: u64,
+    pub mtime: f64,
     pub tags: Vec<String>,
     pub matches: Vec<MatchInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct IndexConfig {
     pub ignore_diacritics: bool,
 }
@@ -48,12 +53,14 @@ impl Default for IndexConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct SearchOptions {
     pub field_boosts: FieldBoosts,
     pub fuzziness: String,
-    pub prefix_length: usize,
-    pub limit: usize,
+    /// f64 for JS compatibility (all JS numbers are f64).
+    pub prefix_length: f64,
+    /// f64 for JS compatibility (all JS numbers are f64).
+    pub limit: f64,
     pub single_file_path: Option<String>,
     pub recency_boost: String,
 }
@@ -63,8 +70,8 @@ impl Default for SearchOptions {
         Self {
             field_boosts: FieldBoosts::default(),
             fuzziness: "1".into(),
-            prefix_length: 1,
-            limit: 10,
+            prefix_length: 1.0,
+            limit: 10.0,
             single_file_path: None,
             recency_boost: "0".into(),
         }
@@ -72,7 +79,7 @@ impl Default for SearchOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct FieldBoosts {
     pub basename: f32,
     pub display_title: f32,
@@ -121,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_index_config_serde_override() {
-        let config: IndexConfig = serde_json::from_str(r#"{"ignore_diacritics": false}"#).unwrap();
+        let config: IndexConfig = serde_json::from_str(r#"{"ignoreDiacritics": false}"#).unwrap();
         assert!(!config.ignore_diacritics);
     }
 
@@ -130,8 +137,8 @@ mod tests {
         let opts: SearchOptions =
             serde_json::from_str(r#"{"fuzziness": "2", "limit": 10}"#).unwrap();
         assert_eq!(opts.fuzziness, "2");
-        assert_eq!(opts.limit, 10);
-        assert_eq!(opts.prefix_length, 1);
+        assert_eq!(opts.limit, 10.0);
+        assert_eq!(opts.prefix_length, 1.0);
     }
 
     #[test]

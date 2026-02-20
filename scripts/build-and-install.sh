@@ -45,13 +45,19 @@ fi
 cp "$DYLIB_PATH" "$PROJECT_DIR/$NODE_FILE"
 echo "    Built $NODE_FILE ($(du -h "$PROJECT_DIR/$NODE_FILE" | cut -f1 | xargs))"
 
-# ── Step 2: Build TypeScript ─────────────────────────────────────────────────
+# ── Step 2: Build WASM module ────────────────────────────────────────────────
+echo "==> Building WASM module (release)..."
+cd "$PROJECT_DIR/wasm"
+wasm-pack build --target web --release
+echo "    Built ferrisearch_wasm_bg.wasm ($(du -h pkg/ferrisearch_wasm_bg.wasm | cut -f1 | xargs))"
+
+# ── Step 3: Build TypeScript ─────────────────────────────────────────────────
 echo "==> Building TypeScript (production)..."
 cd "$PROJECT_DIR"
 bun run build.ts production
 echo "    Built dist/main.js ($(du -h dist/main.js | cut -f1 | xargs))"
 
-# ── Step 3: Install to Obsidian vaults ───────────────────────────────────────
+# ── Step 4: Install to Obsidian vaults ───────────────────────────────────────
 for VAULT in "${VAULT_NAMES[@]}"; do
   PLUGIN_DIR="$VAULT_ROOT/$VAULT/.obsidian/plugins/ferrisearch"
   echo "==> Installing to $PLUGIN_DIR..."
@@ -60,6 +66,7 @@ for VAULT in "${VAULT_NAMES[@]}"; do
   cp dist/manifest.json "$PLUGIN_DIR/"
   cp dist/styles.css "$PLUGIN_DIR/"
   cp "$PROJECT_DIR/$NODE_FILE" "$PLUGIN_DIR/"
+  cp dist/ferrisearch_wasm_bg.wasm "$PLUGIN_DIR/"
   ls -lh "$PLUGIN_DIR"
   echo ""
 done

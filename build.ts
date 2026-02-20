@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 
 const prod = Bun.argv.includes('production')
 
@@ -40,5 +40,12 @@ if (!result.success) {
 mkdirSync('./dist', { recursive: true })
 copyFileSync('manifest.json', 'dist/manifest.json')
 copyFileSync('assets/styles.css', 'dist/styles.css')
+
+// Copy WASM binary if it exists (built by: just build-wasm)
+const wasmBinary = 'wasm/pkg/ferrisearch_wasm_bg.wasm'
+if (existsSync(wasmBinary)) {
+  copyFileSync(wasmBinary, 'dist/ferrisearch_wasm_bg.wasm')
+  console.log('Copied WASM binary to dist/')
+}
 
 console.log(`Built dist/main.js (${prod ? 'production' : 'development'})`)

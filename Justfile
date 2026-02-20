@@ -21,11 +21,17 @@ build:
 build-rust:
     cargo build --release -p ferrisearch-napi
 
-build-all: build-rust build
+build-wasm:
+    cd wasm && wasm-pack build --target web --release
+
+build-all: build-rust build-wasm build
 
 # Build and install to Obsidian vault
 install:
     bash scripts/build-and-install.sh
+
+test-wasm:
+    wasm-pack test --node wasm
 
 test: test-rust test-ts
 

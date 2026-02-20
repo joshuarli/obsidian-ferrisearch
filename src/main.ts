@@ -1,4 +1,4 @@
-import { type App, Notice, Plugin, type PluginManifest, TFile } from 'obsidian'
+import { type App, Notice, Platform, Plugin, type PluginManifest, TFile } from 'obsidian'
 import { FerrisearchInFileModal, FerrisearchVaultModal } from './components/modals'
 import { eventBus, IndexingStepType, indexingStep } from './globals'
 import { NotesIndexer } from './notes-indexer'
@@ -30,6 +30,17 @@ export default class FerrisearchPlugin extends Plugin {
   }
 
   async onload(): Promise<void> {
+    try {
+      await this._onload()
+    } catch (e) {
+      console.error('Ferrisearch - Fatal error during load', e)
+      if (Platform.isMobileApp) {
+        await this.writeErrorLog(e)
+      }
+    }
+  }
+
+  private async _onload(): Promise<void> {
     this.settings = await loadSettings(this)
     this.addSettingTab(new SettingsTab(this))
 
@@ -134,21 +145,21 @@ export default class FerrisearchPlugin extends Plugin {
   }
 
   private async populateIndex(): Promise<void> {
+    const searchEngine = this.searchEngine
+
     console.time('Ferrisearch - Indexing total time')
     indexingStep.set(IndexingStepType.ReadingFiles)
     const files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
-
-    const searchEngine = this.searchEngine
-
-    // Try to load sidecar for differential reindex
+    // Try to load sidecar for differential reindex.
+    // On mobile the Tantivy index is always in-memory (starts empty),
+    // so the sidecar would incorrectly report all files as indexed.
     console.time('Ferrisearch - Loading index from sidecar')
     indexingStep.set(IndexingStepType.LoadingCache)
-    const hasSidecar = await searchEngine.loadSidecar()
+    const hasSidecar = Platform.isMobileApp ? false : await searchEngine.loadSidecar()
     if (hasSidecar) {
       console.timeEnd('Ferrisearch - Loading index from sidecar')
     }
-
     const diff = searchEngine.getDocumentsToReindex(
       files.map(f => ({ path: f.path, mtime: f.stat.mtime })),
     )
@@ -168,11 +179,11 @@ export default class FerrisearchPlugin extends Plugin {
 
     if (diff.toRemove.length || diff.toAdd.length) {
       indexingStep.set(IndexingStepType.WritingCache)
-
       await searchEngine.saveSidecar()
     }
 
     console.timeEnd('Ferrisearch - Indexing total time')
+
     if (diff.toAdd.length >= 1000) {
       new Notice(`Ferrisearch: Your files have been indexed.`)
     }
@@ -181,5 +192,17 @@ export default class FerrisearchPlugin extends Plugin {
 
     // Pre-warm term dictionaries so the first search is fast
     this.searchEngine.warmUp()
+  }
+
+  private async writeErrorLog(e: unknown): Promise<void> {
+    try {
+      const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e)
+      const timestamp = new Date().toISOString()
+      const logPath = `${this.app.vault.configDir}/plugins/ferrisearch/error.log`
+      await this.app.vault.adapter.write(logPath, `[${timestamp}]\n${msg}\n`)
+      new Notice('Ferrisearch: error logged to .obsidian/plugins/ferrisearch/error.log', 10000)
+    } catch {
+      // adapter may not be ready — nothing we can do
+    }
   }
 }

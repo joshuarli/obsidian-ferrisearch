@@ -102,7 +102,7 @@ fn load_corpus() -> Vec<DocumentInput> {
                 headings: [h1.join(" "), h2.join(" "), h3.join(" ")].join(" "),
                 tags: vec![],
                 unmarked_tags: vec![],
-                mtime: 1700000000,
+                mtime: 1700000000.0,
             })
         })
         .collect()

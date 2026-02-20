@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/ferrisearch-core", "napi"]
+members = ["crates/ferrisearch-core", "napi", "wasm"]
 resolver = "2"
 
 [profile.release]
