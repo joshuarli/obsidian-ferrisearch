@@ -10,6 +10,8 @@ use tantivy::tokenizer::TokenFilter;
 use tantivy::{Index, IndexReader, ReloadPolicy, Term};
 
 use crate::schema::{FieldHandles, build_schema};
+#[cfg(not(feature = "filesystem"))]
+use crate::schema::{doc_text, extract_tags};
 use crate::tokenizer::{DiacriticFilter, FerrisearchTokenizer};
 use crate::types::{DocumentInput, IndexConfig};
 
@@ -171,7 +173,6 @@ impl IndexManager {
         Ok(())
     }
 
-    #[cfg(feature = "filesystem")]
     pub fn add_documents(&mut self, docs: &[DocumentInput]) -> Result<(), IndexError> {
         for doc in docs {
             self.add_document(doc)?;
@@ -209,14 +210,6 @@ impl IndexManager {
     fn add_document(&mut self, doc: &DocumentInput) -> Result<(), IndexError> {
         self.docs_buffer.retain(|d| d.path != doc.path);
         self.docs_buffer.push(doc.clone());
-        Ok(())
-    }
-
-    #[cfg(not(feature = "filesystem"))]
-    pub fn add_documents(&mut self, docs: &[DocumentInput]) -> Result<(), IndexError> {
-        for doc in docs {
-            self.add_document(doc)?;
-        }
         Ok(())
     }
 
@@ -398,19 +391,15 @@ impl IndexManager {
     /// Reconstruct docs_buffer by reading all stored documents from the index.
     /// Must be called after load_from_blob() before any add/remove/commit operations.
     /// On desktop (filesystem feature), this is a no-op.
+    #[cfg(feature = "filesystem")]
     pub fn reconstruct_docs_buffer(&mut self) -> Result<(), IndexError> {
-        #[cfg(feature = "filesystem")]
-        {
-            Ok(())
-        }
-        #[cfg(not(feature = "filesystem"))]
-        {
-            self.reconstruct_docs_buffer_impl()
-        }
+        Ok(())
     }
 
+    /// Reconstruct docs_buffer by reading all stored documents from the index.
+    /// Must be called after load_from_blob() before any add/remove/commit operations.
     #[cfg(not(feature = "filesystem"))]
-    fn reconstruct_docs_buffer_impl(&mut self) -> Result<(), IndexError> {
+    pub fn reconstruct_docs_buffer(&mut self) -> Result<(), IndexError> {
         use tantivy::schema::Value;
 
         let searcher = self.reader.searcher();
@@ -422,27 +411,7 @@ impl IndexManager {
             for doc_id in 0..segment_reader.num_docs() {
                 let doc: tantivy::TantivyDocument = store_reader.get(doc_id)?;
 
-                let text = |field| -> String {
-                    doc.get_first(field)
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string()
-                };
-
-                let tags: Vec<String> = doc
-                    .get_first(f.tags_stored)
-                    .and_then(|v| v.as_object())
-                    .and_then(|obj| obj.into_iter().find(|(k, _)| *k == "tags"))
-                    .and_then(|(_, v)| v.as_array())
-                    .map(|arr| {
-                        arr.into_iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                // unmarked_tags is stored as space-separated text
-                let unmarked_tags_text = text(f.unmarked_tags);
+                let unmarked_tags_text = doc_text(&doc, f.unmarked_tags);
                 let unmarked_tags: Vec<String> = if unmarked_tags_text.is_empty() {
                     vec![]
                 } else {
@@ -453,13 +422,13 @@ impl IndexManager {
                 };
 
                 buffer.push(DocumentInput {
-                    path: text(f.path),
-                    basename: text(f.basename),
-                    display_title: text(f.display_title),
-                    aliases: text(f.aliases),
-                    content: text(f.content),
-                    headings: text(f.headings),
-                    tags,
+                    path: doc_text(&doc, f.path),
+                    basename: doc_text(&doc, f.basename),
+                    display_title: doc_text(&doc, f.display_title),
+                    aliases: doc_text(&doc, f.aliases),
+                    content: doc_text(&doc, f.content),
+                    headings: doc_text(&doc, f.headings),
+                    tags: extract_tags(&doc, f.tags_stored),
                     unmarked_tags,
                     mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0) as f64,
                 });

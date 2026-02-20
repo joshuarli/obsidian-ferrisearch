@@ -1,3 +1,4 @@
+use tantivy::TantivyDocument;
 use tantivy::schema::*;
 
 #[derive(Debug, Clone)]
@@ -77,6 +78,28 @@ pub fn build_schema() -> (Schema, FieldHandles) {
             mtime,
         },
     )
+}
+
+/// Extract a text field value from a TantivyDocument, returning empty string if missing.
+pub(crate) fn doc_text(doc: &TantivyDocument, field: Field) -> String {
+    doc.get_first(field)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Extract tags array from the stored JSON field.
+pub(crate) fn extract_tags(doc: &TantivyDocument, tags_stored: Field) -> Vec<String> {
+    doc.get_first(tags_stored)
+        .and_then(|v| v.as_object())
+        .and_then(|obj| obj.into_iter().find(|(k, _)| *k == "tags"))
+        .and_then(|(_, v)| v.as_array())
+        .map(|arr| {
+            arr.into_iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

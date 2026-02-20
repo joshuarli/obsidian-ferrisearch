@@ -9,6 +9,7 @@ use tantivy::{DocAddress, Searcher, Term};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::index::{IndexError, IndexManager};
+use crate::schema::{doc_text, extract_tags};
 use crate::types::{MatchInfo, SearchOptions, SearchResult};
 
 /// Parsed query: individual terms and quoted phrases.
@@ -287,37 +288,18 @@ impl IndexManager {
         let doc: tantivy::TantivyDocument = searcher.doc(addr)?;
         let f = &self.fields;
 
-        let text = |field| -> String {
-            doc.get_first(field)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string()
-        };
-
-        let tags = doc
-            .get_first(f.tags_stored)
-            .and_then(|v| v.as_object())
-            .and_then(|obj| obj.into_iter().find(|(k, _)| *k == "tags"))
-            .and_then(|(_, v)| v.as_array())
-            .map(|arr| {
-                arr.into_iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let content = text(f.content);
+        let content = doc_text(&doc, f.content);
         let matches = matcher.find_matches(&content);
 
         Ok(SearchResult {
-            path: text(f.path),
-            basename: text(f.basename),
-            display_title: text(f.display_title),
+            path: doc_text(&doc, f.path),
+            basename: doc_text(&doc, f.basename),
+            display_title: doc_text(&doc, f.display_title),
             content,
             mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0) as f64,
             score,
             matched_terms: query_words.to_vec(),
-            tags,
+            tags: extract_tags(&doc, f.tags_stored),
             matches,
         })
     }
@@ -373,17 +355,13 @@ impl MatchExtractor {
         // Fast path: skip diacritics stripping if content is ASCII
         let needs_diacritics = self.ignore_diacritics && !content.is_ascii();
 
-        let (search_text, byte_map) = if needs_diacritics {
-            let (stripped, map) = strip_diacritics_with_mapping(content);
-            (stripped, Some(map))
+        let (stripped, byte_map) = if needs_diacritics {
+            let (s, m) = strip_diacritics_with_mapping(content);
+            (Some(s), Some(m))
         } else {
-            (String::new(), None)
+            (None, None)
         };
-        let search_content: &str = if needs_diacritics {
-            &search_text
-        } else {
-            content
-        };
+        let search_content = stripped.as_deref().unwrap_or(content);
 
         let mut matches = Vec::new();
         let mut utf16_pos: u32 = 0;
