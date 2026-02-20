@@ -78,6 +78,9 @@ bench/
   README.md                 # Corpus setup + run instructions
 scripts/
   build-and-install.sh      # Build + install to multiple Obsidian vaults
+  copy-to-android.sh        # Push built plugin to Android device via adb
+.cargo/
+  config.toml               # Sets wasm-bindgen-test-runner for wasm32 target
 ```
 
 ## Rust Search Engine
@@ -94,7 +97,7 @@ Sub-tokens sharing the parent position is critical for phrase queries: `"variabl
 
 ### Schema (`schema.rs`)
 
-4 fields are searched: `display_title`, `directory`, `content`, `headings`. Others are indexed but not searched (basename, aliases, tags_text, unmarked_tags — disabled for performance). All text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization). `aliases`, `headings`, and `unmarked_tags` are stored (needed for `reconstruct_docs_buffer` after blob load on mobile).
+4 fields are searched: `display_title`, `directory`, `content`, `headings`. Others are indexed but not searched (basename, aliases, tags_text, unmarked_tags — disabled for performance). All text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization). `aliases`, `headings`, and `unmarked_tags` are stored (needed for `reconstruct_docs_buffer` after blob load).
 
 ### Search (`search.rs`)
 
@@ -112,7 +115,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 `IndexManager` stores an `Index`, `IndexWriter`, and `IndexReader`. Uses explicit single-threaded writer — Obsidian vaults are small enough that multi-threaded indexing adds overhead without benefit. Heap size: 50MB for disk, 15MB for in-memory (tests).
 
-**Desktop (filesystem feature):** On `commit()`, force-merges to a single segment (best-effort — background merge policy may already have consolidated). Single-segment means a single FST traversal per query. `warm_up()` pre-loads FST pages into the OS page cache.
+**Native/darwin-arm64 (filesystem feature):** On `commit()`, force-merges to a single segment (best-effort — background merge policy may already have consolidated). Single-segment means a single FST traversal per query. `warm_up()` pre-loads FST pages into the OS page cache.
 
 **WASM (no filesystem feature):** `new_in_memory()` creates a `RamDirectory`-backed index. `commit()` uses `SingleSegmentIndexWriter` to rebuild the entire index from the document buffer. `IndexSettings::docstore_compress_dedicated_thread` is set to `false` (WASM has no threads). All JS-facing numeric types are `f64` for `serde_wasm_bindgen` compatibility (JS numbers are always f64). `serialize_to_blob()` / `load_from_blob()` persist the in-memory index as a binary blob (9-byte header + raw file map) for instant WASM startup. After loading from blob, `reconstruct_docs_buffer()` iterates stored documents to rebuild the buffer needed for future `commit()` calls.
 
@@ -156,7 +159,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 - **Runtime:** None (zero runtime dependencies). Query parsing is a custom ~50-line function in `query.ts`.
 - **Dev:** `@biomejs/biome`, `happy-dom`, `@types/bun`, `obsidian`, `typescript`
-- **Native:** Rust crate `ferrisearch-core` using Tantivy 0.25 for full-text search, exposed via `napi-rs` (desktop) and `wasm-bindgen` (mobile). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
+- **Native:** Rust crate `ferrisearch-core` using Tantivy 0.25 for full-text search, exposed via `napi-rs` (darwin-arm64 only) and `wasm-bindgen` (all other platforms). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
 - **WASM:** `wasm-bindgen` 0.2, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen --target web`. The `wasm-bindgen-cli` version (currently 0.2.108) must match the resolved crate version in `Cargo.lock`.
 
 ## Data Flow
