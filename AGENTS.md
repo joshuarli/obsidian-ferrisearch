@@ -1,4 +1,8 @@
-Ferrisearch is an Obsidian plugin that provides fast full-text search using a Rust/Tantivy backend. It replaces Obsidian's built-in search with two modal UIs: vault-wide search and in-file search. Uses WASM as the primary engine across all platforms, with a native NAPI-RS binary only on darwin-arm64 for mmap-backed performance.
+Ferrisearch is an Obsidian plugin that provides fast full-text search using a Rust/Tantivy backend.
+
+Every time code is changed, please update [Codebase](#Codebase).
+
+# Codebase
 
 ## Architecture
 
@@ -79,6 +83,8 @@ bench/
 scripts/
   build-and-install.sh      # Build + install to multiple Obsidian vaults
   copy-to-android.sh        # Push built plugin to Android device via adb
+  test-search.ts            # CLI smoke test: loads NAPI binary, indexes test-vault/*.md, searches, prints results
+  test-vault/               # .md files used by test-search.ts (indexed from scratch each run)
 .cargo/
   config.toml               # Sets wasm-bindgen-test-runner for wasm32 target
 ```
@@ -101,11 +107,17 @@ Sub-tokens sharing the parent position is critical for phrase queries: `"variabl
 
 ### Search (`search.rs`)
 
-**Two-phase search** for each query:
+**Two-phase search** for each query (fuzziness "0"/"1"/"2"):
 - **Phase 1 (exact + prefix, no fuzzy):** For each term, builds per-field sub-queries OR'd together, then AND'd across terms:
   - **Exact:** `TermQuery` on all 4 searched fields (boosted by field weight)
   - **Prefix:** `PhrasePrefixQuery` on 3 fields (skips directory) — fast FST prefix scan (0.8x boost)
-- **Phase 2 (add fuzzy):** Only triggers if Phase 1 returns fewer than `FUZZY_RESULT_THRESHOLD` (5) results and fuzziness > 0. Adds `FuzzyTermQuery` on **content only** (0.6x boost). Correctly-spelled queries never pay the fuzzy cost.
+- **Phase 2 (add fuzzy):** Only triggers if Phase 1 returns fewer than `limit - 5` results and fuzziness > 0. Adds `FuzzyTermQuery` on **content only** (0.6x boost). Correctly-spelled queries never pay the fuzzy cost.
+
+**Fuzzy-only mode** (fuzziness "3"): Skips Phase 1 entirely. Only emits `FuzzyTermQuery` on all searched fields. Finds documents containing typo variants of query terms.
+
+**Fuzziness settings:** `"0"` = exact only, `"1"` = slightly fuzzy (max edit distance 1 for 4-5 char terms, 1 for 6+), `"2"` = fuzzy (distance 1 for 4-5, 2 for 6+), `"3"` = fuzzy results only (same distances as "2" but skips exact+prefix phase).
+
+**Match highlighting:** `MatchExtractor` finds exact regex matches in content. For fuzziness > 0, `find_fuzzy_matches()` scans content tokens using `osa_distance()` (Optimal String Alignment / Damerau-Levenshtein). In normal fuzzy modes ("1"/"2"), match highlighting caps at edit distance 1 (`MATCH_FUZZINESS`) to avoid false positives (e.g. "Wonder" matching "powder"). In fuzzy-only mode ("3"), full edit distance is used. Match parameters are bundled in the `MatchParams` struct.
 
 Quoted phrases (`"foo bar"`) use `PhraseQuery` — requires terms at consecutive positions in the same field.
 
@@ -145,11 +157,12 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 | `bun run build:all` | Rust + JS build |
 | `just build-wasm` | Build WASM module (cargo build + wasm-bindgen) |
 | `just build-all` | Rust + WASM + JS build |
-| `cargo test` | Run Rust tests (95 tests) |
+| `cargo test` | Run Rust tests (102 tests) |
 | `just test-wasm` | Run WASM integration tests via wasm-bindgen-test-runner (Node.js) |
 | `cargo clippy --all-targets --all-features -- -D warnings` | Rust linter |
 | `cargo bench --bench query` | Query latency benchmarks → `bench/results.md` |
 | `scripts/build-and-install.sh` | Build + install to Obsidian vaults |
+| `bun scripts/test-search.ts [query] [fuzziness]` | CLI search smoke test against `scripts/test-vault/` |
 
 - **Build tool:** Bun's bundler (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
 - **Test runner:** `bun:test` with `happy-dom` for DOM APIs. The `obsidian` module is mocked in `setup.ts`. `IntersectionObserver` is mocked to fire immediately.
@@ -172,7 +185,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 ## Settings
 
 Settings are persisted via Obsidian's `plugin.saveData()`. Key settings:
-- **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2), `ignoreDiacritics`, `minQueryLength` (default: 3), `resultLimit` (default: 10)
+- **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2/3), `ignoreDiacritics`, `minQueryLength` (default: 3), `resultLimit` (default: 10)
 - **UI:** `showExcerpt`, `renderLineReturnInExcerpts`, `highlight`
 - **Weighting:** `weightBasename`, `weightDirectory`, `weightHeadings`, `weightUnmarkedTags`
 - **Other:** `recencyBoost` (disabled/day/week/month), `verboseLogging`

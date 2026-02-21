@@ -234,6 +234,65 @@ fn serialize_empty_index() {
 }
 
 #[wasm_bindgen_test]
+fn fuzzy_only_finds_typo_wasm() {
+    let mut idx = SearchIndex::new(JsValue::NULL).unwrap();
+
+    let docs = serde_json::json!([{
+        "path": "note.md", "basename": "note", "displayTitle": "Recipe",
+        "aliases": "", "content": "50g milk powder is key. This is where milk pwoder comes in.",
+        "headings": "", "tags": [], "unmarkedTags": [], "mtime": 1000.0
+    }]);
+
+    idx.add_documents(js(&docs)).unwrap();
+    idx.commit().unwrap();
+
+    // Fuzzy-only mode (fuzziness "3")
+    let opts = serde_json::json!({
+        "fuzziness": "3",
+        "prefixLength": 1.0,
+        "limit": 10.0
+    });
+    let results = idx.search("powder", js(&opts)).unwrap();
+    let results: Vec<serde_json::Value> = serde_wasm_bindgen::from_value(results).unwrap();
+
+    assert!(
+        !results.is_empty(),
+        "fuzzy-only search for 'powder' should find doc with 'pwoder'"
+    );
+    assert_eq!(results[0]["path"], "note.md");
+}
+
+#[wasm_bindgen_test]
+fn fuzzy_only_single_file_wasm() {
+    let mut idx = SearchIndex::new(JsValue::NULL).unwrap();
+
+    let docs = serde_json::json!([{
+        "path": "note.md", "basename": "note", "displayTitle": "Recipe",
+        "aliases": "", "content": "50g milk powder is key. This is where milk pwoder comes in.",
+        "headings": "", "tags": [], "unmarkedTags": [], "mtime": 1000.0
+    }]);
+
+    idx.add_documents(js(&docs)).unwrap();
+    idx.commit().unwrap();
+
+    // Fuzzy-only mode with singleFilePath (in-file search)
+    let opts = serde_json::json!({
+        "fuzziness": "3",
+        "prefixLength": 1.0,
+        "limit": 10.0,
+        "singleFilePath": "note.md"
+    });
+    let results = idx.search("powder", js(&opts)).unwrap();
+    let results: Vec<serde_json::Value> = serde_wasm_bindgen::from_value(results).unwrap();
+
+    assert!(
+        !results.is_empty(),
+        "fuzzy-only in-file search should find doc with 'pwoder'"
+    );
+    assert_eq!(results[0]["path"], "note.md");
+}
+
+#[wasm_bindgen_test]
 fn load_blob_then_add_more_docs() {
     let mut idx = SearchIndex::new(JsValue::NULL).unwrap();
 

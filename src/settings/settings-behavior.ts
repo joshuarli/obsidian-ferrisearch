@@ -8,9 +8,59 @@ export function injectSettingsBehavior(
   settings: FerrisearchSettings,
   containerEl: HTMLElement,
 ) {
-  new Setting(containerEl).setName('Behavior').setHeading()
+  new Setting(containerEl).setName('Search').setHeading()
 
-  // Respect excluded files
+  new Setting(containerEl)
+    .setName('Minimum query length')
+    .setDesc(
+      'Minimum number of characters before a search is triggered. Increase to reduce latency on short queries.',
+    )
+    .addText(component =>
+      component.setValue(String(settings.minQueryLength)).onChange(async v => {
+        const n = parseInt(v, 10)
+        if (Number.isInteger(n) && n >= 0) {
+          settings.minQueryLength = n
+          await saveSettings(plugin)
+        }
+      }),
+    )
+
+  new Setting(containerEl)
+    .setName('Maximum results')
+    .setDesc('Maximum number of search results to return.')
+    .addText(component =>
+      component.setValue(String(settings.resultLimit)).onChange(async v => {
+        const n = parseInt(v, 10)
+        if (Number.isInteger(n) && n >= 1) {
+          settings.resultLimit = n
+          await saveSettings(plugin)
+        }
+      }),
+    )
+
+  new Setting(containerEl)
+    .setName('Fuzziness')
+    .setDesc(
+      "Define the level of fuzziness for the search. The higher the fuzziness, the more results you'll get.",
+    )
+    .addDropdown(dropdown =>
+      dropdown
+        .addOptions({
+          0: 'Exact match',
+          1: 'Slightly fuzzy',
+          2: 'Fuzzy',
+          3: 'Fuzzy results only',
+        })
+        .setValue(settings.fuzziness)
+        .onChange(async v => {
+          if (!['0', '1', '2', '3'].includes(v)) {
+            v = '2'
+          }
+          settings.fuzziness = v as '0' | '1' | '2' | '3'
+          await saveSettings(plugin)
+        }),
+    )
+
   new Setting(containerEl)
     .setName('Respect Obsidian\'s "Excluded Files"')
     .setDesc(
@@ -24,7 +74,6 @@ export function injectSettingsBehavior(
       }),
     )
 
-  // Downranked files
   new Setting(containerEl)
     .setName('Folders to downrank in search results')
     .setDesc(
@@ -41,57 +90,4 @@ export function injectSettingsBehavior(
           await saveSettings(plugin)
         })
     })
-
-  // Minimum query length
-  new Setting(containerEl)
-    .setName('Minimum query length')
-    .setDesc(
-      'Minimum number of characters before a search is triggered. Increase to reduce latency on short queries.',
-    )
-    .addText(component =>
-      component.setValue(String(settings.minQueryLength)).onChange(async v => {
-        const n = parseInt(v, 10)
-        if (Number.isInteger(n) && n >= 0) {
-          settings.minQueryLength = n
-          await saveSettings(plugin)
-        }
-      }),
-    )
-
-  // Result limit
-  new Setting(containerEl)
-    .setName('Maximum results')
-    .setDesc('Maximum number of search results to return.')
-    .addText(component =>
-      component.setValue(String(settings.resultLimit)).onChange(async v => {
-        const n = parseInt(v, 10)
-        if (Number.isInteger(n) && n >= 1) {
-          settings.resultLimit = n
-          await saveSettings(plugin)
-        }
-      }),
-    )
-
-  // Fuzziness
-  new Setting(containerEl)
-    .setName('Fuzziness')
-    .setDesc(
-      "Define the level of fuzziness for the search. The higher the fuzziness, the more results you'll get.",
-    )
-    .addDropdown(dropdown =>
-      dropdown
-        .addOptions({
-          0: 'Exact match',
-          1: 'Not too fuzzy',
-          2: 'Fuzzy enough',
-        })
-        .setValue(settings.fuzziness)
-        .onChange(async v => {
-          if (!['0', '1', '2'].includes(v)) {
-            v = '2'
-          }
-          settings.fuzziness = v as '0' | '1' | '2'
-          await saveSettings(plugin)
-        }),
-    )
 }

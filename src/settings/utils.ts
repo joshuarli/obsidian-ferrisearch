@@ -43,7 +43,7 @@ export interface FerrisearchSettings extends WeightingSettings {
   renderLineReturnInExcerpts: boolean
   highlight: boolean
   verboseLogging: boolean
-  fuzziness: '0' | '1' | '2'
+  fuzziness: '0' | '1' | '2' | '3'
   /** Minimum number of characters before a search is triggered */
   minQueryLength: number
   /** Maximum number of search results returned */

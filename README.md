@@ -2,8 +2,8 @@
 
 warp speed fuzzy text-only search for Obsidian
 
-for larger vaults, Omnisearch's startup latency became a problem for me,
-and has started feeling sluggish
+For larger vaults, Omnisearch's startup latency became a problem for me,
+and has started feeling sluggish.
 
 ferrisearch is based on [Omnisearch](https://github.com/scambier/obsidian-omnisearch) but has since diverged infrastructurally a lot:
 - minisearch has been replaced with [tantivy](https://github.com/quickwit-oss/tantivy) + wasm to bridge ts <-> rust on all platforms
@@ -13,7 +13,15 @@ ferrisearch is based on [Omnisearch](https://github.com/scambier/obsidian-omnise
   - svelte has been replaced with pure ts
   - as much as possible hot path ts has been moved into rust land
 
+## new features
+
+fuzziness -> fuzzy results only
+
+This omits exact matches, which is useful for when you want to surface typos with correctly spelled search term.
+
+Obsidian's maximum fuzziness doesn't match simple typos when the search term is correctly spelled.
+
 
 ## native build
 
-native build is only supported on darwin arm64 in github releases, everyone else gets wasm (otherwise the build footprint in github actions is unsustainably complicated)
+The native build is only supported on darwin arm64 in github releases, everyone else gets wasm (otherwise the build footprint in github actions is unsustainably complicated).

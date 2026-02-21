@@ -259,6 +259,10 @@ export class SearchEngine {
 
     const { settings } = this.plugin
 
+    console.debug(
+      `Ferrisearch - search engine=${this.isNativeEngine ? 'native' : 'wasm'} fuzziness=${settings.fuzziness} query="${searchText}"`,
+    )
+
     let results: NativeSearchResult[]
     try {
       results = this.nativeIndex.search(searchText, {
