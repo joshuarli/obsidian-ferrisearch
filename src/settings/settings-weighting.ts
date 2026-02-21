@@ -41,7 +41,7 @@ export function injectSettingsWeighting(
     .addSlider(cb => weightSlider(cb, 'weightUnmarkedTags'))
 
   new Setting(containerEl)
-    .setName('Recency boost (experimental)')
+    .setName('Recency boost')
     .setDesc(
       'Files that have been modified more recently than [selected cutoff] are given a higher rank.',
     )

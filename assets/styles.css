@@ -8,6 +8,11 @@
   flex-wrap: nowrap;
 }
 
+.ferrisearch-result > div {
+  flex: 1;
+  min-width: 0;
+}
+
 .ferrisearch-result__title-container {
   display: flex;
   align-items: center;
@@ -42,6 +47,12 @@
 .ferrisearch-result__counter {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+.ferrisearch-result__mtime {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: auto;
 }
 
 .ferrisearch-result__body {

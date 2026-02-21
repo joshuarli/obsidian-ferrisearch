@@ -78,6 +78,7 @@ export type ResultNote = {
   content: string
   foundWords: string[]
   matches: SearchMatch[]
+  mtime: number
 }
 
 let inComposition = false

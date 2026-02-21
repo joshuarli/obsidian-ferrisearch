@@ -4,6 +4,23 @@ import type FerrisearchPlugin from '../main'
 import { showExcerpt } from '../settings/index'
 import { getExtension, pathWithoutFilename } from '../tools/utils'
 
+export function formatRelativeTime(mtime: number): string {
+  const diff = Date.now() - mtime
+  const minutes = Math.floor(diff / 60_000)
+  const hours = Math.floor(diff / 3_600_000)
+  const days = Math.floor(diff / 86_400_000)
+  const months = Math.floor(days / 30)
+  const years = Math.floor(days / 365)
+
+  if (minutes < 1) return 'just now'
+  if (hours < 1) return `${minutes}m ago`
+  if (days < 1) return `${hours}h ago`
+  if (days < 7) return `${days}d ${hours % 24}h ago`
+  if (days < 30) return `${days}d ago`
+  if (years < 1) return `${months}mo ago`
+  return `${years}y ago`
+}
+
 const unsubscribers = new WeakMap<HTMLElement, () => void>()
 
 export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugin): HTMLElement {
@@ -45,7 +62,12 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
     titleSpan.appendChild(counter)
   }
 
+  const mtimeSpan = document.createElement('span')
+  mtimeSpan.className = 'ferrisearch-result__mtime'
+  mtimeSpan.textContent = formatRelativeTime(note.mtime)
+
   titleContainer.appendChild(titleSpan)
+  titleContainer.appendChild(mtimeSpan)
   wrapper.appendChild(titleContainer)
 
   // Folder path

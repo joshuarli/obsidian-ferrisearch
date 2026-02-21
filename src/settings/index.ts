@@ -71,7 +71,7 @@ export class SettingsTab extends PluginSettingTab {
 
 export function getDefaultSettings(): FerrisearchSettings {
   return {
-    recencyBoost: RecencyCutoff.Disabled,
+    recencyBoost: RecencyCutoff.Week,
     downrankedFoldersFilters: [] as string[],
     ignoreDiacritics: true,
     showExcerpt: true,

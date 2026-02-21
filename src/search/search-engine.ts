@@ -423,6 +423,7 @@ export class SearchEngine {
         content: result.content,
         foundWords,
         matches,
+        mtime: result.mtime,
       }
     })
   }

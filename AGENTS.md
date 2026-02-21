@@ -37,7 +37,7 @@ src/
     modal-helpers.ts       # Shared DOM builders (input, results container, instructions)
     vault-modal.ts         # Vault search UI (history display, lazy-loaded results, min query length gate)
     infile-modal.ts        # In-file search UI (grouped match offsets, min query length gate)
-    result-items.ts        # DOM creation for search result items
+    result-items.ts        # DOM creation for search result items, formatRelativeTime() for mtime display
   search/
     search-engine.ts       # Wraps native Tantivy index, handles indexing + querying + document fetching
     query.ts               # Custom query parser (tokenization, keywords, exclusions, quoted phrases)
@@ -180,4 +180,4 @@ Settings are persisted via Obsidian's `plugin.saveData()`. Key settings:
 - **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2/3), `ignoreDiacritics`, `minQueryLength` (default: 3), `resultLimit` (default: 10)
 - **UI:** `showExcerpt`, `renderLineReturnInExcerpts`, `highlight`
 - **Weighting:** `weightBasename`, `weightDirectory`, `weightHeadings`, `weightUnmarkedTags`
-- **Other:** `recencyBoost` (disabled/day/week/month), `verboseLogging`
+- **Other:** `recencyBoost` (default: week; disabled/day/week/month), `verboseLogging`

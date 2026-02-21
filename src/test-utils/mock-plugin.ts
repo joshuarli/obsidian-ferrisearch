@@ -6,7 +6,7 @@ export function createMockPlugin(overrides?: {
   searchResults?: unknown[]
 }): FerrisearchPlugin {
   const settings = {
-    recencyBoost: '0',
+    recencyBoost: '2',
     downrankedFoldersFilters: [],
     ignoreDiacritics: true,
     showExcerpt: true,
