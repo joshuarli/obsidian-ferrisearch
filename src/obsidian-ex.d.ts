@@ -16,8 +16,4 @@ declare module 'obsidian' {
     getBasePath(): string
     basePath: string
   }
-
-  interface MetadataCache {
-    isUserIgnored?(path: string): boolean
-  }
 }

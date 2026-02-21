@@ -349,15 +349,6 @@ export class SearchEngine {
       return results.filter(r => r.path === options.singleFilePath)
     }
 
-    // Hide or downrank excluded files
-    if (settings.hideExcluded) {
-      results = results.filter(r => !this.plugin.app.metadataCache.isUserIgnored?.(r.path))
-    } else {
-      for (const r of results) {
-        if (this.plugin.app.metadataCache.isUserIgnored?.(r.path)) r.score /= 10
-      }
-    }
-
     // Downrank folders + tag boost
     logVerbose('searching with downranked folders', settings.downrankedFoldersFilters)
     const tags = query.getTags()

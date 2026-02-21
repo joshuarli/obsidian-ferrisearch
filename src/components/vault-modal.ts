@@ -22,7 +22,6 @@ export function renderVaultModal(
   let searchQuery = previousQuery ?? ''
   let resultNotes: ResultNote[] = []
   let searching = true
-  let cancelled = false
   let resultEls: HTMLElement[] = []
   let currentObserver: IntersectionObserver | null = null
   let historyItems: string[] = []
@@ -406,7 +405,6 @@ export function renderVaultModal(
 
   return {
     destroy() {
-      cancelled = true
       modal.off()
       unsubIndexing()
       currentObserver?.disconnect()

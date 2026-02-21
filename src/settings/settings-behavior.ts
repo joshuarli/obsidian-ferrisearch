@@ -62,19 +62,6 @@ export function injectSettingsBehavior(
     )
 
   new Setting(containerEl)
-    .setName('Respect Obsidian\'s "Excluded Files"')
-    .setDesc(
-      `By default, files that are in Obsidian's "Options > Files & Links > Excluded Files" list are downranked in results.
-        Enable this option to completely hide them.`,
-    )
-    .addToggle(toggle =>
-      toggle.setValue(settings.hideExcluded).onChange(async v => {
-        settings.hideExcluded = v
-        await saveSettings(plugin)
-      }),
-    )
-
-  new Setting(containerEl)
     .setName('Folders to downrank in search results')
     .setDesc(
       `Folders to downrank in search results. Files in these folders will be downranked in results. Folders should be comma delimited.`,

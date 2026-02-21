@@ -28,8 +28,6 @@ export async function saveSettings(plugin: Plugin): Promise<void> {
 }
 
 export interface FerrisearchSettings extends WeightingSettings {
-  /** Respect the "excluded files" Obsidian setting by downranking results ignored files */
-  hideExcluded: boolean
   /** Boost more recent files */
   recencyBoost: RecencyCutoff
   /** downrank files in the given folders */
