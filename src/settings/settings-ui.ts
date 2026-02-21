@@ -44,4 +44,15 @@ export function injectSettingsUserInterface(
         await saveSettings(plugin)
       }),
     )
+
+  // Score breakdown
+  new Setting(containerEl)
+    .setName('Show score breakdown')
+    .setDesc('Display detailed score breakdown for each search result.')
+    .addToggle(toggle =>
+      toggle.setValue(settings.showScoreBreakdown).onChange(async v => {
+        settings.showScoreBreakdown = v
+        await saveSettings(plugin)
+      }),
+    )
 }

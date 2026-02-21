@@ -18,7 +18,7 @@ import {
 import type { Query } from './query'
 
 // Must match NAPI_VERSION in napi/src/lib.rs
-const EXPECTED_NAPI_VERSION = 3
+const EXPECTED_NAPI_VERSION = 4
 
 // The napi binding types - loaded at runtime
 interface NativeModule {
@@ -77,6 +77,7 @@ interface NativeMatchInfo {
 interface NativeSearchResult {
   path: string
   score: number
+  recencyMultiplier: number
   matchedTerms: string[]
   basename: string
   displayTitle: string
@@ -84,6 +85,11 @@ interface NativeSearchResult {
   mtime: number
   tags: string[]
   matches: NativeMatchInfo[]
+}
+
+type NativeSearchResultWithBreakdown = NativeSearchResult & {
+  _folderDownrank?: boolean
+  _tagBoost?: boolean
 }
 
 export class SearchEngine {
@@ -359,10 +365,16 @@ export class SearchEngine {
         const shouldDownrank =
           filters.some(f => r.path === f || r.path.startsWith(`${f}/`)) ||
           r.path.split('/').some(part => filters.includes(part))
-        if (shouldDownrank) r.score /= 10
+        if (shouldDownrank) {
+          r.score /= 10
+          ;(r as NativeSearchResultWithBreakdown)._folderDownrank = true
+        }
       }
       for (const tag of tags) {
-        if (r.tags?.includes(tag)) r.score *= 100
+        if (r.tags?.includes(tag)) {
+          r.score *= 100
+          ;(r as NativeSearchResultWithBreakdown)._tagBoost = true
+        }
       }
     }
 
@@ -415,8 +427,23 @@ export class SearchEngine {
       const matches = result.matches.map(m => ({ match: m.matchText, offset: m.offset }))
       logVerbose(`Matches for note "${result.path}"`, matches)
 
+      const rb = result as NativeSearchResultWithBreakdown
+      const recency = result.recencyMultiplier ?? 1.0
+      // Reverse TS adjustments to recover the score before recency
+      let base = result.score
+      if (rb._tagBoost) base /= 100
+      if (rb._folderDownrank) base *= 10
+      base /= recency
+      const scoreBreakdown = {
+        base,
+        recency,
+        folderDownrank: rb._folderDownrank ?? false,
+        tagBoost: rb._tagBoost ?? false,
+      }
+
       return {
         score: result.score,
+        scoreBreakdown,
         path: result.path,
         basename: result.basename,
         displayTitle: result.displayTitle,

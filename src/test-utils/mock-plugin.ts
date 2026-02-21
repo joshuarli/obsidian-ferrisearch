@@ -19,6 +19,7 @@ export function createMockPlugin(overrides?: {
     weightHeadings: 5,
     weightUnmarkedTags: 2,
     verboseLogging: false,
+    showScoreBreakdown: false,
     ...overrides?.settings,
   }
 

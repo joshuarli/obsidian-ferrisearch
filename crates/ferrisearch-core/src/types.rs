@@ -29,6 +29,7 @@ pub struct MatchInfo {
 pub struct SearchResult {
     pub path: String,
     pub score: f64,
+    pub recency_multiplier: f64,
     pub matched_terms: Vec<String>,
     pub basename: String,
     pub display_title: String,

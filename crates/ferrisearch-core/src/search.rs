@@ -165,7 +165,9 @@ impl IndexManager {
                     .ok()?;
                 if let Some(decay) = recency_decay {
                     let days = (now - r.mtime) / (24.0 * 3_600_000.0);
-                    r.score *= 1.0 + (decay * days / 1000.0).exp();
+                    let multiplier = 1.0 + (decay * days / 1000.0).exp();
+                    r.recency_multiplier = multiplier;
+                    r.score *= multiplier;
                 }
                 Some(r)
             })
@@ -357,6 +359,7 @@ impl IndexManager {
             content,
             mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0) as f64,
             score,
+            recency_multiplier: 1.0,
             matched_terms: mp.query_words.to_vec(),
             tags: extract_tags(&doc, f.tags_stored),
             matches,

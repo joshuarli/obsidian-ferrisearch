@@ -87,6 +87,7 @@ export function getDefaultSettings(): FerrisearchSettings {
     weightUnmarkedTags: 2,
 
     verboseLogging: false,
+    showScoreBreakdown: false,
   }
 }
 

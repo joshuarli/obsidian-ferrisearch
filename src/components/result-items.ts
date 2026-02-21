@@ -70,6 +70,21 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
   titleContainer.appendChild(mtimeSpan)
   wrapper.appendChild(titleContainer)
 
+  // Score breakdown
+  if (plugin.settings.showScoreBreakdown && note.scoreBreakdown) {
+    const scoreDiv = document.createElement('div')
+    scoreDiv.className = 'ferrisearch-result__score'
+    const bd = note.scoreBreakdown
+    let text = `Score: ${note.score.toPrecision(3)}`
+    const parts: string[] = [`${bd.base.toPrecision(3)} base`]
+    if (bd.recency !== 1.0) parts.push(`\u00d7${bd.recency.toPrecision(3)} recency`)
+    if (bd.folderDownrank) parts.push('\u00f710 folder')
+    if (bd.tagBoost) parts.push('\u00d7100 tag')
+    if (parts.length > 1 || bd.recency !== 1.0) text += ` = ${parts.join(' ')}`
+    scoreDiv.textContent = text
+    wrapper.appendChild(scoreDiv)
+  }
+
   // Folder path
   const notePath = pathWithoutFilename(note.path)
   if (notePath) {

@@ -6,7 +6,7 @@ use ferrisearch_core::types;
 
 /// Bump this whenever the NAPI interface changes (new methods, renamed fields, etc.)
 /// so the TS layer can detect a stale dlopen-cached binary and prompt a restart.
-const NAPI_VERSION: u32 = 3;
+const NAPI_VERSION: u32 = 4;
 
 #[napi]
 pub fn napi_version() -> u32 {
@@ -153,6 +153,7 @@ impl From<types::MatchInfo> for MatchInfo {
 pub struct SearchResult {
     pub path: String,
     pub score: f64,
+    pub recency_multiplier: f64,
     pub matched_terms: Vec<String>,
     pub basename: String,
     pub display_title: String,
@@ -167,6 +168,7 @@ impl From<types::SearchResult> for SearchResult {
         Self {
             path: r.path,
             score: r.score,
+            recency_multiplier: r.recency_multiplier,
             matched_terms: r.matched_terms,
             basename: r.basename,
             display_title: r.display_title,

@@ -37,7 +37,7 @@ src/
     modal-helpers.ts       # Shared DOM builders (input, results container, instructions)
     vault-modal.ts         # Vault search UI (history display, lazy-loaded results, min query length gate)
     infile-modal.ts        # In-file search UI (grouped match offsets, min query length gate)
-    result-items.ts        # DOM creation for search result items, formatRelativeTime() for mtime display
+    result-items.ts        # DOM creation for search result items, formatRelativeTime() for mtime display, optional score breakdown
   search/
     search-engine.ts       # Wraps native Tantivy index, handles indexing + querying + document fetching
     query.ts               # Custom query parser (tokenization, keywords, exclusions, quoted phrases)
@@ -68,7 +68,7 @@ wasm/
 crates/
   ferrisearch-core/src/
     lib.rs                 # Re-exports all modules
-    types.rs               # Core types: DocumentInput, SearchResult, SearchOptions, FieldBoosts, IndexConfig
+    types.rs               # Core types: DocumentInput, SearchResult (includes recency_multiplier), SearchOptions, FieldBoosts, IndexConfig
     schema.rs              # Tantivy schema (4 searched fields) + FieldHandles
     tokenizer.rs           # FerrisearchTokenizer (Unicode-category separator regex, camelCase split) + DiacriticFilter
     index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. `filesystem` feature gates mmap/disk code; WASM uses in-memory only.
@@ -171,13 +171,13 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 1. **Startup:** `populateIndex()` loads the cached index blob for WASM users (instant restore) or sidecar manifest for native, diffs against vault files, adds/removes changed documents in the Tantivy index, saves updated sidecar (+ blob for WASM users).
 2. **File events:** Create/delete trigger immediate index updates. Modify flags for deferred reindex. Rename does remove + add.
-3. **Search:** User types in modal → min query length check → `Query` parser → `searchEngine.search()` calls native Tantivy → post-filters (extension, path, exact terms, exclusions, downranked folders, tag boost) → `getSuggestions()` maps results with match offsets → rendered as lazy-loaded DOM.
+3. **Search:** User types in modal → min query length check → `Query` parser → `searchEngine.search()` calls native Tantivy → post-filters (extension, path, exact terms, exclusions, downranked folders, tag boost) → `getSuggestions()` maps results with match offsets + score breakdown (base score, recency multiplier, folder downrank, tag boost) → rendered as lazy-loaded DOM.
 4. **History:** When a vault search result is opened, the query is saved to `search-history.txt`. When the modal opens with an empty query, the last 10 history entries are displayed.
 
 ## Settings
 
 Settings are persisted via Obsidian's `plugin.saveData()`. Key settings:
 - **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2/3), `ignoreDiacritics`, `minQueryLength` (default: 3), `resultLimit` (default: 10)
-- **UI:** `showExcerpt`, `renderLineReturnInExcerpts`, `highlight`
+- **UI:** `showExcerpt`, `renderLineReturnInExcerpts`, `highlight`, `showScoreBreakdown`
 - **Weighting:** `weightBasename`, `weightDirectory`, `weightHeadings`, `weightUnmarkedTags`
 - **Other:** `recencyBoost` (default: week; disabled/day/week/month), `verboseLogging`

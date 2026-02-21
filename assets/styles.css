@@ -55,6 +55,11 @@
   margin-left: auto;
 }
 
+.ferrisearch-result__score {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
 .ferrisearch-result__body {
   white-space: normal;
   font-size: small;

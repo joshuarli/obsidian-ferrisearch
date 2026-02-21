@@ -46,4 +46,6 @@ export interface FerrisearchSettings extends WeightingSettings {
   minQueryLength: number
   /** Maximum number of search results returned */
   resultLimit: number
+  /** Show score breakdown in search results */
+  showScoreBreakdown: boolean
 }
