@@ -51,6 +51,14 @@ impl SearchIndex {
         self.inner_mut()?.add_documents(&core_docs).map_err(map_err)
     }
 
+    #[wasm_bindgen(js_name = "addDocumentsBulk")]
+    pub fn add_documents_bulk(&mut self, docs: JsValue) -> Result<(), JsError> {
+        let core_docs: Vec<types::DocumentInput> = from_js(docs)?;
+        self.inner_mut()?
+            .add_documents_bulk(&core_docs)
+            .map_err(map_err)
+    }
+
     #[wasm_bindgen(js_name = "removeDocuments")]
     pub fn remove_documents(&mut self, paths: JsValue) -> Result<(), JsError> {
         let paths: Vec<String> = from_js(paths)?;
@@ -60,6 +68,11 @@ impl SearchIndex {
 
     pub fn commit(&mut self) -> Result<(), JsError> {
         self.inner_mut()?.commit().map_err(map_err)
+    }
+
+    #[wasm_bindgen(js_name = "commitNoMerge")]
+    pub fn commit_no_merge(&mut self) -> Result<(), JsError> {
+        self.inner_mut()?.commit_no_merge().map_err(map_err)
     }
 
     #[wasm_bindgen(js_name = "warmUp")]

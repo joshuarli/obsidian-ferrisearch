@@ -18,7 +18,7 @@ import {
 import type { Query } from './query'
 
 // Must match NAPI_VERSION in napi/src/lib.rs
-const EXPECTED_NAPI_VERSION = 2
+const EXPECTED_NAPI_VERSION = 3
 
 // The napi binding types - loaded at runtime
 interface NativeModule {
@@ -28,8 +28,10 @@ interface NativeModule {
 
 interface NativeSearchIndex {
   addDocuments(docs: NativeDocumentInput[]): void
+  addDocumentsBulk(docs: NativeDocumentInput[]): void
   removeDocuments(paths: string[]): void
   commit(): void
+  commitNoMerge(): void
   warmUp(): void
   hasDocument(path: string): boolean
   documentCount(): number
@@ -230,35 +232,50 @@ export class SearchEngine {
     }
   }
 
-  public async addFromPaths(paths: string[]): Promise<void> {
+  public async addFromPaths(paths: string[], options?: { skipCommit?: boolean }): Promise<void> {
     if (!this.nativeIndex) return
     logVerbose('Adding files', paths)
 
+    const t0 = performance.now()
     const results = await Promise.all(paths.map(p => this.getIndexedDocument(p)))
     const documents = results.filter((d): d is IndexedDocument => d !== null)
-
-    logVerbose('Sorting documents to first index markdown')
-    documents.sort((a, b) =>
-      a.path.endsWith('.md') === b.path.endsWith('.md') ? 0 : a.path.endsWith('.md') ? -1 : 1,
-    )
+    const readMs = performance.now() - t0
 
     try {
-      this.nativeIndex.addDocuments(documents)
-      this.nativeIndex.commit()
+      const t1 = performance.now()
+      if (options?.skipCommit) {
+        this.nativeIndex.addDocumentsBulk(documents)
+      } else {
+        this.nativeIndex.addDocuments(documents)
+        this.nativeIndex.commit()
+      }
+      const rustMs = performance.now() - t1
+      console.debug(
+        `Ferrisearch - addFromPaths: ${documents.length} docs, read=${readMs.toFixed(0)}ms, rust=${rustMs.toFixed(0)}ms`,
+      )
       for (const doc of documents) this.indexedDocuments.set(doc.path, doc.mtime)
     } catch (e) {
       console.error('Ferrisearch - Error adding documents', e)
     }
   }
 
-  public removeFromPaths(paths: string[]): void {
+  public removeFromPaths(paths: string[], options?: { skipCommit?: boolean }): void {
     if (!this.nativeIndex) return
     for (const p of paths) this.indexedDocuments.delete(p)
     try {
       this.nativeIndex.removeDocuments(paths)
-      this.nativeIndex.commit()
+      if (!options?.skipCommit) this.nativeIndex.commit()
     } catch (e) {
       console.error('Ferrisearch - Error removing documents', e)
+    }
+  }
+
+  public commit(): void {
+    if (!this.nativeIndex) return
+    try {
+      this.nativeIndex.commitNoMerge()
+    } catch (e) {
+      console.error('Ferrisearch - Error committing index', e)
     }
   }
 
@@ -481,7 +498,6 @@ export class SearchEngine {
         basename: file.basename,
         displayTitle: metadata?.headings?.find(h => h.level === 1)?.heading ?? file.basename,
         content,
-        cleanedContent: stripMarkdownCharacters(removeDiacritics(content)),
         path: file.path,
         mtime: file.stat.mtime,
         tags,

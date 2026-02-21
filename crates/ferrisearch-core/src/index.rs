@@ -180,6 +180,17 @@ impl IndexManager {
         Ok(())
     }
 
+    /// Add documents without upserting (no delete_by_path before insert).
+    /// Use during bulk indexing when removes are handled separately.
+    #[cfg(feature = "filesystem")]
+    pub fn add_documents_bulk(&mut self, docs: &[DocumentInput]) -> Result<(), IndexError> {
+        for doc in docs {
+            let d = Self::build_tantivy_doc(&self.fields, doc);
+            self.writer.add_document(d)?;
+        }
+        Ok(())
+    }
+
     #[cfg(feature = "filesystem")]
     pub fn remove_documents(&mut self, paths: &[String]) {
         for path in paths {
@@ -194,6 +205,15 @@ impl IndexManager {
         if segment_ids.len() > 1 {
             let _ = self.writer.merge(&segment_ids).wait();
         }
+        self.reader.reload()?;
+        Ok(())
+    }
+
+    /// Commit without force-merging segments. Use during bulk indexing
+    /// where the merge cost isn't worth blocking on.
+    #[cfg(feature = "filesystem")]
+    pub fn commit_no_merge(&mut self) -> Result<(), IndexError> {
+        self.writer.commit()?;
         self.reader.reload()?;
         Ok(())
     }
@@ -213,9 +233,22 @@ impl IndexManager {
         Ok(())
     }
 
+    /// Bulk add without dedup — caller guarantees no duplicates.
+    #[cfg(not(feature = "filesystem"))]
+    pub fn add_documents_bulk(&mut self, docs: &[DocumentInput]) -> Result<(), IndexError> {
+        self.docs_buffer.extend(docs.iter().cloned());
+        Ok(())
+    }
+
     #[cfg(not(feature = "filesystem"))]
     pub fn remove_documents(&mut self, paths: &[String]) {
         self.docs_buffer.retain(|d| !paths.contains(&d.path));
+    }
+
+    /// Alias for commit() — WASM has no merge step.
+    #[cfg(not(feature = "filesystem"))]
+    pub fn commit_no_merge(&mut self) -> Result<(), IndexError> {
+        self.commit()
     }
 
     /// Rebuild the entire index from the docs buffer using SingleSegmentIndexWriter

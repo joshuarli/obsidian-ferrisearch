@@ -6,7 +6,7 @@ use ferrisearch_core::types;
 
 /// Bump this whenever the NAPI interface changes (new methods, renamed fields, etc.)
 /// so the TS layer can detect a stale dlopen-cached binary and prompt a restart.
-const NAPI_VERSION: u32 = 2;
+const NAPI_VERSION: u32 = 3;
 
 #[napi]
 pub fn napi_version() -> u32 {
@@ -222,6 +222,16 @@ impl SearchIndex {
         self.inner_mut()?.add_documents(&core_docs).map_err(map_err)
     }
 
+    /// Bulk add without per-document delete (no upsert).
+    /// Use during bulk indexing when removes are handled separately.
+    #[napi]
+    pub fn add_documents_bulk(&mut self, docs: Vec<DocumentInput>) -> Result<()> {
+        let core_docs: Vec<types::DocumentInput> = docs.into_iter().map(Into::into).collect();
+        self.inner_mut()?
+            .add_documents_bulk(&core_docs)
+            .map_err(map_err)
+    }
+
     #[napi]
     pub fn remove_documents(&mut self, paths: Vec<String>) -> Result<()> {
         self.inner_mut()?.remove_documents(&paths);
@@ -231,6 +241,12 @@ impl SearchIndex {
     #[napi]
     pub fn commit(&mut self) -> Result<()> {
         self.inner_mut()?.commit().map_err(map_err)
+    }
+
+    /// Commit without force-merging segments.
+    #[napi]
+    pub fn commit_no_merge(&mut self) -> Result<()> {
+        self.inner_mut()?.commit_no_merge().map_err(map_err)
     }
 
     #[napi]

@@ -1,2 +1,1 @@
-I'd like fuzziness=1 to at least match simple one character typos like
-  this and fuzziness=2 to match even more severe typos
+everytime obsidian saves edits to a new file, we should be indexing the new file.

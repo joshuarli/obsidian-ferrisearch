@@ -192,14 +192,14 @@ export default class FerrisearchPlugin extends Plugin {
 
   public async populateIndex(): Promise<void> {
     const searchEngine = this.searchEngine
+    const t0 = performance.now()
 
-    console.time('Ferrisearch - Indexing total time')
     indexingStep.set(IndexingStepType.ReadingFiles)
     const files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
 
     // Try to load cached index (blob for WASM users, sidecar-only for native)
-    console.time('Ferrisearch - Loading index from cache')
+    const tCache = performance.now()
     indexingStep.set(IndexingStepType.LoadingCache)
     let hasCache: boolean
     if (!searchEngine.isNative) {
@@ -212,7 +212,7 @@ export default class FerrisearchPlugin extends Plugin {
       hasCache = await searchEngine.loadSidecar()
     }
     if (hasCache) {
-      console.timeEnd('Ferrisearch - Loading index from cache')
+      console.debug(`Ferrisearch - Loaded cache in ${(performance.now() - tCache).toFixed(0)}ms`)
     }
 
     const diff = searchEngine.getDocumentsToReindex(
@@ -227,23 +227,37 @@ export default class FerrisearchPlugin extends Plugin {
     }
 
     if (diff.toAdd.length > 0) {
-      new Notice(`Ferrisearch: adding ${diff.toAdd.length} files to the index.`, 10_000)
+      new Notice(`Ferrisearch: indexing ${diff.toAdd.length} files…`, 10_000)
     }
 
+    const tIndex = performance.now()
     indexingStep.set(IndexingStepType.IndexingFiles)
-    searchEngine.removeFromPaths(diff.toRemove.map(o => o.path))
-    await searchEngine.addFromPaths(diff.toAdd.map(o => o.path))
+    const skipCommit = { skipCommit: true }
+    searchEngine.removeFromPaths(
+      diff.toRemove.map(o => o.path),
+      skipCommit,
+    )
+    await searchEngine.addFromPaths(
+      diff.toAdd.map(o => o.path),
+      skipCommit,
+    )
+    if (diff.toRemove.length || diff.toAdd.length) searchEngine.commit()
+    const indexMs = performance.now() - tIndex
 
     if (diff.toRemove.length || diff.toAdd.length) {
+      const tSave = performance.now()
       indexingStep.set(IndexingStepType.WritingCache)
       await searchEngine.saveSidecar()
       await searchEngine.saveIndexBlob()
+      console.debug(`Ferrisearch - Saved cache in ${(performance.now() - tSave).toFixed(0)}ms`)
     }
 
-    console.timeEnd('Ferrisearch - Indexing total time')
+    const totalMs = performance.now() - t0
 
     if (diff.toAdd.length > 0) {
-      new Notice(`Ferrisearch: Your files have been indexed.`)
+      const msg = `Ferrisearch: indexed ${diff.toAdd.length} files in ${(totalMs / 1000).toFixed(1)}s`
+      console.log(`${msg} (read+index: ${indexMs.toFixed(0)}ms, total: ${totalMs.toFixed(0)}ms)`)
+      new Notice(msg)
     }
     indexingStep.set(IndexingStepType.Done)
     notifyOnIndexed()
