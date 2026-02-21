@@ -190,7 +190,7 @@ export default class FerrisearchPlugin extends Plugin {
     this.searchEngine.close()
   }
 
-  private async populateIndex(): Promise<void> {
+  public async populateIndex(): Promise<void> {
     const searchEngine = this.searchEngine
 
     console.time('Ferrisearch - Indexing total time')

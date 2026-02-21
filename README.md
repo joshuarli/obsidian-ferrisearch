@@ -2,16 +2,18 @@
 
 warp speed fuzzy text-only search for Obsidian
 
-For larger vaults, Omnisearch's startup latency became a problem for me,
-and has started feeling sluggish.
+For my vault (~1500 md files, ~100k lines), [Omnisearch's](https://github.com/scambier/obsidian-omnisearch) startup latency became a problem for me, and has started feeling sluggish.
 
-ferrisearch is based on [Omnisearch](https://github.com/scambier/obsidian-omnisearch) but has since diverged infrastructurally a lot:
-- minisearch has been replaced with [tantivy](https://github.com/quickwit-oss/tantivy) + wasm to bridge ts <-> rust on all platforms
-- search is restricted to pure text, and some Omnisearch features have been removed
-- search is now so fast (~1ms) that input debouncing has been completely removed
-- dependencies have been cut down to the minimum
-  - svelte has been replaced with pure ts
-  - as much as possible hot path ts has been moved into rust land
+The solution to this was to replace minisearch with [tantivy](https://github.com/quickwit-oss/tantivy) and tune it towards minimizing subqueries.
+Search is now so fast (~1ms for my vault) that input debouncing has been completely removed and results are pretty much instant.
+
+Extraneous features and customizability have been removed for simplicity. The majority use case should be supported very well.
+- Search is restricted to pure text.
+
+Also, non-build/app dependencies have been cut down to the minimum.
+- Svelte has been replaced with pure TS.
+- The remaining TS hotpaths (mainly, results highlighting) have been moved into rust.
+
 
 ## new features
 
@@ -24,4 +26,4 @@ Obsidian's maximum fuzziness doesn't match simple typos when the search term is 
 
 ## native build
 
-The native build is only supported on darwin arm64 in github releases, everyone else gets wasm (otherwise the build footprint in github actions is unsustainably complicated).
+The native build is only supported on darwin arm64 in github releases, everyone else gets WASM (otherwise the build footprint in github actions is unsustainably complicated).

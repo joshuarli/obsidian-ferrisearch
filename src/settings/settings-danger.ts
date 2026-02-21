@@ -11,11 +11,10 @@ export function injectSettingsDanger(
 ) {
   new Setting(containerEl).setName('Danger Zone').setHeading()
 
-  // Ignore diacritics
   new Setting(containerEl)
     .setName('Ignore diacritics')
     .setDesc(
-      htmlDescription(`Normalize diacritics in search terms. Words like "brulee" or "zlutoucky" will be indexed without diacritics.<br/>
+      htmlDescription(`Normalize diacritics. ("Crème brûlée" will be indexed as "creme brulee".)<br/>
       ${needsARestart}`),
     )
     .addToggle(toggle =>
@@ -25,7 +24,6 @@ export function injectSettingsDanger(
       }),
     )
 
-  // Disable Ferrisearch
   const disableDesc = new DocumentFragment()
   disableDesc.createSpan({}, span => {
     span.innerHTML = `Disable Ferrisearch on this device only.<br>
@@ -46,19 +44,22 @@ export function injectSettingsDanger(
       }),
     )
 
-  // Clear index
   new Setting(containerEl)
-    .setName('Clear index data')
+    .setName('Rebuild index')
     .setDesc(
-      htmlDescription(`Erase all Ferrisearch index data.
-        Use this if results are inconsistent, missing, or appear outdated.<br>
-        ${needsARestart}`),
+      htmlDescription(`Erase all Ferrisearch index data and rebuild from scratch.
+        Use this if results are inconsistent, missing, or appear outdated.`),
     )
     .addButton(btn => {
-      btn.setButtonText('Clear index')
-      btn.onClick(() => {
-        plugin.searchEngine.close()
-        new Notice('Ferrisearch - Index cleared. Please restart Obsidian.')
+      btn.setButtonText('Rebuild index')
+      btn.onClick(async () => {
+        btn.setDisabled(true)
+        btn.setButtonText('Rebuilding…')
+        new Notice('Ferrisearch - Rebuilding index…')
+        await plugin.searchEngine.clearIndex()
+        await plugin.populateIndex()
+        btn.setButtonText('Rebuild index')
+        btn.setDisabled(false)
       })
     })
 }

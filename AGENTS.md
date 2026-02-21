@@ -52,7 +52,7 @@ src/
     settings-behavior.ts   # Behavior settings UI (min query length, fuzziness, camelCase, etc.)
     settings-ui.ts         # UI settings UI
     settings-weighting.ts  # Field weight sliders + recency boost
-    settings-danger.ts     # Danger zone (diacritics, disable, clear index)
+    settings-danger.ts     # Danger zone (diacritics, disable, rebuild index)
   test-utils/
     setup.ts               # happy-dom registration, obsidian module mock, polyfills
     mock-plugin.ts         # createMockPlugin() factory for tests

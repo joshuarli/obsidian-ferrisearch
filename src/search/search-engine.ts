@@ -177,6 +177,23 @@ export class SearchEngine {
     this.nativeIndex = null
   }
 
+  public async clearIndex(): Promise<void> {
+    this.close()
+    this.indexedDocuments.clear()
+
+    const adapter = this.plugin.app.vault.adapter
+    const sidecar = this.getSidecarPath()
+    if (await adapter.exists(sidecar)) await adapter.remove(sidecar)
+    const blob = this.getBlobPath()
+    if (await adapter.exists(blob)) await adapter.remove(blob)
+    if (this.isNativeEngine) {
+      const indexDir = this.getIndexPath()
+      if (await adapter.exists(indexDir)) await adapter.rmdir(indexDir, true)
+    }
+
+    await this.initialize()
+  }
+
   async loadSidecar(): Promise<boolean> {
     try {
       const adapter = this.plugin.app.vault.adapter
