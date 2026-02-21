@@ -9,9 +9,6 @@ setup:
 loc:
     tokei
 
-bench:
-    cargo bench --bench query
-
 dev:
     bun run --watch build.ts
 

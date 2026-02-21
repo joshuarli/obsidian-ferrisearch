@@ -2,10 +2,10 @@
 
 warp speed fuzzy text-only search for Obsidian
 
-For my vault (~1500 md files, ~100k lines), [Omnisearch's](https://github.com/scambier/obsidian-omnisearch) startup latency became a problem for me, and has started feeling sluggish.
+For my vault (~1500 md files, ~100k lines), [Omnisearch's](https://github.com/scambier/obsidian-omnisearch) startup latency became a problem for me - I'd like to be able to open Obsidian and immediately search. This is especially important on mobile.
 
 The solution to this was to replace minisearch with [tantivy](https://github.com/quickwit-oss/tantivy) and tune it towards minimizing subqueries.
-Search is now so fast (~1ms for my vault) that input debouncing has been completely removed and results are pretty much instant.
+Search is now so fast (~4ms for my vault) that input debouncing has been completely removed and results are pretty much instant.
 
 Extraneous features and customizability have been removed for simplicity. The majority use case should be supported very well.
 - Search is restricted to pure text.

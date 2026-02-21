@@ -479,7 +479,7 @@ export class SearchEngine {
 
       return {
         basename: file.basename,
-        displayTitle: metadata?.headings?.find(h => h.level === 1)?.heading ?? '',
+        displayTitle: metadata?.headings?.find(h => h.level === 1)?.heading ?? file.basename,
         content,
         cleanedContent: stripMarkdownCharacters(removeDiacritics(content)),
         path: file.path,

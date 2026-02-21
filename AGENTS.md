@@ -73,13 +73,6 @@ crates/
     tokenizer.rs           # FerrisearchTokenizer (Unicode-category separator regex, camelCase split) + DiacriticFilter
     index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. `filesystem` feature gates mmap/disk code; WASM uses in-memory only.
     search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost. Uses js-sys::Date::now() on WASM (SystemTime panics on wasm32).
-  ferrisearch-core/benches/
-    query.rs               # Query latency benchmarks (writes bench/results.md with % change tracking)
-bench/
-  gh-docs.tar.zst          # GitHub docs corpus (~3,400 markdown files)
-  corpus/                   # Extracted corpus (gitignored)
-  results.md                # Latest benchmark results
-  README.md                 # Corpus setup + run instructions
 scripts/
   build-and-install.sh      # Build + install to multiple Obsidian vaults
   copy-to-android.sh        # Push built plugin to Android device via adb
@@ -160,9 +153,8 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 | `cargo test` | Run Rust tests (102 tests) |
 | `just test-wasm` | Run WASM integration tests via wasm-bindgen-test-runner (Node.js) |
 | `cargo clippy --all-targets --all-features -- -D warnings` | Rust linter |
-| `cargo bench --bench query` | Query latency benchmarks → `bench/results.md` |
 | `scripts/build-and-install.sh` | Build + install to Obsidian vaults |
-| `bun scripts/test-search.ts [query] [fuzziness]` | CLI search smoke test against `scripts/test-vault/` |
+| `bun scripts/test-search.ts <dir> <query> [fuzziness]` | CLI search test harness (indexes dir, searches, benchmarks query latency) |
 
 - **Build tool:** Bun's bundler (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
 - **Test runner:** `bun:test` with `happy-dom` for DOM APIs. The `obsidian` module is mocked in `setup.ts`. `IntersectionObserver` is mocked to fire immediately.

@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
 /**
- * CLI smoke test for the native NAPI search engine.
- * Reads .md files from scripts/test-vault/, indexes them, searches, prints results.
+ * CLI test harness for the native NAPI search engine.
+ * Indexes .md files from any directory, searches, and benchmarks query latency.
  *
  * Usage:
- *   bun scripts/test-search.ts [query] [fuzziness]
+ *   bun scripts/test-search.ts <directory> <query> [fuzziness]
  *
  * Examples:
- *   bun scripts/test-search.ts powder 2
- *   bun scripts/test-search.ts powder 3
- *   bun scripts/test-search.ts restaurant 1
+ *   bun scripts/test-search.ts ~/my-vault powder 2
+ *   bun scripts/test-search.ts ~/my-vault restaurant 1
+ *   bun scripts/test-search.ts ~/my-vault "github actions" 0
  */
 
 import path from "node:path";
@@ -18,7 +18,6 @@ import fs from "node:fs";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const NODE_FILE = path.join(ROOT, "ferrisearch.darwin-arm64.node");
-const VAULT_DIR = path.join(ROOT, "scripts", "test-vault");
 
 if (!fs.existsSync(NODE_FILE)) {
   console.error(`Native binary not found: ${NODE_FILE}`);
@@ -28,56 +27,79 @@ if (!fs.existsSync(NODE_FILE)) {
   process.exit(1);
 }
 
-if (!fs.existsSync(VAULT_DIR)) {
-  console.error(`Test vault not found: ${VAULT_DIR}`);
-  console.error("Create .md files in scripts/test-vault/");
+const dirArg = process.argv[2];
+const query = process.argv[3];
+const fuzziness = process.argv[4] || "1";
+
+if (!dirArg || !query) {
+  console.error("Usage: bun scripts/test-search.ts <directory> <query> [fuzziness]");
   process.exit(1);
 }
 
-// ── Collect all .md files recursively ───────────────────────────────────
-function collectMdFiles(dir: string, base: string): string[] {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...collectMdFiles(full, base));
-    } else if (entry.name.endsWith(".md")) {
-      files.push(path.relative(base, full));
-    }
-  }
-  return files;
+const VAULT_DIR = path.resolve(dirArg);
+
+if (!fs.existsSync(VAULT_DIR) || !fs.statSync(VAULT_DIR).isDirectory()) {
+  console.error(`Directory not found: ${VAULT_DIR}`);
+  process.exit(1);
 }
 
-const mdPaths = collectMdFiles(VAULT_DIR, VAULT_DIR);
+// ── Collect .md files via fd ─────────────────────────────────────────────
+async function collectMdFiles(): Promise<string[]> {
+  const proc = Bun.spawn(["fd", "-e", "md", "-t", "f", ".", VAULT_DIR], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [text, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  await proc.exited;
+  if (proc.exitCode !== 0) {
+    console.error(stderr || "fd failed — is it installed? (brew install fd)");
+    process.exit(1);
+  }
+  if (!text.length) return [];
+  return text.trimEnd().split("\n").map((p) => path.relative(VAULT_DIR, p));
+}
 
-// ── Build document inputs from files ────────────────────────────────────
-const docs = mdPaths.map((relPath) => {
-  const fullPath = path.join(VAULT_DIR, relPath);
-  const content = fs.readFileSync(fullPath, "utf-8");
-  const basename = path.basename(relPath, ".md");
+const crawlStart = performance.now();
+const mdPaths = await collectMdFiles();
+const crawlMs = performance.now() - crawlStart;
+console.log(`Found ${mdPaths.length} .md files in ${crawlMs.toFixed(1)}ms`);
 
-  // Extract first H1 as display title
-  const h1Match = content.match(/^#\s+(.+)$/m);
-  const displayTitle = h1Match ? h1Match[1] : basename;
+// ── Read files + build document inputs (parallel async I/O) ─────────────
+const readStart = performance.now();
+const docs = await Promise.all(
+  mdPaths.map(async (relPath) => {
+    const fullPath = path.join(VAULT_DIR, relPath);
+    const [content, stat] = await Promise.all([
+      Bun.file(fullPath).text(),
+      fs.promises.stat(fullPath),
+    ]);
+    const basename = path.basename(relPath, ".md");
 
-  // Extract headings (H1-H3)
-  const headings = (content.match(/^#{1,3}\s+(.+)$/gm) || [])
-    .map((h) => h.replace(/^#{1,3}\s+/, ""))
-    .join(" ");
+    const h1Match = content.match(/^#\s+(.+)$/m);
+    const displayTitle = h1Match ? h1Match[1] : basename;
 
-  return {
-    path: relPath,
-    basename,
-    displayTitle,
-    aliases: "",
-    content,
-    headings,
-    tags: [] as string[],
-    unmarkedTags: [] as string[],
-    mtime: fs.statSync(fullPath).mtimeMs,
-  };
-});
+    const headings = (content.match(/^#{1,3}\s+(.+)$/gm) || [])
+      .map((h) => h.replace(/^#{1,3}\s+/, ""))
+      .join(" ");
+
+    return {
+      path: relPath,
+      basename,
+      displayTitle,
+      aliases: "",
+      content,
+      headings,
+      tags: [] as string[],
+      unmarkedTags: [] as string[],
+      mtime: stat.mtimeMs,
+    };
+  }),
+);
+const readMs = performance.now() - readStart;
+console.log(`Read ${docs.length} files in ${readMs.toFixed(1)}ms`);
 
 // ── Index ───────────────────────────────────────────────────────────────
 const native = require(NODE_FILE);
@@ -85,18 +107,19 @@ const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ferrisearch-test-"));
 const indexPath = path.join(tmpDir, "tantivy-index");
 const index = new native.SearchIndex(indexPath, { ignoreDiacritics: true });
 
+const indexStart = performance.now();
 index.addDocuments(docs);
 index.commit();
-console.log(`Indexed ${docs.length} files from ${VAULT_DIR}\n`);
+const indexMs = performance.now() - indexStart;
+console.log(`Indexed ${docs.length} files in ${indexMs.toFixed(1)}ms`);
+console.log(`Total: ${(crawlMs + readMs + indexMs).toFixed(1)}ms\n`);
 
 // ── Search ──────────────────────────────────────────────────────────────
-const query = process.argv[2] || "powder";
-const fuzziness = process.argv[3] || "2";
-
 const opts = {
   fuzziness,
   prefixLength: 1,
   limit: 10,
+  recencyBoost: "0",
   fieldBoosts: {
     basename: 10,
     displayTitle: 10,
@@ -109,7 +132,7 @@ const opts = {
   },
 };
 
-console.log(`Query: "${query}"  Fuzziness: ${fuzziness}\n`);
+console.log(`Query: "${query}"  Fuzziness: ${fuzziness}`);
 console.log("─".repeat(70));
 
 const results = index.search(query, opts);
@@ -128,6 +151,32 @@ if (results.length === 0) {
 }
 
 console.log("\n" + "─".repeat(70));
+
+// ── Benchmark ───────────────────────────────────────────────────────────
+const RUNS = 100;
+const latencies = new Float64Array(RUNS);
+
+// Warm up (5 runs, discarded)
+for (let i = 0; i < 5; i++) index.search(query, opts);
+
+for (let i = 0; i < RUNS; i++) {
+  const t0 = performance.now();
+  index.search(query, opts);
+  latencies[i] = performance.now() - t0;
+}
+
+latencies.sort();
+
+const p50 = latencies[Math.floor(RUNS * 0.5)];
+const mean = latencies.reduce((a, b) => a + b, 0) / RUNS;
+const variance = latencies.reduce((a, b) => a + (b - mean) ** 2, 0) / RUNS;
+const stddev = Math.sqrt(variance);
+
+console.log(`\nBenchmark (${RUNS} runs):`);
+console.log(`  p50:    ${p50.toFixed(3)}ms`);
+console.log(`  mean:   ${mean.toFixed(3)}ms`);
+console.log(`  stddev: ${stddev.toFixed(3)}ms`);
+console.log(`  3σ:     ${(mean + 3 * stddev).toFixed(3)}ms`);
 
 // Cleanup
 index.close();
