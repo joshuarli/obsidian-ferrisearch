@@ -6,7 +6,7 @@ use ferrisearch_core::types;
 
 /// Bump this whenever the NAPI interface changes (new methods, renamed fields, etc.)
 /// so the TS layer can detect a stale dlopen-cached binary and prompt a restart.
-const NAPI_VERSION: u32 = 4;
+const NAPI_VERSION: u32 = 5;
 
 #[napi]
 pub fn napi_version() -> u32 {
@@ -117,6 +117,7 @@ pub struct SearchOptions {
     pub limit: Option<f64>,
     pub single_file_path: Option<String>,
     pub recency_boost: Option<String>,
+    pub score_breakdown: Option<bool>,
 }
 
 impl From<SearchOptions> for types::SearchOptions {
@@ -128,6 +129,7 @@ impl From<SearchOptions> for types::SearchOptions {
             limit: o.limit.unwrap_or(10.0),
             single_file_path: o.single_file_path,
             recency_boost: o.recency_boost.unwrap_or_else(|| "0".into()),
+            score_breakdown: o.score_breakdown.unwrap_or(false),
         }
     }
 }
@@ -150,10 +152,31 @@ impl From<types::MatchInfo> for MatchInfo {
 
 #[napi(object)]
 #[derive(Debug, Clone)]
+pub struct FieldScoreBreakdown {
+    pub display_title: f64,
+    pub directory: f64,
+    pub content: f64,
+    pub headings: f64,
+}
+
+impl From<types::FieldScoreBreakdown> for FieldScoreBreakdown {
+    fn from(b: types::FieldScoreBreakdown) -> Self {
+        Self {
+            display_title: b.display_title,
+            directory: b.directory,
+            content: b.content,
+            headings: b.headings,
+        }
+    }
+}
+
+#[napi(object)]
+#[derive(Debug, Clone)]
 pub struct SearchResult {
     pub path: String,
     pub score: f64,
     pub recency_multiplier: f64,
+    pub field_scores: Option<FieldScoreBreakdown>,
     pub matched_terms: Vec<String>,
     pub basename: String,
     pub display_title: String,
@@ -169,6 +192,7 @@ impl From<types::SearchResult> for SearchResult {
             path: r.path,
             score: r.score,
             recency_multiplier: r.recency_multiplier,
+            field_scores: r.field_scores.map(Into::into),
             matched_terms: r.matched_terms,
             basename: r.basename,
             display_title: r.display_title,

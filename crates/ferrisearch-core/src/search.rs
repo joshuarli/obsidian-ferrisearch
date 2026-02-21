@@ -10,7 +10,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::index::{IndexError, IndexManager};
 use crate::schema::{doc_text, extract_tags};
-use crate::types::{MatchInfo, SearchOptions, SearchResult};
+use crate::types::{FieldScoreBreakdown, MatchInfo, SearchOptions, SearchResult};
 
 /// Parsed query: individual terms and quoted phrases.
 struct ParsedQuery {
@@ -127,15 +127,17 @@ impl IndexManager {
             fuzzy_only,
         };
 
-        let results = if fuzzy_only {
+        let (results, effective_fuzziness) = if fuzzy_only {
             // Fuzzy-only mode: skip exact+prefix, go straight to fuzzy on all fields
             let query = self.build_search_query(&parsed, options, fuzziness, true);
-            searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?
+            let r = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
+            (r, fuzziness)
         } else {
             // Phase 1: exact + prefix only (no fuzzy)
             let query = self.build_search_query(&parsed, options, 0.0, false);
             let mut results =
                 searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
+            let mut eff_fuzz = 0.0;
 
             // Phase 2: if exact+prefix found very few results and fuzzy is enabled, retry with fuzzy.
             // Threshold is fixed (not scaled with limit) so that raising the limit for debugging
@@ -144,8 +146,9 @@ impl IndexManager {
             if results.len() < FUZZY_THRESHOLD && fuzziness > 0.0 && !parsed.terms.is_empty() {
                 let query = self.build_search_query(&parsed, options, fuzziness, false);
                 results = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
+                eff_fuzz = fuzziness;
             }
-            results
+            (results, eff_fuzz)
         };
 
         // Recency boost (applied post-hoc)
@@ -168,6 +171,16 @@ impl IndexManager {
                     let multiplier = 1.0 + (decay * days / 1000.0).exp();
                     r.recency_multiplier = multiplier;
                     r.score *= multiplier;
+                }
+                if options.score_breakdown {
+                    r.field_scores = Some(self.explain_per_field(
+                        &searcher,
+                        &parsed,
+                        options,
+                        effective_fuzziness,
+                        fuzzy_only,
+                        addr,
+                    ));
                 }
                 Some(r)
             })
@@ -360,10 +373,107 @@ impl IndexManager {
             mtime: doc.get_first(f.mtime).and_then(|v| v.as_u64()).unwrap_or(0) as f64,
             score,
             recency_multiplier: 1.0,
+            field_scores: None,
             matched_terms: mp.query_words.to_vec(),
             tags: extract_tags(&doc, f.tags_stored),
             matches,
         })
+    }
+    /// Compute per-field score breakdown for a single document using Tantivy's explain API.
+    /// For each searched field, explains each individual sub-query (exact, prefix, fuzzy)
+    /// separately and sums the scores. Only called when `SearchOptions::score_breakdown`
+    /// is true.
+    fn explain_per_field(
+        &self,
+        searcher: &Searcher,
+        parsed: &ParsedQuery,
+        options: &SearchOptions,
+        fuzziness: f32,
+        fuzzy_only: bool,
+        addr: DocAddress,
+    ) -> FieldScoreBreakdown {
+        let mut bd = FieldScoreBreakdown::default();
+
+        for (name, field) in self.fields.text_fields().iter() {
+            let boost = options.field_boosts.for_field(name);
+            let mut field_score = 0.0_f64;
+
+            // Individual terms — explain each sub-query independently to avoid
+            // Tantivy seek-ordering issues with BooleanQuery::explain.
+            for lower in &parsed.terms {
+                let term = Term::from_field_text(*field, lower);
+
+                if fuzzy_only {
+                    let dist = fuzzy_distance(lower, fuzziness);
+                    if dist > 0 {
+                        let q: Box<dyn Query> = Box::new(BoostQuery::new(
+                            Box::new(FuzzyTermQuery::new(term, dist, true)),
+                            boost,
+                        ));
+                        if let Ok(expl) = q.explain(searcher, addr) {
+                            field_score += expl.value() as f64;
+                        }
+                    }
+                } else {
+                    // Exact
+                    let q: Box<dyn Query> = Box::new(BoostQuery::new(
+                        Box::new(TermQuery::new(term.clone(), IndexRecordOption::WithFreqs)),
+                        boost,
+                    ));
+                    if let Ok(expl) = q.explain(searcher, addr) {
+                        field_score += expl.value() as f64;
+                    }
+
+                    // Prefix (skip directory)
+                    if *name != "directory" && lower.len() >= options.prefix_length as usize {
+                        let q: Box<dyn Query> = Box::new(BoostQuery::new(
+                            Box::new(PhrasePrefixQuery::new(vec![term.clone()])),
+                            boost * 0.8,
+                        ));
+                        if let Ok(expl) = q.explain(searcher, addr) {
+                            field_score += expl.value() as f64;
+                        }
+                    }
+
+                    // Fuzzy (content only)
+                    if *name == "content" && fuzziness > 0.0 {
+                        let dist = fuzzy_distance(lower, fuzziness);
+                        if dist > 0 {
+                            let q: Box<dyn Query> = Box::new(BoostQuery::new(
+                                Box::new(FuzzyTermQuery::new(term, dist, true)),
+                                boost * 0.6,
+                            ));
+                            if let Ok(expl) = q.explain(searcher, addr) {
+                                field_score += expl.value() as f64;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Phrase queries
+            for phrase_words in &parsed.phrases {
+                let terms: Vec<Term> = phrase_words
+                    .iter()
+                    .map(|w| Term::from_field_text(*field, w))
+                    .collect();
+                let q: Box<dyn Query> =
+                    Box::new(BoostQuery::new(Box::new(PhraseQuery::new(terms)), boost));
+                if let Ok(expl) = q.explain(searcher, addr) {
+                    field_score += expl.value() as f64;
+                }
+            }
+
+            match *name {
+                "display_title" => bd.display_title = field_score,
+                "directory" => bd.directory = field_score,
+                "content" => bd.content = field_score,
+                "headings" => bd.headings = field_score,
+                _ => {}
+            }
+        }
+
+        bd
     }
 }
 
@@ -1424,5 +1534,80 @@ mod tests {
             .collect();
         assert!(match_texts.contains(&"Hello"));
         assert!(match_texts.contains(&"test"));
+    }
+
+    // ── Score breakdown tests ────────────────────────────────────────
+
+    #[test]
+    fn score_breakdown_disabled_by_default() {
+        let mgr = setup_index(vec![make_doc("a.md", "a", "hello world")]);
+        let results = mgr.search("hello", &SearchOptions::default()).unwrap();
+        assert!(!results.is_empty());
+        assert!(results[0].field_scores.is_none());
+    }
+
+    #[test]
+    fn score_breakdown_returns_field_scores() {
+        let mgr = setup_index(vec![make_doc(
+            "notes/hello.md",
+            "hello",
+            "Hello world, this is a test",
+        )]);
+        let opts = SearchOptions {
+            score_breakdown: true,
+            ..Default::default()
+        };
+        let results = mgr.search("hello", &opts).unwrap();
+        assert!(!results.is_empty());
+        let fs = results[0].field_scores.as_ref().unwrap();
+        // "hello" appears in display_title and content — both should have positive scores
+        assert!(
+            fs.display_title > 0.0,
+            "display_title should be > 0, got {}",
+            fs.display_title
+        );
+        assert!(
+            fs.content > 0.0,
+            "content should be > 0, got {}",
+            fs.content
+        );
+    }
+
+    #[test]
+    fn score_breakdown_headings_field() {
+        let mut doc = make_doc("a.md", "a", "body text only");
+        doc.headings = "Important Topic".into();
+        let mgr = setup_index(vec![doc]);
+        let opts = SearchOptions {
+            score_breakdown: true,
+            ..Default::default()
+        };
+        let results = mgr.search("important", &opts).unwrap();
+        assert!(!results.is_empty());
+        let fs = results[0].field_scores.as_ref().unwrap();
+        assert!(
+            fs.headings > 0.0,
+            "headings should be > 0, got {}",
+            fs.headings
+        );
+        // "important" is not in display_title
+        assert_eq!(fs.display_title, 0.0);
+    }
+
+    #[test]
+    fn score_breakdown_directory_field() {
+        let mgr = setup_index(vec![make_doc("recipes/hello.md", "hello", "some content")]);
+        let opts = SearchOptions {
+            score_breakdown: true,
+            ..Default::default()
+        };
+        let results = mgr.search("recipes", &opts).unwrap();
+        assert!(!results.is_empty());
+        let fs = results[0].field_scores.as_ref().unwrap();
+        assert!(
+            fs.directory > 0.0,
+            "directory should be > 0, got {}",
+            fs.directory
+        );
     }
 }

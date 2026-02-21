@@ -68,11 +68,11 @@ wasm/
 crates/
   ferrisearch-core/src/
     lib.rs                 # Re-exports all modules
-    types.rs               # Core types: DocumentInput, SearchResult (includes recency_multiplier), SearchOptions, FieldBoosts, IndexConfig
+    types.rs               # Core types: DocumentInput, SearchResult (recency_multiplier, optional FieldScoreBreakdown), SearchOptions (score_breakdown flag), FieldBoosts, IndexConfig
     schema.rs              # Tantivy schema (4 searched fields) + FieldHandles
     tokenizer.rs           # FerrisearchTokenizer (Unicode-category separator regex, camelCase split) + DiacriticFilter
     index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. `filesystem` feature gates mmap/disk code; WASM uses in-memory only.
-    search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost. Uses js-sys::Date::now() on WASM (SystemTime panics on wasm32).
+    search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost, per-field score explain. Uses js-sys::Date::now() on WASM (SystemTime panics on wasm32).
 scripts/
   build-and-install.sh      # Build + install to multiple Obsidian vaults
   copy-to-android.sh        # Push built plugin to Android device via adb
@@ -115,6 +115,8 @@ Sub-tokens sharing the parent position is critical for phrase queries: `"variabl
 Quoted phrases (`"foo bar"`) use `PhraseQuery` — requires terms at consecutive positions in the same field.
 
 Query parsing (`parse_query`) splits input into individual terms and quoted phrases. Single-word phrases are promoted to terms. Unclosed quotes fall back to individual terms.
+
+**Per-field score breakdown** (`explain_per_field`): When `SearchOptions::score_breakdown` is true, each result gets a `FieldScoreBreakdown` with per-field scores (`display_title`, `directory`, `content`, `headings`). Uses Tantivy's `Query::explain()` API — for each (term, field) pair, explains individual sub-queries (exact TermQuery, PhrasePrefixQuery, FuzzyTermQuery) separately and sums the scores. Each explain is independent to avoid Tantivy seek-ordering issues with BooleanQuery::explain. Cost: ~N_terms × N_fields explain calls per result, gated behind the `showScoreBreakdown` setting (default off).
 
 ### Index (`index.rs`)
 

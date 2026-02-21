@@ -70,11 +70,19 @@ export type SearchMatch = {
 
 export const indexingStep = new Observable(IndexingStepType.Done)
 
+export type FieldScores = {
+  displayTitle: number
+  directory: number
+  content: number
+  headings: number
+}
+
 export type ScoreBreakdown = {
   base: number
   recency: number
   folderDownrank: boolean
   tagBoost: boolean
+  fieldScores?: FieldScores
 }
 
 export type ResultNote = {

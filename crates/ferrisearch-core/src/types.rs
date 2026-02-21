@@ -24,12 +24,22 @@ pub struct MatchInfo {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldScoreBreakdown {
+    pub display_title: f64,
+    pub directory: f64,
+    pub content: f64,
+    pub headings: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub path: String,
     pub score: f64,
     pub recency_multiplier: f64,
+    pub field_scores: Option<FieldScoreBreakdown>,
     pub matched_terms: Vec<String>,
     pub basename: String,
     pub display_title: String,
@@ -64,6 +74,7 @@ pub struct SearchOptions {
     pub limit: f64,
     pub single_file_path: Option<String>,
     pub recency_boost: String,
+    pub score_breakdown: bool,
 }
 
 impl Default for SearchOptions {
@@ -75,6 +86,7 @@ impl Default for SearchOptions {
             limit: 10.0,
             single_file_path: None,
             recency_boost: "0".into(),
+            score_breakdown: false,
         }
     }
 }

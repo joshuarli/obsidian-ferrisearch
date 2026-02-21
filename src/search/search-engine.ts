@@ -18,7 +18,7 @@ import {
 import type { Query } from './query'
 
 // Must match NAPI_VERSION in napi/src/lib.rs
-const EXPECTED_NAPI_VERSION = 4
+const EXPECTED_NAPI_VERSION = 5
 
 // The napi binding types - loaded at runtime
 interface NativeModule {
@@ -67,6 +67,7 @@ interface NativeSearchOptions {
   limit?: number
   singleFilePath?: string
   recencyBoost?: string
+  scoreBreakdown?: boolean
 }
 
 interface NativeMatchInfo {
@@ -74,10 +75,18 @@ interface NativeMatchInfo {
   offset: number
 }
 
+interface NativeFieldScoreBreakdown {
+  displayTitle: number
+  directory: number
+  content: number
+  headings: number
+}
+
 interface NativeSearchResult {
   path: string
   score: number
   recencyMultiplier: number
+  fieldScores?: NativeFieldScoreBreakdown
   matchedTerms: string[]
   basename: string
   displayTitle: string
@@ -321,6 +330,7 @@ export class SearchEngine {
         limit: settings.resultLimit,
         singleFilePath: options.singleFilePath,
         recencyBoost: settings.recencyBoost,
+        scoreBreakdown: settings.showScoreBreakdown,
       })
     } catch (e) {
       console.error('Ferrisearch - Search error', e)
@@ -439,6 +449,14 @@ export class SearchEngine {
         recency,
         folderDownrank: rb._folderDownrank ?? false,
         tagBoost: rb._tagBoost ?? false,
+        fieldScores: result.fieldScores
+          ? {
+              displayTitle: result.fieldScores.displayTitle,
+              directory: result.fieldScores.directory,
+              content: result.fieldScores.content,
+              headings: result.fieldScores.headings,
+            }
+          : undefined,
       }
 
       return {

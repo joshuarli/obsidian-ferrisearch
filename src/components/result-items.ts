@@ -77,6 +77,15 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
     const bd = note.scoreBreakdown
     let text = `Score: ${note.score.toPrecision(3)}`
     const parts: string[] = [`${bd.base.toPrecision(3)} base`]
+    if (bd.fieldScores) {
+      const fs = bd.fieldScores
+      const fields: string[] = []
+      if (fs.displayTitle > 0) fields.push(`title:${fs.displayTitle.toPrecision(3)}`)
+      if (fs.directory > 0) fields.push(`dir:${fs.directory.toPrecision(3)}`)
+      if (fs.content > 0) fields.push(`content:${fs.content.toPrecision(3)}`)
+      if (fs.headings > 0) fields.push(`headings:${fs.headings.toPrecision(3)}`)
+      if (fields.length) parts.push(`[${fields.join(' ')}]`)
+    }
     if (bd.recency !== 1.0) parts.push(`\u00d7${bd.recency.toPrecision(3)} recency`)
     if (bd.folderDownrank) parts.push('\u00f710 folder')
     if (bd.tagBoost) parts.push('\u00d7100 tag')

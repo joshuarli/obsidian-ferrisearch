@@ -141,6 +141,7 @@ const opts = {
   prefixLength: 1,
   limit: 10,
   recencyBoost: "0",
+  scoreBreakdown: true,
   fieldBoosts: {
     basename: 10,
     displayTitle: 10,
@@ -153,9 +154,18 @@ const opts = {
   },
 };
 
+type FieldScoreBreakdown = {
+  displayTitle: number;
+  directory: number;
+  content: number;
+  headings: number;
+};
+
 type SearchResult = {
   path: string;
   score: number;
+  recencyMultiplier: number;
+  fieldScores?: FieldScoreBreakdown;
   matches: { matchText: string; offset: number }[];
   matchedTerms: string[];
 };
@@ -165,6 +175,17 @@ function printResult(r: SearchResult, rank?: number): void {
   const prefix = rank != null ? `  #${rank}` : "  ";
   console.log(`${prefix} ${r.path}`);
   console.log(`     Score:   ${r.score.toFixed(4)}`);
+  if (r.fieldScores) {
+    const fs = r.fieldScores;
+    const parts: string[] = [];
+    if (fs.displayTitle > 0) parts.push(`title:${fs.displayTitle.toFixed(2)}`);
+    if (fs.directory > 0) parts.push(`dir:${fs.directory.toFixed(2)}`);
+    if (fs.content > 0) parts.push(`content:${fs.content.toFixed(2)}`);
+    if (fs.headings > 0) parts.push(`headings:${fs.headings.toFixed(2)}`);
+    if (parts.length) console.log(`     Fields:  ${parts.join("  ")}`);
+  }
+  if (r.recencyMultiplier !== 1.0)
+    console.log(`     Recency: ×${r.recencyMultiplier.toFixed(4)}`);
   console.log(`     Matches: [${matchTexts.join(", ")}]`);
 }
 
