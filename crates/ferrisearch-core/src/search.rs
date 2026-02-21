@@ -137,9 +137,11 @@ impl IndexManager {
             let mut results =
                 searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
 
-            // Phase 2: if there's room for more results and fuzzy is enabled, retry with fuzzy
-            let fuzzy_threshold = (options.limit as usize).saturating_sub(5);
-            if results.len() < fuzzy_threshold && fuzziness > 0.0 && !parsed.terms.is_empty() {
+            // Phase 2: if exact+prefix found very few results and fuzzy is enabled, retry with fuzzy.
+            // Threshold is fixed (not scaled with limit) so that raising the limit for debugging
+            // or large result sets doesn't change the query strategy.
+            const FUZZY_THRESHOLD: usize = 5;
+            if results.len() < FUZZY_THRESHOLD && fuzziness > 0.0 && !parsed.terms.is_empty() {
                 let query = self.build_search_query(&parsed, options, fuzziness, false);
                 results = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
             }

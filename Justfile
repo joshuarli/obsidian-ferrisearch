@@ -9,6 +9,11 @@ setup:
 loc:
     tokei
 
+bench:
+    cargo build --release -p ferrisearch-napi
+    cp target/release/libferrisearch_napi.dylib ferrisearch.darwin-arm64.node
+    bun scripts/test-search.ts /Users/josh/iCloud~md~obsidian/Documents/Notes powder 1 --file baking/Ingredients/Dairy.md
+
 dev:
     bun run --watch build.ts
 

@@ -4,11 +4,11 @@
  * Indexes .md files from any directory, searches, and benchmarks query latency.
  *
  * Usage:
- *   bun scripts/test-search.ts <directory> <query> [fuzziness]
+ *   bun scripts/test-search.ts <directory> <query> [fuzziness] [--file <path>]
  *
  * Examples:
  *   bun scripts/test-search.ts ~/my-vault powder 2
- *   bun scripts/test-search.ts ~/my-vault restaurant 1
+ *   bun scripts/test-search.ts ~/my-vault powder 1 --file baking/Ingredients/Dairy.md
  *   bun scripts/test-search.ts ~/my-vault "github actions" 0
  */
 
@@ -27,12 +27,29 @@ if (!fs.existsSync(NODE_FILE)) {
   process.exit(1);
 }
 
-const dirArg = process.argv[2];
-const query = process.argv[3];
-const fuzziness = process.argv[4] || "1";
+// ── Parse args ──────────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+let dirArg: string | undefined;
+let query: string | undefined;
+let fuzziness = "1";
+let debugFile: string | undefined;
+
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--file") {
+    debugFile = args[++i];
+  } else if (!dirArg) {
+    dirArg = args[i];
+  } else if (!query) {
+    query = args[i];
+  } else {
+    fuzziness = args[i];
+  }
+}
 
 if (!dirArg || !query) {
-  console.error("Usage: bun scripts/test-search.ts <directory> <query> [fuzziness]");
+  console.error(
+    "Usage: bun scripts/test-search.ts <directory> <query> [fuzziness] [--file <path>]",
+  );
   process.exit(1);
 }
 
@@ -78,12 +95,16 @@ const docs = await Promise.all(
     ]);
     const basename = path.basename(relPath, ".md");
 
-    const h1Match = content.match(/^#\s+(.+)$/m);
-    const displayTitle = h1Match ? h1Match[1] : basename;
+    // Extract headings: ATX (# Heading) and setext (Heading\n=== or Heading\n---)
+    const atxHeadings = (content.match(/^#{1,3}\s+(.+)$/gm) || [])
+      .map((h) => h.replace(/^#{1,3}\s+/, ""));
+    const setextHeadings = (content.match(/^(.+)\n[=-]{2,}$/gm) || [])
+      .map((h) => h.split("\n")[0]);
+    const headings = [...atxHeadings, ...setextHeadings].join(" ");
 
-    const headings = (content.match(/^#{1,3}\s+(.+)$/gm) || [])
-      .map((h) => h.replace(/^#{1,3}\s+/, ""))
-      .join(" ");
+    const h1Match = content.match(/^#\s+(.+)$/m)
+      ?? content.match(/^(.+)\n={2,}$/m);
+    const displayTitle = h1Match ? h1Match[1] : basename;
 
     return {
       path: relPath,
@@ -132,21 +153,65 @@ const opts = {
   },
 };
 
+type SearchResult = {
+  path: string;
+  score: number;
+  matches: { matchText: string; offset: number }[];
+  matchedTerms: string[];
+};
+
+function printResult(r: SearchResult, rank?: number): void {
+  const matchTexts = r.matches.map((m) => m.matchText);
+  const prefix = rank != null ? `  #${rank}` : "  ";
+  console.log(`${prefix} ${r.path}`);
+  console.log(`     Score:   ${r.score.toFixed(4)}`);
+  console.log(`     Matches: [${matchTexts.join(", ")}]`);
+}
+
 console.log(`Query: "${query}"  Fuzziness: ${fuzziness}`);
 console.log("─".repeat(70));
 
-const results = index.search(query, opts);
+const results: SearchResult[] = index.search(query, opts);
 
 if (results.length === 0) {
   console.log("No results found.");
 } else {
-  for (const r of results) {
-    const matchTexts = r.matches.map(
-      (m: { matchText: string; offset: number }) => m.matchText,
-    );
-    console.log(`\n  Path:    ${r.path}`);
-    console.log(`  Score:   ${r.score.toFixed(4)}`);
-    console.log(`  Matches: [${matchTexts.join(", ")}]`);
+  for (let i = 0; i < results.length; i++) {
+    printResult(results[i], i + 1);
+  }
+}
+
+// ── Debug single file ───────────────────────────────────────────────────
+if (debugFile) {
+  console.log("\n" + "─".repeat(70));
+  console.log(`\nDebug: ${debugFile}`);
+
+  // Search with a high limit to find the file's true rank and score
+  const allResults: SearchResult[] = index.search(query, { ...opts, limit: 500 });
+  const idx = allResults.findIndex((r) => r.path === debugFile);
+
+  if (idx >= 0) {
+    printResult(allResults[idx], idx + 1);
+  } else {
+    console.log("  No match for this file.");
+  }
+
+  // Show indexed doc fields for inspection
+  const doc = docs.find((d) => d.path === debugFile);
+  if (doc) {
+    console.log("\n  Indexed fields:");
+    console.log(`     basename:     "${doc.basename}"`);
+    console.log(`     displayTitle: "${doc.displayTitle}"`);
+    console.log(`     headings:     "${doc.headings}"`);
+    console.log(`     content:      ${doc.content.length} chars`);
+  } else {
+    console.log(`\n  File not found in index. Available paths matching "${path.basename(debugFile, ".md")}":`);
+    const needle = path.basename(debugFile, ".md").toLowerCase();
+    for (const d of docs) {
+      if (d.basename.toLowerCase().includes(needle)) {
+        console.log(`     ${d.path}`);
+      }
+    }
   }
 }
 
