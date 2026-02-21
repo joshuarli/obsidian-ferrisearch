@@ -79,8 +79,6 @@ export default class FerrisearchPlugin extends Plugin {
   public readonly searchEngine = new SearchEngine(this)
   public readonly searchHistory = createSearchHistory(this)
 
-  private refreshIndexCallback?: (ev: FocusEvent) => void
-
   async onload(): Promise<void> {
     try {
       await this._onload()
@@ -154,7 +152,9 @@ export default class FerrisearchPlugin extends Plugin {
         this.app.vault.on('modify', async file => {
           if (!(file instanceof TFile)) return
           if (this.notesIndexer.isFileIndexable(file.path)) {
-            this.notesIndexer.flagNoteForReindex(file)
+            logVerbose('Reindexing modified file', file.path)
+            searchEngine.removeFromPaths([file.path])
+            await searchEngine.addFromPaths([file.path])
           }
         }),
       )
@@ -169,9 +169,6 @@ export default class FerrisearchPlugin extends Plugin {
         }),
       )
 
-      this.refreshIndexCallback = this.notesIndexer.refreshIndex.bind(this.notesIndexer)
-      if (this.refreshIndexCallback) addEventListener('blur', this.refreshIndexCallback)
-
       await this.populateIndex()
     })
   }
@@ -179,10 +176,6 @@ export default class FerrisearchPlugin extends Plugin {
   async onunload(): Promise<void> {
     // @ts-expect-error
     delete globalThis.ferrisearch
-
-    if (this.refreshIndexCallback) {
-      removeEventListener('blur', this.refreshIndexCallback)
-    }
 
     // Save sidecar + blob (WASM) and close the index
     await this.searchEngine.saveSidecar()

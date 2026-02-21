@@ -395,17 +395,14 @@ export function renderVaultModal(
   modal.on(Action.ArrowDown, () => moveIndex(1))
   modal.on(Action.OpenInNewLeaf, openNoteInNewLeaf)
 
-  // Initial load — warm up term dictionaries and refresh deferred changes
+  // Initial load — warm up term dictionaries
   plugin.searchEngine.warmUp()
-  plugin.notesIndexer.refreshIndex().then(() => {
-    if (cancelled) return
-    if (searchQuery) {
-      updateResults()
-    } else {
-      searching = false
-      loadHistory()
-    }
-  })
+  if (searchQuery) {
+    updateResults()
+  } else {
+    searching = false
+    loadHistory()
+  }
 
   return {
     destroy() {
