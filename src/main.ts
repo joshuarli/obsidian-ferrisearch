@@ -149,13 +149,16 @@ export default class FerrisearchPlugin extends Plugin {
         }),
       )
       this.registerEvent(
-        this.app.vault.on('modify', async file => {
+        this.app.vault.on('modify', file => {
           if (!(file instanceof TFile)) return
           if (this.notesIndexer.isFileIndexable(file.path)) {
-            logVerbose('Reindexing modified file', file.path)
-            searchEngine.removeFromPaths([file.path])
-            await searchEngine.addFromPaths([file.path])
+            this.notesIndexer.flagNoteForReindex(file)
           }
+        }),
+      )
+      this.registerEvent(
+        this.app.workspace.on('active-leaf-change', () => {
+          this.notesIndexer.refreshIndex()
         }),
       )
       this.registerEvent(
@@ -219,8 +222,9 @@ export default class FerrisearchPlugin extends Plugin {
       console.debug(`Ferrisearch - Files to remove: ${diff.toRemove.length}`)
     }
 
+    let indexingNotice: Notice | null = null
     if (diff.toAdd.length > 0) {
-      new Notice(`Ferrisearch: indexing ${diff.toAdd.length} files…`, 10_000)
+      indexingNotice = new Notice(`Ferrisearch: indexing ${diff.toAdd.length} files…`, 0)
     }
 
     const tIndex = performance.now()
@@ -248,6 +252,7 @@ export default class FerrisearchPlugin extends Plugin {
     const totalMs = performance.now() - t0
 
     if (diff.toAdd.length > 0) {
+      indexingNotice?.hide()
       const msg = `Ferrisearch: indexed ${diff.toAdd.length} files in ${(totalMs / 1000).toFixed(1)}s`
       console.log(`${msg} (read+index: ${indexMs.toFixed(0)}ms, total: ${totalMs.toFixed(0)}ms)`)
       new Notice(msg)

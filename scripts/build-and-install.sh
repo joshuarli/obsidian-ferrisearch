@@ -4,7 +4,7 @@ set -euo pipefail
 # ── Configuration ────────────────────────────────────────────────────────────
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VAULT_ROOT="/Users/josh/iCloud~md~obsidian/Documents"
-VAULT_NAMES=("Notes" "Apple Notes")
+VAULT_NAMES=("Notes")
 CARGO_PROFILE="${1:-dev-fast}"
 
 # Ensure Rust toolchain is in PATH
