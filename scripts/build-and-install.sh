@@ -5,6 +5,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VAULT_ROOT="/Users/josh/iCloud~md~obsidian/Documents"
 VAULT_NAMES=("Notes" "Apple Notes")
+CARGO_PROFILE="${1:-dev-fast}"
 
 # Ensure Rust toolchain is in PATH
 export PATH="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH"
@@ -31,12 +32,12 @@ NODE_FILE="ferrisearch.${PLATFORM}-${ARCH}.node"
 
 # ── Step 1: Build native Rust module (darwin-arm64 only) ─────────────────────
 if [ "$PLATFORM" = "darwin" ] && [ "$ARCH" = "arm64" ]; then
-  echo "==> Building native Rust module (release)..."
+  echo "==> Building native Rust module (profile: $CARGO_PROFILE)..."
   cd "$PROJECT_DIR"
-  cargo build --release -p ferrisearch-napi
+  cargo build --profile "$CARGO_PROFILE" -p ferrisearch-napi
 
   # The cdylib is named libferrisearch_napi.dylib/.so
-  DYLIB_PATH="$PROJECT_DIR/target/release/libferrisearch_napi.${DYLIB_EXT}"
+  DYLIB_PATH="$PROJECT_DIR/target/$CARGO_PROFILE/libferrisearch_napi.${DYLIB_EXT}"
   if [ ! -f "$DYLIB_PATH" ]; then
     echo "ERROR: Expected dylib not found at $DYLIB_PATH"
     exit 1
@@ -50,10 +51,10 @@ else
 fi
 
 # ── Step 2: Build WASM module ────────────────────────────────────────────────
-echo "==> Building WASM module (release)..."
+echo "==> Building WASM module (profile: $CARGO_PROFILE)..."
 cd "$PROJECT_DIR"
-cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown
-wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm
+cargo build --profile "$CARGO_PROFILE" -p ferrisearch-wasm --target wasm32-unknown-unknown
+wasm-bindgen --target web --out-dir wasm/pkg "target/wasm32-unknown-unknown/$CARGO_PROFILE/ferrisearch_wasm.wasm"
 echo "    Built ferrisearch_wasm_bg.wasm ($(du -h wasm/pkg/ferrisearch_wasm_bg.wasm | cut -f1 | xargs))"
 
 # ── Step 3: Build TypeScript ─────────────────────────────────────────────────

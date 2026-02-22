@@ -8,3 +8,12 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[profile.dev-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+strip = false
+
+[profile.dev-napi]
+inherits = "dev-fast"

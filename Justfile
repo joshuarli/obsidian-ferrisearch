@@ -10,8 +10,8 @@ loc:
     tokei
 
 bench:
-    cargo build --release -p ferrisearch-napi
-    cp target/release/libferrisearch_napi.dylib ferrisearch.darwin-arm64.node
+    cargo build --profile dev-napi -p ferrisearch-napi
+    cp target/dev-napi/libferrisearch_napi.dylib ferrisearch.darwin-arm64.node
     bun scripts/test-search.ts /Users/josh/iCloud~md~obsidian/Documents/Notes powder 1 --file baking/Ingredients/Dairy.md
 
 dev:
@@ -21,16 +21,19 @@ build:
     bun run build.ts production
 
 build-rust:
-    cargo build --release -p ferrisearch-napi
+    cargo build --profile dev-napi -p ferrisearch-napi
 
 build-wasm:
-    cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown
-    wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm
+    cargo build --profile dev-fast -p ferrisearch-wasm --target wasm32-unknown-unknown
+    wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/dev-fast/ferrisearch_wasm.wasm
 
 build-all: build-rust build-wasm build
 
 install:
-    bash scripts/build-and-install.sh
+    bash scripts/build-and-install.sh release
+
+install-dev:
+    bash scripts/build-and-install.sh dev-fast
 
 test-wasm:
     WASM_BINDGEN_TEST_ONLY_NODE=1 cargo test -p ferrisearch-wasm --target wasm32-unknown-unknown
