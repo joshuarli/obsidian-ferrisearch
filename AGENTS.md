@@ -30,7 +30,7 @@ Both paths produce a `NativeSearchIndex` interface — the rest of the TypeScrip
 ```
 src/
   main.ts                  # Plugin entry point (FerrisearchPlugin extends Plugin)
-  globals.ts               # Shared types, enums, Observable
+  globals.ts               # Shared types, enums (Action, RecencyCutoff), Observable
   notes-indexer.ts         # Deferred reindexing (flags notes, reindexes on modal open)
   components/
     modals.ts              # Modal classes with per-modal action dispatch (on/off/close)
@@ -145,7 +145,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 |---------|---------|
 | `bun run build` | Production build → `dist/main.js` (CJS, minified, tree-shaken) |
 | `bun run dev` | Watch mode build |
-| `bun test` | Run tests (57 tests across 4 files) |
+| `bun test` | Run tests (56 tests across 4 files) |
 | `bun run lint` | Biome check (lint + format, read-only) |
 | `bun run format` | Biome auto-fix |
 | `bun run build:rust` | Build native module via napi-rs |

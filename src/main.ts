@@ -1,6 +1,6 @@
 import { Notice, Platform, Plugin, TFile } from 'obsidian'
 import { FerrisearchInFileModal, FerrisearchVaultModal } from './components/modals'
-import { IndexingStepType, indexingStep, type ResultNote } from './globals'
+import type { ResultNote } from './globals'
 import { NotesIndexer } from './notes-indexer'
 import { Query } from './search/query'
 import { SearchEngine } from './search/search-engine'
@@ -190,13 +190,11 @@ export default class FerrisearchPlugin extends Plugin {
     const searchEngine = this.searchEngine
     const t0 = performance.now()
 
-    indexingStep.set(IndexingStepType.ReadingFiles)
     const files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
 
     // Try to load cached index (blob for WASM users, sidecar-only for native)
     const tCache = performance.now()
-    indexingStep.set(IndexingStepType.LoadingCache)
     let hasCache: boolean
     if (!searchEngine.isNative) {
       // WASM: try loading the serialized index blob + sidecar
@@ -228,7 +226,6 @@ export default class FerrisearchPlugin extends Plugin {
     }
 
     const tIndex = performance.now()
-    indexingStep.set(IndexingStepType.IndexingFiles)
     const skipCommit = { skipCommit: true }
     searchEngine.removeFromPaths(
       diff.toRemove.map(o => o.path),
@@ -243,7 +240,6 @@ export default class FerrisearchPlugin extends Plugin {
 
     if (diff.toRemove.length || diff.toAdd.length) {
       const tSave = performance.now()
-      indexingStep.set(IndexingStepType.WritingCache)
       await searchEngine.saveSidecar()
       await searchEngine.saveIndexBlob()
       console.debug(`Ferrisearch - Saved cache in ${(performance.now() - tSave).toFixed(0)}ms`)
@@ -257,7 +253,6 @@ export default class FerrisearchPlugin extends Plugin {
       console.log(`${msg} (read+index: ${indexMs.toFixed(0)}ms, total: ${totalMs.toFixed(0)}ms)`)
       new Notice(msg)
     }
-    indexingStep.set(IndexingStepType.Done)
     notifyOnIndexed()
 
     // Pre-warm term dictionaries so the first search is fast

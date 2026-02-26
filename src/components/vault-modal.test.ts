@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test'
-import { Action, IndexingStepType, indexingStep } from '../globals'
+import { describe, expect, it, mock } from 'bun:test'
+import { Action } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
 import type { ModalHandle } from './modals'
@@ -58,11 +58,6 @@ function setup(overrides?: {
 }
 
 describe('renderVaultModal', () => {
-  afterEach(() => {
-    // Reset indexing step to avoid leaking between tests
-    indexingStep.set(IndexingStepType.Done)
-  })
-
   describe('DOM structure', () => {
     it('creates input with correct placeholder', () => {
       const { container, handle } = setup()
@@ -231,18 +226,6 @@ describe('renderVaultModal', () => {
 
       modal.dispatch(Action.Tab)
       expect(modal.close).not.toHaveBeenCalled()
-
-      handle.destroy()
-    })
-  })
-
-  describe('indexing status', () => {
-    it('shows status text during indexing', () => {
-      const { container, handle } = setup()
-      indexingStep.set(IndexingStepType.ReadingFiles)
-
-      const text = container.textContent
-      expect(text).toContain('Reading files')
 
       handle.destroy()
     })

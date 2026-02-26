@@ -1,5 +1,5 @@
 import { MarkdownView, Notice, setIcon, TFile } from 'obsidian'
-import { Action, IndexingStepType, indexingStep, type ResultNote } from '../globals'
+import { Action, type ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { Query } from '../search/query'
 import { openNote } from '../tools/notes'
@@ -32,14 +32,6 @@ export function renderVaultModal(
     onQueryChange()
   })
 
-  // Indexing status
-  const statusDiv = document.createElement('div')
-  statusDiv.style.textAlign = 'center'
-  statusDiv.style.color = 'var(--text-accent)'
-  statusDiv.style.marginTop = '10px'
-  statusDiv.style.display = 'none'
-  container.appendChild(statusDiv)
-
   const resultsDiv = createResultsContainer(container)
 
   const ctrlKey = getCtrlKeyLabel()
@@ -71,33 +63,6 @@ export function renderVaultModal(
 
   // Search
   let currentSearchId = 0
-
-  // Indexing status
-  const unsubIndexing = indexingStep.subscribe(step => {
-    if (step === IndexingStepType.Done) {
-      onQueryChange()
-      setStatusText('')
-    } else if (step === IndexingStepType.WritingCache) {
-      onQueryChange()
-      setStatusText('Updating cache...')
-    } else {
-      const labels = {
-        [IndexingStepType.LoadingCache]: 'Loading cache...',
-        [IndexingStepType.ReadingFiles]: 'Reading files...',
-        [IndexingStepType.IndexingFiles]: 'Indexing files...',
-      }
-      setStatusText(labels[step] ?? '')
-    }
-  })
-
-  function setStatusText(text: string) {
-    if (text) {
-      statusDiv.textContent = `Work in progress: ${text}`
-      statusDiv.style.display = ''
-    } else {
-      statusDiv.style.display = 'none'
-    }
-  }
 
   async function updateResults() {
     searching = true
@@ -406,7 +371,6 @@ export function renderVaultModal(
   return {
     destroy() {
       modal.off()
-      unsubIndexing()
       currentObserver?.disconnect()
       for (const el of resultEls) cleanupResultItem(el)
     },

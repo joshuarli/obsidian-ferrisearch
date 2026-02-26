@@ -23,14 +23,6 @@ export const excerptAfter = 300
 
 export const K_DISABLE_FERRISEARCH = 'ferrisearch-disabled'
 
-export enum IndexingStepType {
-  Done,
-  LoadingCache,
-  ReadingFiles,
-  IndexingFiles,
-  WritingCache,
-}
-
 export enum Action {
   Enter = 'enter',
   OpenInBackground = 'open-in-background',
@@ -67,8 +59,6 @@ export type SearchMatch = {
   match: string
   offset: number
 }
-
-export const indexingStep = new Observable(IndexingStepType.Done)
 
 export type FieldScores = {
   displayTitle: number
