@@ -74,10 +74,10 @@ crates/
     index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. `filesystem` feature gates mmap/disk code; WASM uses in-memory only.
     search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost, per-field score explain. Uses js-sys::Date::now() on WASM (SystemTime panics on wasm32).
 scripts/
-  build-and-install.sh      # Build + install to multiple Obsidian vaults (toolchain from rust-toolchain.toml)
   copy-to-android.sh        # Push built plugin to Android device via adb
   test-search.ts            # CLI smoke test: loads NAPI binary, indexes test-vault/*.md, searches, prints results
   test-vault/               # .md files used by test-search.ts (indexed from scratch each run)
+Makefile                     # Local macOS-arm64 build and install workflow
 .cargo/
   config.toml               # Sets wasm-bindgen-test-runner for wasm32 target
 rust-toolchain.toml         # Pins nightly-2026-09-15 + wasm32 target (rustup + CI read this; no PATH hacks in scripts)
@@ -158,7 +158,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - `cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown`: Build WASM module
 - `cargo test`: Run Rust tests (102 tests)
 - `cargo clippy --all-targets --all-features -- -D warnings`: Rust linter
-- `scripts/build-and-install.sh`: Build + install to Obsidian vaults
+- `make install`: Build and install to the configured macOS arm64 Obsidian vault
 - `deno task test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
 
 - **Build tool:** Rolldown via Deno (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.

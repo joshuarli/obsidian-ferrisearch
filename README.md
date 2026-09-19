@@ -16,6 +16,16 @@ Also, non-build/app dependencies have been cut down to the minimum.
 - Svelte has been replaced with pure TS.
 - The remaining TS hotpaths (mainly, results highlighting) have been moved into rust.
 
+## Local build
+
+On macOS arm64, `make install` builds the native and WASM engines, bundles the
+plugin, and installs it into the configured Obsidian vault. The default targets
+`/Users/josh/iCloud~md~obsidian/Documents/Notes`; override the destination with
+`make install VAULT_PLUGIN=/path/to/.obsidian/plugins/ferrisearch`.
+
+Use `PROFILE=release` for a production-oriented Rust build; the default
+`dev-fast` profile is quicker for local iteration.
+
 ## new features
 
 fuzziness -> fuzzy results only
