@@ -20,7 +20,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli@0.2.108
+        run: cargo install wasm-bindgen-cli@0.2.128
       - run: deno install --frozen
 
       # Lint
@@ -72,7 +72,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli@0.2.108
+        run: cargo install wasm-bindgen-cli@0.2.128
       - run: deno install --frozen
       - run: cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown
       - run: wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm

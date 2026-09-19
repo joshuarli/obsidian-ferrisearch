@@ -11,17 +11,17 @@
     "jsr:@std/path@^1.1.5": "1.1.6",
     "jsr:@std/path@^1.1.6": "1.1.6",
     "jsr:@std/testing@^1.0.20": "1.0.20",
-    "npm:@happy-dom/global-registrator@^20.6.3": "20.14.5",
+    "npm:@happy-dom/global-registrator@^20.14.5": "20.14.5",
     "npm:@napi-rs/cli@^3.10.4": "3.10.4_@emnapi+core@1.11.3_@emnapi+runtime@1.11.3_@types+node@26.6.1",
     "npm:@types/node@^26.1.1": "26.6.1",
-    "npm:happy-dom@^20.6.3": "20.14.5",
-    "npm:obsidian@1.12.2": "1.12.2_@codemirror+state@6.5.0_@codemirror+view@6.38.6",
+    "npm:happy-dom@^20.14.5": "20.14.5",
+    "npm:obsidian@1.13.1": "1.13.1_@codemirror+state@6.5.0_@codemirror+view@6.38.6",
     "npm:oxfmt@*": "0.68.0",
     "npm:oxfmt@0.68": "0.68.0",
     "npm:oxlint@*": "1.83.0",
     "npm:oxlint@1.83.0": "1.83.0",
     "npm:oxlint@^1.83.0": "1.83.0",
-    "npm:rolldown@^1.2.0": "1.2.9",
+    "npm:rolldown@^1.2.9": "1.2.9",
     "npm:typescript@*": "7.0.2",
     "npm:typescript@^7.0.2": "7.0.2"
   },
@@ -1283,8 +1283,8 @@
     "mute-stream@3.0.0": {
       "integrity": "sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw=="
     },
-    "obsidian@1.12.2_@codemirror+state@6.5.0_@codemirror+view@6.38.6": {
-      "integrity": "sha512-DGAzpt6vo+sMDET/o8Zj26Bj2hbHrFsNUU8TtnzCyerO/OHksMFQnU9QEnPHVsOMstt/WnHXfC56j2r1syObWg==",
+    "obsidian@1.13.1_@codemirror+state@6.5.0_@codemirror+view@6.38.6": {
+      "integrity": "sha512-qtTEA2pmhJzhuhJqzbBFRYhpIOqvW+krDYjtFynv66KbxBbumHBlsJfWw3I4jtnK/6fZwbQhCrmmDdRwXmX56w==",
       "dependencies": [
         "@codemirror/state",
         "@codemirror/view",
@@ -1445,14 +1445,14 @@
     "dependencies": [
       "jsr:@std/expect@^1.0.20",
       "jsr:@std/testing@^1.0.20",
-      "npm:@happy-dom/global-registrator@^20.6.3",
+      "npm:@happy-dom/global-registrator@^20.14.5",
       "npm:@napi-rs/cli@^3.10.4",
       "npm:@types/node@^26.1.1",
-      "npm:happy-dom@^20.6.3",
-      "npm:obsidian@1.12.2",
+      "npm:happy-dom@^20.14.5",
+      "npm:obsidian@1.13.1",
       "npm:oxfmt@0.68",
       "npm:oxlint@^1.83.0",
-      "npm:rolldown@^1.2.0",
+      "npm:rolldown@^1.2.9",
       "npm:typescript@^7.0.2"
     ]
   }

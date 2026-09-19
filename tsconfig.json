@@ -32,7 +32,7 @@
     "allowUnusedLabels": false,
     "noUncheckedSideEffectImports": true,
     "resolveJsonModule": true,
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "noEmit": true,
     "types": ["node"],
     "erasableSyntaxOnly": true

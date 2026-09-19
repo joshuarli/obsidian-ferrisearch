@@ -72,7 +72,7 @@ crates/
     schema.rs              # Tantivy schema (4 searched fields) + FieldHandles
     tokenizer.rs           # FerrisearchTokenizer (Unicode-category separator regex, camelCase split) + DiacriticFilter
     index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. `filesystem` feature gates mmap/disk code; WASM uses in-memory only.
-    search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost, per-field score explain. Uses js-sys::Date::now() on WASM (SystemTime panics on wasm32).
+    search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost, per-field score explain. Uses Tantivy 0.26 collectors and js-sys::Date::now() on WASM (SystemTime panics on wasm32).
 scripts/
   copy-to-android.sh        # Push built plugin to Android device via adb
   test-search.ts            # CLI smoke test: loads NAPI binary, indexes test-vault/*.md, searches, prints results
@@ -156,7 +156,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - `deno task build:wasm`: Build the WASM module and wasm-bindgen output
 - `deno task build:all`: Rust + WASM + TypeScript build
 - `cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown`: Build WASM module
-- `cargo test`: Run Rust tests (102 tests)
+- `cargo test`: Run Rust tests (106 tests)
 - `cargo clippy --all-targets --all-features -- -D warnings`: Rust linter
 - `make install`: Build and install to the configured macOS arm64 Obsidian vault
 - `deno task test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
@@ -169,8 +169,9 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 - **Runtime:** None (zero runtime dependencies). Query parsing is a custom ~50-line function in `query.ts`.
 - **Dev:** Deno, TypeScript 7, Oxfmt, Oxlint, Rolldown, `happy-dom`, `@types/node`, `obsidian`
-- **Native:** Rust crate `ferrisearch-core` using Tantivy 0.25 for full-text search, exposed via `napi-rs` (darwin-arm64 only) and `wasm-bindgen` (all other platforms). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
-- **WASM:** `wasm-bindgen` 0.2, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen --target web`. The `wasm-bindgen-cli` version (currently 0.2.108) must match the resolved crate version in `Cargo.lock`.
+- **TypeScript compatibility:** `tsconfig.json` skips library declaration checking because Obsidian 1.13.1 currently contains internal `HistoryHandler` declaration errors under TypeScript 7; project sources remain strictly checked.
+- **Native:** Rust crate `ferrisearch-core` using Tantivy 0.26 for full-text search, exposed via `napi-rs` (darwin-arm64 only) and `wasm-bindgen` (all other platforms). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
+- **WASM:** `wasm-bindgen` 0.2.128, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen --target web`. The `wasm-bindgen-cli` version (currently 0.2.128) must match the resolved crate version in `Cargo.lock`.
 
 ## Data Flow
 

@@ -9,9 +9,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 ferrisearch-core = { path = "../crates/ferrisearch-core", default-features = false }
 serde = "1"
-wasm-bindgen = "0.2"
+wasm-bindgen = "0.2.128"
 serde-wasm-bindgen = "0.6"
-getrandom = { version = "0.2", features = ["js"] }
 uuid = { version = "1", features = ["js"] }
 
 [dev-dependencies]

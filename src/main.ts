@@ -70,7 +70,7 @@ function registerAPI(plugin: FerrisearchPlugin): void {
 // --- Plugin ---
 
 export default class FerrisearchPlugin extends Plugin {
-  public settings: FerrisearchSettings = getDefaultSettings()
+  public override settings: FerrisearchSettings = getDefaultSettings()
 
   public readonly notesIndexer: NotesIndexer = new NotesIndexer(this)
   public readonly textProcessor: TextProcessor = new TextProcessor(this)

@@ -26,7 +26,7 @@ export class SettingsTab extends PluginSettingTab {
     })
   }
 
-  display(): void {
+  override display(): void {
     const { containerEl } = this
 
     containerEl.empty()

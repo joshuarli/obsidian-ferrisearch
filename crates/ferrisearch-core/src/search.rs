@@ -130,13 +130,19 @@ impl IndexManager {
         let (results, effective_fuzziness) = if fuzzy_only {
             // Fuzzy-only mode: skip exact+prefix, go straight to fuzzy on all fields
             let query = self.build_search_query(&parsed, options, fuzziness, true);
-            let r = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
+            let r = searcher.search(
+                &*query,
+                &TopDocs::with_limit(options.limit as usize).order_by_score(),
+            )?;
             (r, fuzziness)
         } else {
             // Phase 1: exact + prefix only (no fuzzy)
             let query = self.build_search_query(&parsed, options, 0.0, false);
             let mut results =
-                searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
+                searcher.search(
+                    &*query,
+                    &TopDocs::with_limit(options.limit as usize).order_by_score(),
+                )?;
             let mut eff_fuzz = 0.0;
 
             // Phase 2: if exact+prefix found very few results and fuzzy is enabled, retry with fuzzy.
@@ -145,7 +151,10 @@ impl IndexManager {
             const FUZZY_THRESHOLD: usize = 5;
             if results.len() < FUZZY_THRESHOLD && fuzziness > 0.0 && !parsed.terms.is_empty() {
                 let query = self.build_search_query(&parsed, options, fuzziness, false);
-                results = searcher.search(&*query, &TopDocs::with_limit(options.limit as usize))?;
+                results = searcher.search(
+                    &*query,
+                    &TopDocs::with_limit(options.limit as usize).order_by_score(),
+                )?;
                 eff_fuzz = fuzziness;
             }
             (results, eff_fuzz)
