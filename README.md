@@ -23,6 +23,11 @@ plugin, and installs it into the configured Obsidian vault. The default targets
 `/Users/josh/iCloud~md~obsidian/Documents/Notes`; override the destination with
 `make install VAULT_PLUGIN=/path/to/.obsidian/plugins/ferrisearch`.
 
+`make package` creates the `ferrisearch.zip` archive used by the manual GitHub
+Actions prerelease workflow. `make install-remote` downloads the newest
+non-draft prerelease archive with the GitHub CLI and installs it into the same
+configured vault.
+
 The Makefile automatically installs the `wasm-bindgen` CLI version resolved in
 `Cargo.lock`, and `make install` uses the `release` Rust profile by default.
 Use `PROFILE=dev-fast` for quicker local iteration.

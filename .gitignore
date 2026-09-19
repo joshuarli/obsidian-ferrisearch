@@ -2,4 +2,5 @@ target
 node_modules
 dist
 ferrisearch.darwin-arm64.node
+ferrisearch.zip
 wasm/pkg

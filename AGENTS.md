@@ -77,6 +77,7 @@ scripts/
   copy-to-android.sh        # Push built plugin to Android device via adb
   test-search.ts            # CLI smoke test and production-aligned benchmark: bulk-indexes a markdown directory, searches, prints results
   test-vault/               # .md files used by test-search.ts (indexed from scratch each run)
+.github/workflows/build.yml # Manual workflow that builds and publishes the prerelease archive
 Makefile                     # Local macOS-arm64 build and install workflow
 PERF.md                      # Benchmark method, baselines, and indexing target
 .cargo/
@@ -160,8 +161,14 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - `cargo test`: Run Rust tests (106 tests)
 - `cargo clippy --all-targets --all-features -- -D warnings`: Rust linter
 - `make install`: Build and install to the configured macOS arm64 Obsidian vault; automatically installs the `wasm-bindgen` CLI version resolved in `Cargo.lock` and uses the `release` Rust profile by default. Pass `PROFILE=dev-fast` for iteration builds.
+- `make package`: Build the plugin and create `ferrisearch.zip` with the five files required by `make install`.
+- `make install-remote`: Download the newest non-draft GitHub prerelease archive with `gh` and install it to the configured vault.
 - `deno task test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
 - `PERF.md`: Benchmark method, recorded baselines, and performance targets
+
+The GitHub Actions workflow is `workflow_dispatch`-only. It runs on the `macos-26`
+arm64 runner, builds `ferrisearch.zip`, uploads that archive as the only Actions
+artifact, and publishes it as a GitHub prerelease asset.
 
 - **Build tool:** Rolldown via Deno (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
 - **Test runner:** Deno's test runner with `happy-dom` for DOM APIs. The `obsidian` module is mocked in `setup.ts`. `IntersectionObserver` is mocked to fire immediately.

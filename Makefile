@@ -1,4 +1,4 @@
-.PHONY: build build-native ensure-wasm-bindgen build-wasm build-plugin install
+.PHONY: build build-native ensure-wasm-bindgen build-wasm build-plugin package install install-remote
 
 PROFILE ?= release
 VAULT_PLUGIN ?= /Users/josh/iCloud~md~obsidian/Documents/Notes/.obsidian/plugins/ferrisearch
@@ -6,6 +6,8 @@ VAULT_PLUGIN ?= /Users/josh/iCloud~md~obsidian/Documents/Notes/.obsidian/plugins
 NATIVE_FILE := ferrisearch.darwin-arm64.node
 NATIVE_BINARY := target/$(PROFILE)/libferrisearch_napi.dylib
 WASM_BINARY := target/wasm32-unknown-unknown/$(PROFILE)/ferrisearch_wasm.wasm
+PACKAGE := ferrisearch.zip
+PACKAGE_FILES := dist/main.js dist/manifest.json dist/styles.css dist/ferrisearch_wasm_bg.wasm $(NATIVE_FILE)
 
 # wasm-bindgen's CLI schema must match the Rust crate that produced the Wasm.
 # Read the resolved crate version instead of maintaining a second version pin.
@@ -35,8 +37,27 @@ build-wasm: ensure-wasm-bindgen
 build-plugin: build-wasm
 	deno run -A build.ts production
 
+package: build
+	rm -f "$(PACKAGE)"
+	zip -j "$(PACKAGE)" $(PACKAGE_FILES)
+
 install: build
 	mkdir -p "$(VAULT_PLUGIN)"
 	cp dist/main.js dist/manifest.json dist/styles.css "$(VAULT_PLUGIN)/"
 	cp "$(NATIVE_FILE)" dist/ferrisearch_wasm_bg.wasm "$(VAULT_PLUGIN)/"
+	ls -lh "$(VAULT_PLUGIN)"
+
+install-remote:
+	@set -eu; \
+	command -v gh >/dev/null || { echo "install-remote requires the GitHub CLI (gh)" >&2; exit 1; }; \
+	command -v unzip >/dev/null || { echo "install-remote requires unzip" >&2; exit 1; }; \
+	remote_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$remote_dir"' EXIT; \
+	tag="$$(gh release list --exclude-drafts --limit 100 --json tagName,isPrerelease,publishedAt --jq 'map(select(.isPrerelease)) | sort_by(.publishedAt) | reverse | .[0].tagName // empty')"; \
+	test -n "$$tag" || { echo "No prerelease release found" >&2; exit 1; }; \
+	echo "Downloading Ferrisearch $$tag..."; \
+	gh release download "$$tag" --pattern "$(PACKAGE)" --dir "$$remote_dir"; \
+	unzip -q "$$remote_dir/$(PACKAGE)" -d "$$remote_dir/plugin"; \
+	mkdir -p "$(VAULT_PLUGIN)"; \
+	cp "$$remote_dir/plugin/main.js" "$$remote_dir/plugin/manifest.json" "$$remote_dir/plugin/styles.css" "$$remote_dir/plugin/ferrisearch_wasm_bg.wasm" "$$remote_dir/plugin/$(NATIVE_FILE)" "$(VAULT_PLUGIN)/"; \
 	ls -lh "$(VAULT_PLUGIN)"
