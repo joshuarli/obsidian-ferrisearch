@@ -11,7 +11,7 @@ import { type FerrisearchSettings, saveSettings } from './utils'
 /**
  * A store to reactively toggle the `showExcerpt` setting on the fly
  */
-export const showExcerpt = new Observable(false)
+export const showExcerpt: Observable<boolean> = new Observable<boolean>(false)
 
 export class SettingsTab extends PluginSettingTab {
   plugin: FerrisearchPlugin
@@ -94,7 +94,7 @@ export function getDefaultSettings(): FerrisearchSettings {
 export let settings: FerrisearchSettings
 
 export async function loadSettings(plugin: Plugin): Promise<FerrisearchSettings> {
-  settings = Object.assign({}, getDefaultSettings(), await plugin.loadData())
+  settings = { ...getDefaultSettings(), ...(await plugin.loadData()) }
   showExcerpt.set(settings.showExcerpt)
   enableVerboseLogging(settings.verboseLogging)
   return settings

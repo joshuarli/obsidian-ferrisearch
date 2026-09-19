@@ -1,7 +1,7 @@
 import type FerrisearchPlugin from '../main'
 
-interface SearchHistory {
-  getHistory(): Promise<ReadonlyArray<string>>
+export interface SearchHistory {
+  getHistory(): Promise<readonly string[]>
   addToHistory(query: string): Promise<void>
 }
 
@@ -15,8 +15,8 @@ export function createSearchHistory(plugin: FerrisearchPlugin): SearchHistory {
         const raw = await adapter.read(filePath)
         return raw.split('\n').filter(Boolean)
       }
-    } catch (e) {
-      console.warn('Ferrisearch - Failed to read search history', e)
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to read search history', error)
     }
     return []
   }
@@ -33,8 +33,8 @@ export function createSearchHistory(plugin: FerrisearchPlugin): SearchHistory {
       lines = lines.slice(0, 10)
       try {
         await plugin.app.vault.adapter.write(filePath, lines.join('\n'))
-      } catch (e) {
-        console.error('Ferrisearch - Failed to save search history', e)
+      } catch (error) {
+        console.error('Ferrisearch - Failed to save search history', error)
       }
     },
   }

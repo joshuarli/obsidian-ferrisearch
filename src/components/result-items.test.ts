@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'bun:test'
+import { describe, it } from '@std/testing/bdd'
+import { expect } from '@std/expect'
+import '../test-utils/setup'
 import { showExcerpt } from '../settings/index'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
@@ -11,25 +13,25 @@ import {
 
 describe('createVaultResultItem', () => {
   it('creates element with correct class names', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
-    const el = createVaultResultItem(note, plugin)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote(),
+      el = createVaultResultItem(note, plugin)
     expect(el.className).toContain('suggestion-item')
     expect(el.className).toContain('ferrisearch-result')
   })
 
   it('sets data-result-id to note path', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ path: 'my/note.md' })
-    const el = createVaultResultItem(note, plugin)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ path: 'my/note.md' }),
+      el = createVaultResultItem(note, plugin)
     expect(el.dataset.resultId).toBe('my/note.md')
   })
 
   it('displays match counter with singular "match"', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ matches: [{ match: 'test', offset: 0 }] })
-    const el = createVaultResultItem(note, plugin)
-    const counter = el.querySelector('.ferrisearch-result__counter')
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ matches: [{ match: 'test', offset: 0 }] }),
+      el = createVaultResultItem(note, plugin),
+      counter = el.querySelector('.ferrisearch-result__counter')
     expect(counter).not.toBeNull()
     expect(counter?.innerHTML).toContain('1')
     expect(counter?.innerHTML).toContain('match')
@@ -37,69 +39,69 @@ describe('createVaultResultItem', () => {
   })
 
   it('displays match counter with plural "matches"', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({
-      matches: [
-        { match: 'a', offset: 0 },
-        { match: 'b', offset: 10 },
-        { match: 'c', offset: 20 },
-      ],
-    })
-    const el = createVaultResultItem(note, plugin)
-    const counter = el.querySelector('.ferrisearch-result__counter')
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({
+        matches: [
+          { match: 'a', offset: 0 },
+          { match: 'b', offset: 10 },
+          { match: 'c', offset: 20 },
+        ],
+      }),
+      el = createVaultResultItem(note, plugin),
+      counter = el.querySelector('.ferrisearch-result__counter')
     expect(counter?.innerHTML).toContain('3')
     expect(counter?.innerHTML).toContain('matches')
   })
 
   it('does not show counter when matches is empty', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ matches: [] })
-    const el = createVaultResultItem(note, plugin)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ matches: [] }),
+      el = createVaultResultItem(note, plugin)
     expect(el.querySelector('.ferrisearch-result__counter')).toBeNull()
   })
 
   it('shows folder path for notes in subdirectories', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ path: 'deep/folder/note.md' })
-    const el = createVaultResultItem(note, plugin)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ path: 'deep/folder/note.md' }),
+      el = createVaultResultItem(note, plugin)
     expect(el.querySelector('.ferrisearch-result__folder-path')).not.toBeNull()
   })
 
   it('does not show folder path for root-level notes', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ path: 'note.md' })
-    const el = createVaultResultItem(note, plugin)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ path: 'note.md' }),
+      el = createVaultResultItem(note, plugin)
     expect(el.querySelector('.ferrisearch-result__folder-path')).toBeNull()
   })
 
   it('shows extension when displayTitle is empty', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ displayTitle: '', path: 'test.md' })
-    const el = createVaultResultItem(note, plugin)
-    const ext = el.querySelector('.ferrisearch-result__extension')
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ displayTitle: '', path: 'test.md' }),
+      el = createVaultResultItem(note, plugin),
+      ext = el.querySelector('.ferrisearch-result__extension')
     expect(ext).not.toBeNull()
     expect(ext?.textContent).toBe('.md')
   })
 
   it('hides extension when displayTitle is set', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ displayTitle: 'My Title' })
-    const el = createVaultResultItem(note, plugin)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ displayTitle: 'My Title' }),
+      el = createVaultResultItem(note, plugin)
     expect(el.querySelector('.ferrisearch-result__extension')).toBeNull()
   })
 
   it('creates excerpt body', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
-    const el = createVaultResultItem(note, plugin)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote(),
+      el = createVaultResultItem(note, plugin)
     expect(el.querySelector('.ferrisearch-result__body')).not.toBeNull()
   })
 
   it('excerpt visibility reacts to showExcerpt Observable', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
-    const el = createVaultResultItem(note, plugin)
-    const body = el.querySelector('.ferrisearch-result__body') as HTMLElement
+    const plugin = createMockPlugin(),
+      note = createMockResultNote(),
+      el = createVaultResultItem(note, plugin),
+      body = el.querySelector('.ferrisearch-result__body') as HTMLElement
 
     showExcerpt.set(false)
     expect(body.style.display).toBe('none')
@@ -111,15 +113,15 @@ describe('createVaultResultItem', () => {
   })
 
   it('calls textProcessor.highlightText for title', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote({ basename: 'my-note' })
+    const plugin = createMockPlugin(),
+      note = createMockResultNote({ basename: 'my-note' })
     createVaultResultItem(note, plugin)
     expect(plugin.textProcessor.highlightText).toHaveBeenCalled()
   })
 
   it('calls textProcessor.makeExcerpt for body', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
+    const plugin = createMockPlugin(),
+      note = createMockResultNote()
     createVaultResultItem(note, plugin)
     expect(plugin.textProcessor.makeExcerpt).toHaveBeenCalled()
   })
@@ -127,18 +129,18 @@ describe('createVaultResultItem', () => {
 
 describe('createInFileResultItem', () => {
   it('creates element with correct class and data-result-id', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
-    const el = createInFileResultItem(note, plugin, 42, 3)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote(),
+      el = createInFileResultItem(note, plugin, 42, 3)
     expect(el.className).toContain('suggestion-item')
     expect(el.className).toContain('ferrisearch-result')
     expect(el.dataset.resultId).toBe('3')
   })
 
   it('creates body with excerpt', () => {
-    const plugin = createMockPlugin()
-    const note = createMockResultNote()
-    const el = createInFileResultItem(note, plugin, 42, 0)
+    const plugin = createMockPlugin(),
+      note = createMockResultNote(),
+      el = createInFileResultItem(note, plugin, 42, 0)
     expect(el.querySelector('.ferrisearch-result__body')).not.toBeNull()
   })
 })

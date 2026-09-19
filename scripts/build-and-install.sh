@@ -57,7 +57,7 @@ echo "    Built ferrisearch_wasm_bg.wasm ($(du -h wasm/pkg/ferrisearch_wasm_bg.w
 # ── Step 3: Build TypeScript ─────────────────────────────────────────────────
 echo "==> Building TypeScript (production)..."
 cd "$PROJECT_DIR"
-bun run build.ts production
+deno run -A build.ts production
 echo "    Built dist/main.js ($(du -h dist/main.js | cut -f1 | xargs))"
 
 # ── Step 4: Install to Obsidian vaults ───────────────────────────────────────

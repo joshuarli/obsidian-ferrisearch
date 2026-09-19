@@ -1,0 +1,37 @@
+{
+  "version": "0.1.0",
+  "nodeModulesDir": "auto",
+  "imports": {
+    "rolldown": "npm:rolldown@^1.2.0",
+    "typescript": "npm:typescript@^7.0.2",
+    "oxfmt": "npm:oxfmt@^0.68.0",
+    "oxlint": "npm:oxlint@^1.83.0",
+    "@napi-rs/cli": "npm:@napi-rs/cli@^3.10.4",
+    "obsidian": "npm:obsidian@1.12.2",
+    "happy-dom": "npm:happy-dom@^20.6.3",
+    "@happy-dom/global-registrator": "npm:@happy-dom/global-registrator@^20.6.3",
+    "@types/node": "npm:@types/node@^26.1.1",
+    "@std/expect": "jsr:@std/expect@^1.0.20",
+    "@std/testing": "jsr:@std/testing@^1.0.20"
+  },
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "deno.ns"]
+  },
+  "tasks": {
+    "typecheck": "deno run -A npm:typescript/tsc --noEmit && deno check --unstable-sloppy-imports build.ts scripts/test-search.ts src/obsidian-ex.d.ts src/globals.test.ts src/components/*.test.ts src/test-utils/*.ts",
+    "fmt": "deno run -A npm:oxfmt --write",
+    "fmt:check": "deno run -A npm:oxfmt --check",
+    "lint": "deno run -A npm:oxlint --fix",
+    "lint:check": "deno run -A npm:oxlint",
+    "fmtlint": "deno task fmt && deno task lint",
+    "prebuild": "deno task fmt:check && deno task lint:check && deno task typecheck",
+    "dev": "deno run -A --watch build.ts",
+    "build": "deno task prebuild && deno run -A build.ts production",
+    "build:rust": "cd napi && deno run -A npm:@napi-rs/cli build --release",
+    "build:wasm": "cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown && wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm",
+    "build:all": "deno task build:rust && deno task build:wasm && deno task build",
+    "test": "deno test -A --no-check --unstable-sloppy-imports --config deno.test.json src/",
+    "test:watch": "deno test -A --no-check --unstable-sloppy-imports --config deno.test.json --watch src/",
+    "test-search": "deno run --allow-ffi --allow-read --allow-run --allow-write scripts/test-search.ts"
+  }
+}

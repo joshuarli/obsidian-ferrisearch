@@ -88,6 +88,7 @@ rust-toolchain.toml         # Pins nightly-2026-09-15 + wasm32 target (rustup + 
 ### Tokenizer (`tokenizer.rs`)
 
 `FerrisearchTokenizer` splits text on Unicode punctuation/symbols/separators/control chars (`\p{P}\p{Z}\p{Cc}\p{S}`). For each token, it emits:
+
 1. The full lowercased token at position N
 2. CamelCase sub-tokens (e.g. "fooBar" → "foo", "bar") also at position N
 
@@ -102,6 +103,7 @@ Sub-tokens sharing the parent position is critical for phrase queries: `"variabl
 ### Search (`search.rs`)
 
 **Two-phase search** for each query (fuzziness "0"/"1"/"2"):
+
 - **Phase 1 (exact + prefix, no fuzzy):** For each term, builds per-field sub-queries OR'd together, then AND'd across terms:
   - **Exact:** `TermQuery` on all 4 searched fields (boosted by field weight)
   - **Prefix:** `PhrasePrefixQuery` on 3 fields (skips directory) — fast FST prefix scan (0.8x boost)
@@ -142,31 +144,31 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 ## Build & Test
 
-| Command | Purpose |
-|---------|---------|
-| `bun run build` | Production build → `dist/main.js` (CJS, minified, tree-shaken) |
-| `bun run dev` | Watch mode build |
-| `bun test` | Run tests (56 tests across 4 files) |
-| `bun run lint` | Biome check (lint + format, read-only) |
-| `bun run format` | Biome auto-fix |
-| `bun run build:rust` | Build native module via napi-rs |
-| `bun run build:all` | Rust + JS build |
-| `just build-wasm` | Build WASM module (cargo build + wasm-bindgen) |
-| `just build-all` | Rust + WASM + JS build |
-| `cargo test` | Run Rust tests (102 tests) |
-| `just test-wasm` | Run WASM integration tests via wasm-bindgen-test-runner (Node.js) |
-| `cargo clippy --all-targets --all-features -- -D warnings` | Rust linter |
-| `scripts/build-and-install.sh` | Build + install to Obsidian vaults |
-| `bun scripts/test-search.ts <dir> <query> [fuzziness]` | CLI search test harness (indexes dir, searches, benchmarks query latency) |
+- `deno task build`: Production build → `dist/main.js` (CJS, minified, tree-shaken)
+- `deno task dev`: Watch mode build
+- `deno task test`: Run TypeScript tests (56 tests across 4 files)
+- `deno task fmt:check`: Check formatting with Oxfmt
+- `deno task fmt`: Apply formatting with Oxfmt
+- `deno task lint:check`: Check lint with Oxlint
+- `deno task lint`: Apply Oxlint fixes
+- `deno task typecheck`: Run TypeScript 7 and Deno type checks
+- `deno task build:rust`: Build native module via napi-rs
+- `deno task build:wasm`: Build the WASM module and wasm-bindgen output
+- `deno task build:all`: Rust + WASM + TypeScript build
+- `cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown`: Build WASM module
+- `cargo test`: Run Rust tests (102 tests)
+- `cargo clippy --all-targets --all-features -- -D warnings`: Rust linter
+- `scripts/build-and-install.sh`: Build + install to Obsidian vaults
+- `deno task test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
 
-- **Build tool:** Bun's bundler (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
-- **Test runner:** `bun:test` with `happy-dom` for DOM APIs. The `obsidian` module is mocked in `setup.ts`. `IntersectionObserver` is mocked to fire immediately.
-- **Linter/Formatter:** Biome (TS/JS), cargo clippy + cargo fmt (Rust), shfmt + shellcheck (shell). All run via pre-commit hooks.
+- **Build tool:** Rolldown via Deno (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
+- **Test runner:** Deno's test runner with `happy-dom` for DOM APIs. The `obsidian` module is mocked in `setup.ts`. `IntersectionObserver` is mocked to fire immediately.
+- **Linter/Formatter:** Oxfmt and Oxlint (TS/JS), cargo clippy + cargo fmt (Rust), shfmt + shellcheck (shell).
 
 ## Dependencies
 
 - **Runtime:** None (zero runtime dependencies). Query parsing is a custom ~50-line function in `query.ts`.
-- **Dev:** `@biomejs/biome`, `happy-dom`, `@types/bun`, `obsidian`, `typescript`
+- **Dev:** Deno, TypeScript 7, Oxfmt, Oxlint, Rolldown, `happy-dom`, `@types/node`, `obsidian`
 - **Native:** Rust crate `ferrisearch-core` using Tantivy 0.25 for full-text search, exposed via `napi-rs` (darwin-arm64 only) and `wasm-bindgen` (all other platforms). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
 - **WASM:** `wasm-bindgen` 0.2, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen --target web`. The `wasm-bindgen-cli` version (currently 0.2.108) must match the resolved crate version in `Cargo.lock`.
 
@@ -180,6 +182,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 ## Settings
 
 Settings are persisted via Obsidian's `plugin.saveData()`. Key settings:
+
 - **Behavior:** `hideExcluded`, `downrankedFoldersFilters`, `splitCamelCase`, `fuzziness` (0/1/2/3), `ignoreDiacritics`, `minQueryLength` (default: 3), `resultLimit` (default: 10)
 - **UI:** `showExcerpt`, `renderLineReturnInExcerpts`, `highlight`, `showScoreBreakdown`
 - **Weighting:** `weightBasename`, `weightDirectory`, `weightHeadings`, `weightUnmarkedTags`

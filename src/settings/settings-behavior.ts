@@ -1,13 +1,12 @@
 import { Setting } from 'obsidian'
 import type FerrisearchPlugin from '../main'
-import type { FerrisearchSettings } from './utils'
-import { saveSettings } from './utils'
+import { type FerrisearchSettings, saveSettings } from './utils'
 
 export function injectSettingsBehavior(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
   containerEl: HTMLElement,
-) {
+): void {
   new Setting(containerEl).setName('Search').setHeading()
 
   new Setting(containerEl)

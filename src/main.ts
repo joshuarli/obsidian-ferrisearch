@@ -4,16 +4,15 @@ import type { ResultNote } from './globals'
 import { NotesIndexer } from './notes-indexer'
 import { Query } from './search/query'
 import { SearchEngine } from './search/search-engine'
-import { createSearchHistory } from './search/search-history'
+import { createSearchHistory, type SearchHistory } from './search/search-history'
 import { getDefaultSettings, loadSettings, SettingsTab } from './settings'
-import type { FerrisearchSettings } from './settings/utils'
-import { isPluginDisabled } from './settings/utils'
+import { type FerrisearchSettings, isPluginDisabled } from './settings/utils'
 import { TextProcessor } from './tools/text-processing'
 import { logVerbose } from './tools/utils'
 
 // --- Public API (exposed on globalThis.ferrisearch) ---
 
-type ResultNoteApi = {
+interface ResultNoteApi {
   score: number
   vault: string
   path: string
@@ -23,8 +22,8 @@ type ResultNoteApi = {
   excerpt: string
 }
 
-let apiNotified = false
-let onIndexedCallbacks: Array<() => void> = []
+let apiNotified = false,
+  onIndexedCallbacks: (() => void)[] = []
 
 function mapApiResults(plugin: FerrisearchPlugin, results: ResultNote[]): ResultNoteApi[] {
   return results.map(({ score, path, basename, foundWords, matches, content }) => ({
@@ -45,7 +44,7 @@ function notifyOnIndexed(): void {
 
 function registerAPI(plugin: FerrisearchPlugin): void {
   plugin.registerObsidianProtocolHandler('ferrisearch', params => {
-    new FerrisearchVaultModal(plugin, params.query).open()
+    new FerrisearchVaultModal(plugin, params['query']).open()
   })
 
   const api = {
@@ -65,8 +64,7 @@ function registerAPI(plugin: FerrisearchPlugin): void {
 
   // @ts-expect-error
   globalThis.ferrisearch = api
-  // biome-ignore lint/suspicious/noExplicitAny: Obsidian internal plugin registry
-  ;(plugin.app as any).plugins.plugins.ferrisearch.api = api
+  plugin.app.plugins.plugins.ferrisearch.api = api
 }
 
 // --- Plugin ---
@@ -74,18 +72,18 @@ function registerAPI(plugin: FerrisearchPlugin): void {
 export default class FerrisearchPlugin extends Plugin {
   public settings: FerrisearchSettings = getDefaultSettings()
 
-  public readonly notesIndexer = new NotesIndexer(this)
-  public readonly textProcessor = new TextProcessor(this)
-  public readonly searchEngine = new SearchEngine(this)
-  public readonly searchHistory = createSearchHistory(this)
+  public readonly notesIndexer: NotesIndexer = new NotesIndexer(this)
+  public readonly textProcessor: TextProcessor = new TextProcessor(this)
+  public readonly searchEngine: SearchEngine = new SearchEngine(this)
+  public readonly searchHistory: SearchHistory = createSearchHistory(this)
 
-  async onload(): Promise<void> {
+  override async onload(): Promise<void> {
     try {
       await this._onload()
-    } catch (e) {
-      console.error('Ferrisearch - Fatal error during load', e)
+    } catch (error) {
+      console.error('Ferrisearch - Fatal error during load', error)
       if (Platform.isMobileApp) {
-        await this.writeErrorLog(e)
+        await this.writeErrorLog(error)
       }
     }
   }
@@ -176,7 +174,7 @@ export default class FerrisearchPlugin extends Plugin {
     })
   }
 
-  async onunload(): Promise<void> {
+  override async onunload(): Promise<void> {
     // @ts-expect-error
     delete globalThis.ferrisearch
 
@@ -187,23 +185,22 @@ export default class FerrisearchPlugin extends Plugin {
   }
 
   public async populateIndex(): Promise<void> {
-    const searchEngine = this.searchEngine
-    const t0 = performance.now()
-
-    const files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
+    const searchEngine = this.searchEngine,
+      t0 = performance.now(),
+      files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
 
     // Try to load cached index (blob for WASM users, sidecar-only for native)
     const tCache = performance.now()
     let hasCache: boolean
-    if (!searchEngine.isNative) {
+    if (searchEngine.isNative) {
+      hasCache = await searchEngine.loadSidecar()
+    } else {
       // WASM: try loading the serialized index blob + sidecar
       hasCache = await searchEngine.loadIndexBlob()
       if (hasCache) {
         await searchEngine.loadSidecar()
       }
-    } else {
-      hasCache = await searchEngine.loadSidecar()
     }
     if (hasCache) {
       console.debug(`Ferrisearch - Loaded cache in ${(performance.now() - tCache).toFixed(0)}ms`)
@@ -213,10 +210,10 @@ export default class FerrisearchPlugin extends Plugin {
       files.map(f => ({ path: f.path, mtime: f.stat.mtime })),
     )
 
-    if (diff.toAdd.length) {
+    if (diff.toAdd.length > 0) {
       console.debug(`Ferrisearch - Files to add/update: ${diff.toAdd.length}`)
     }
-    if (diff.toRemove.length) {
+    if (diff.toRemove.length > 0) {
       console.debug(`Ferrisearch - Files to remove: ${diff.toRemove.length}`)
     }
 
@@ -225,8 +222,8 @@ export default class FerrisearchPlugin extends Plugin {
       indexingNotice = new Notice(`Ferrisearch: indexing ${diff.toAdd.length} files…`, 0)
     }
 
-    const tIndex = performance.now()
-    const skipCommit = { skipCommit: true }
+    const tIndex = performance.now(),
+      skipCommit = { skipCommit: true }
     searchEngine.removeFromPaths(
       diff.toRemove.map(o => o.path),
       skipCommit,
@@ -235,10 +232,10 @@ export default class FerrisearchPlugin extends Plugin {
       diff.toAdd.map(o => o.path),
       skipCommit,
     )
-    if (diff.toRemove.length || diff.toAdd.length) searchEngine.commit()
+    if (diff.toRemove.length > 0 || diff.toAdd.length > 0) searchEngine.commit()
     const indexMs = performance.now() - tIndex
 
-    if (diff.toRemove.length || diff.toAdd.length) {
+    if (diff.toRemove.length > 0 || diff.toAdd.length > 0) {
       const tSave = performance.now()
       await searchEngine.saveSidecar()
       await searchEngine.saveIndexBlob()
@@ -261,13 +258,13 @@ export default class FerrisearchPlugin extends Plugin {
 
   private async writeErrorLog(e: unknown): Promise<void> {
     try {
-      const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e)
-      const timestamp = new Date().toISOString()
-      const logPath = `${this.app.vault.configDir}/plugins/ferrisearch/error.log`
+      const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e),
+        timestamp = new Date().toISOString(),
+        logPath = `${this.app.vault.configDir}/plugins/ferrisearch/error.log`
       await this.app.vault.adapter.write(logPath, `[${timestamp}]\n${msg}\n`)
-      new Notice('Ferrisearch: error logged to .obsidian/plugins/ferrisearch/error.log', 10000)
+      new Notice('Ferrisearch: error logged to .obsidian/plugins/ferrisearch/error.log', 10_000)
     } catch {
-      // adapter may not be ready — nothing we can do
+      // Adapter may not be ready — nothing we can do
     }
   }
 }

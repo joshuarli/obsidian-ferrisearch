@@ -1,11 +1,11 @@
 import { Notice, normalizePath, Platform, TFile } from 'obsidian'
 // WASM glue code — bundled into main.js (~23KB), used on mobile and non-darwin-arm64 desktop.
-// Build requires: just build-wasm (or build-all)
+// Build requires: make build-wasm (or build-all)
 import {
   SearchIndex as WasmSearchIndex,
   initSync as wasmInitSync,
 } from '../../wasm/pkg/ferrisearch_wasm.js'
-import type { DocumentRef, IndexedDocument, ResultNote } from '../globals'
+import type { DocumentRef, IndexedDocument, ResultNote, ScoreBreakdown } from '../globals'
 import type FerrisearchPlugin from '../main'
 import {
   extractHeadingsFromCache,
@@ -24,6 +24,11 @@ const EXPECTED_NAPI_VERSION = 5
 interface NativeModule {
   napiVersion(): number
   SearchIndex: new (indexPath: string, config?: { ignoreDiacritics?: boolean }) => NativeSearchIndex
+}
+
+interface NativeVaultAdapter {
+  basePath: string
+  getBasePath(): string
 }
 
 interface NativeSearchIndex {
@@ -102,11 +107,14 @@ type NativeSearchResultWithBreakdown = NativeSearchResult & {
 }
 
 export class SearchEngine {
+  protected plugin: FerrisearchPlugin
   private nativeIndex: NativeSearchIndex | null = null
   private indexedDocuments = new Map<string, number>()
   private isNativeEngine = false
 
-  constructor(protected plugin: FerrisearchPlugin) {}
+  constructor(plugin: FerrisearchPlugin) {
+    this.plugin = plugin
+  }
 
   private shouldUseNative(): boolean {
     return !Platform.isMobileApp && process.platform === 'darwin' && process.arch === 'arm64'
@@ -123,16 +131,16 @@ export class SearchEngine {
           this.initializeNative()
           this.isNativeEngine = true
           return
-        } catch (e) {
-          console.warn('Ferrisearch - Native init failed, falling back to WASM', e)
+        } catch (error) {
+          console.warn('Ferrisearch - Native init failed, falling back to WASM', error)
         }
       }
       await this.initializeWasm()
-    } catch (e) {
-      console.error('Ferrisearch - Failed to initialize search engine', e)
+    } catch (error) {
+      console.error('Ferrisearch - Failed to initialize search engine', error)
       if (Platform.isMobileApp) {
         // No console on mobile — write error to a file
-        const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e)
+        const msg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error)
         const logPath = `${this.plugin.app.vault.configDir}/plugins/ferrisearch/error.log`
         try {
           await this.plugin.app.vault.adapter.write(
@@ -141,22 +149,24 @@ export class SearchEngine {
           )
           new Notice('Ferrisearch: error written to .obsidian/plugins/ferrisearch/error.log', 10000)
         } catch {
-          new Notice(`Ferrisearch init failed: ${e instanceof Error ? e.message : e}`, 15000)
+          new Notice(
+            `Ferrisearch init failed: ${error instanceof Error ? error.message : error}`,
+            15_000,
+          )
         }
       } else {
         new Notice(
           'Ferrisearch - Failed to initialize search engine. See console for details.',
-          10000,
+          10_000,
         )
       }
     }
   }
 
   private initializeNative(): void {
-    const module = this.loadNativeModule()
-
-    // Detect stale native binary cached by dlopen after a plugin update
-    const version = typeof module.napiVersion === 'function' ? module.napiVersion() : 0
+    const module = this.loadNativeModule(),
+      // Detect stale native binary cached by dlopen after a plugin update
+      version = typeof module.napiVersion === 'function' ? module.napiVersion() : 0
     if (version !== EXPECTED_NAPI_VERSION) {
       new Notice('Ferrisearch: native module outdated — please restart Obsidian.', 0)
       return
@@ -169,9 +179,9 @@ export class SearchEngine {
   }
 
   private async initializeWasm(): Promise<void> {
-    const adapter = this.plugin.app.vault.adapter
-    const wasmPath = `${this.plugin.app.vault.configDir}/plugins/ferrisearch/ferrisearch_wasm_bg.wasm`
-    const wasmBytes = await adapter.readBinary(wasmPath)
+    const adapter = this.plugin.app.vault.adapter,
+      wasmPath = `${this.plugin.app.vault.configDir}/plugins/ferrisearch/ferrisearch_wasm_bg.wasm`,
+      wasmBytes = await adapter.readBinary(wasmPath)
 
     wasmInitSync(wasmBytes)
     this.nativeIndex = new WasmSearchIndex({
@@ -188,8 +198,8 @@ export class SearchEngine {
     if (!this.nativeIndex) return
     try {
       this.nativeIndex.close()
-    } catch (e) {
-      console.error('Ferrisearch - Error closing index', e)
+    } catch (error) {
+      console.error('Ferrisearch - Error closing index', error)
     }
     this.nativeIndex = null
   }
@@ -198,8 +208,8 @@ export class SearchEngine {
     this.close()
     this.indexedDocuments.clear()
 
-    const adapter = this.plugin.app.vault.adapter
-    const sidecar = this.getSidecarPath()
+    const adapter = this.plugin.app.vault.adapter,
+      sidecar = this.getSidecarPath()
     if (await adapter.exists(sidecar)) await adapter.remove(sidecar)
     const blob = this.getBlobPath()
     if (await adapter.exists(blob)) await adapter.remove(blob)
@@ -213,15 +223,15 @@ export class SearchEngine {
 
   async loadSidecar(): Promise<boolean> {
     try {
-      const adapter = this.plugin.app.vault.adapter
-      const path = this.getSidecarPath()
+      const adapter = this.plugin.app.vault.adapter,
+        path = this.getSidecarPath()
       if (await adapter.exists(path)) {
         const manifest: { path: string; mtime: number }[] = JSON.parse(await adapter.read(path))
         this.indexedDocuments = new Map(manifest.map(o => [o.path, o.mtime]))
         return true
       }
-    } catch (e) {
-      console.warn('Ferrisearch - Failed to load sidecar manifest', e)
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to load sidecar manifest', error)
     }
     return false
   }
@@ -230,8 +240,8 @@ export class SearchEngine {
     try {
       const data = [...this.indexedDocuments].map(([path, mtime]) => ({ path, mtime }))
       await this.plugin.app.vault.adapter.write(this.getSidecarPath(), JSON.stringify(data))
-    } catch (e) {
-      console.error('Ferrisearch - Failed to save sidecar manifest', e)
+    } catch (error) {
+      console.error('Ferrisearch - Failed to save sidecar manifest', error)
     }
   }
 
@@ -251,10 +261,10 @@ export class SearchEngine {
     if (!this.nativeIndex) return
     logVerbose('Adding files', paths)
 
-    const t0 = performance.now()
-    const results = await Promise.all(paths.map(p => this.getIndexedDocument(p)))
-    const documents = results.filter((d): d is IndexedDocument => d !== null)
-    const readMs = performance.now() - t0
+    const t0 = performance.now(),
+      results = await Promise.all(paths.map(p => this.getIndexedDocument(p))),
+      documents = results.filter((d): d is IndexedDocument => d !== null),
+      readMs = performance.now() - t0
 
     try {
       const t1 = performance.now()
@@ -269,8 +279,8 @@ export class SearchEngine {
         `Ferrisearch - addFromPaths: ${documents.length} docs, read=${readMs.toFixed(0)}ms, rust=${rustMs.toFixed(0)}ms`,
       )
       for (const doc of documents) this.indexedDocuments.set(doc.path, doc.mtime)
-    } catch (e) {
-      console.error('Ferrisearch - Error adding documents', e)
+    } catch (error) {
+      console.error('Ferrisearch - Error adding documents', error)
     }
   }
 
@@ -280,8 +290,8 @@ export class SearchEngine {
     try {
       this.nativeIndex.removeDocuments(paths)
       if (!options?.skipCommit) this.nativeIndex.commit()
-    } catch (e) {
-      console.error('Ferrisearch - Error removing documents', e)
+    } catch (error) {
+      console.error('Ferrisearch - Error removing documents', error)
     }
   }
 
@@ -289,8 +299,8 @@ export class SearchEngine {
     if (!this.nativeIndex) return
     try {
       this.nativeIndex.commitNoMerge()
-    } catch (e) {
-      console.error('Ferrisearch - Error committing index', e)
+    } catch (error) {
+      console.error('Ferrisearch - Error committing index', error)
     }
   }
 
@@ -328,19 +338,19 @@ export class SearchEngine {
         fuzziness: settings.fuzziness,
         prefixLength: options.prefixLength,
         limit: settings.resultLimit,
-        singleFilePath: options.singleFilePath,
+        ...(options.singleFilePath === undefined ? {} : { singleFilePath: options.singleFilePath }),
         recencyBoost: settings.recencyBoost,
         scoreBreakdown: settings.showScoreBreakdown,
       })
-    } catch (e) {
-      console.error('Ferrisearch - Search error', e)
+    } catch (error) {
+      console.error('Ferrisearch - Search error', error)
       return []
     }
 
     logVerbose(`Found ${results.length} results`, results)
 
     // Post-filter: extension
-    if (query.query.ext.length) {
+    if (query.query.ext.length > 0) {
       results = results.filter(r => {
         const ext = `.${r.path.slice(r.path.lastIndexOf('.') + 1)}`
         return query.query.ext.some(e => ext.startsWith(e.startsWith('.') ? e : `.${e}`))
@@ -348,18 +358,18 @@ export class SearchEngine {
     }
 
     // Post-filter: path include/exclude
-    if (query.query.path.length) {
+    if (query.query.path.length > 0) {
       results = results.filter(r =>
         query.query.path.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
       )
     }
-    if (query.query.exclude.path.length) {
+    if (query.query.exclude.path.length > 0) {
       results = results.filter(
         r => !query.query.exclude.path.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
       )
     }
 
-    if (!results.length) return []
+    if (results.length === 0) return []
 
     if (options.singleFilePath) {
       return results.filter(r => r.path === options.singleFilePath)
@@ -367,11 +377,11 @@ export class SearchEngine {
 
     // Downrank folders + tag boost
     logVerbose('searching with downranked folders', settings.downrankedFoldersFilters)
-    const tags = query.getTags()
-    const filters = settings.downrankedFoldersFilters
+    const tags = query.getTags(),
+      filters = settings.downrankedFoldersFilters
 
     for (const r of results) {
-      if (filters.length) {
+      if (filters.length > 0) {
         const shouldDownrank =
           filters.some(f => r.path === f || r.path.startsWith(`${f}/`)) ||
           r.path.split('/').some(part => filters.includes(part))
@@ -394,17 +404,17 @@ export class SearchEngine {
 
     // Exact-term and exclusion filters — use content already returned by Tantivy
     const exactTerms = query.getExactTerms()
-    if (exactTerms.length) {
+    if (exactTerms.length > 0) {
       logVerbose('Filtering with quoted terms:', exactTerms)
       results = results.filter(r => {
-        const title = removeDiacritics(r.path.toLowerCase())
-        const content = stripMarkdownCharacters(removeDiacritics(r.content)).toLowerCase()
+        const title = removeDiacritics(r.path.toLowerCase()),
+          content = stripMarkdownCharacters(removeDiacritics(r.content)).toLowerCase()
         return exactTerms.every(q => content.includes(q) || title.includes(q))
       })
     }
 
     const exclusions = query.query.exclude.text
-    if (exclusions.length) {
+    if (exclusions.length > 0) {
       logVerbose('Filtering with exclusions')
       results = results.filter(r => {
         const content = r.content.toLowerCase()
@@ -426,7 +436,7 @@ export class SearchEngine {
   public getSuggestions(query: Query, options?: { singleFilePath?: string }): ResultNote[] {
     const results = this.search(query, {
       prefixLength: 1,
-      singleFilePath: options?.singleFilePath,
+      ...(options?.singleFilePath === undefined ? {} : { singleFilePath: options.singleFilePath }),
     })
     return results.map(result => {
       logVerbose('Locating matches for', result.path)
@@ -437,26 +447,28 @@ export class SearchEngine {
       const matches = result.matches.map(m => ({ match: m.matchText, offset: m.offset }))
       logVerbose(`Matches for note "${result.path}"`, matches)
 
-      const rb = result as NativeSearchResultWithBreakdown
-      const recency = result.recencyMultiplier ?? 1.0
+      const rb = result as NativeSearchResultWithBreakdown,
+        recency = result.recencyMultiplier ?? 1
       // Reverse TS adjustments to recover the score before recency
       let base = result.score
       if (rb._tagBoost) base /= 100
       if (rb._folderDownrank) base *= 10
       base /= recency
-      const scoreBreakdown = {
+      const scoreBreakdown: ScoreBreakdown = {
         base,
         recency,
         folderDownrank: rb._folderDownrank ?? false,
         tagBoost: rb._tagBoost ?? false,
-        fieldScores: result.fieldScores
+        ...(result.fieldScores
           ? {
-              displayTitle: result.fieldScores.displayTitle,
-              directory: result.fieldScores.directory,
-              content: result.fieldScores.content,
-              headings: result.fieldScores.headings,
+              fieldScores: {
+                displayTitle: result.fieldScores.displayTitle,
+                directory: result.fieldScores.directory,
+                content: result.fieldScores.content,
+                headings: result.fieldScores.headings,
+              },
             }
-          : undefined,
+          : {}),
       }
 
       return {
@@ -480,15 +492,15 @@ export class SearchEngine {
   async saveIndexBlob(): Promise<void> {
     if (this.isNativeEngine || !this.nativeIndex) return
     try {
-      const wasmIndex = this.nativeIndex as unknown as WasmSearchIndex
-      const blob = wasmIndex.serializeIndex()
+      const wasmIndex = this.nativeIndex as unknown as WasmSearchIndex,
+        blob = wasmIndex.serializeIndex()
       await this.plugin.app.vault.adapter.writeBinary(
         this.getBlobPath(),
         blob.buffer as ArrayBuffer,
       )
       console.log(`Ferrisearch - Saved index blob (${(blob.length / 1024).toFixed(0)} KB)`)
-    } catch (e) {
-      console.error('Ferrisearch - Failed to save index blob', e)
+    } catch (error) {
+      console.error('Ferrisearch - Failed to save index blob', error)
     }
   }
 
@@ -499,19 +511,19 @@ export class SearchEngine {
   async loadIndexBlob(): Promise<boolean> {
     if (this.isNativeEngine) return false
     try {
-      const adapter = this.plugin.app.vault.adapter
-      const blobPath = this.getBlobPath()
+      const adapter = this.plugin.app.vault.adapter,
+        blobPath = this.getBlobPath()
       if (!(await adapter.exists(blobPath))) return false
 
-      const buffer = await adapter.readBinary(blobPath)
-      const blob = new Uint8Array(buffer)
+      const buffer = await adapter.readBinary(blobPath),
+        blob = new Uint8Array(buffer)
       this.nativeIndex = WasmSearchIndex.loadFromBlob(blob, {
         ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
       }) as unknown as NativeSearchIndex
       console.log('Ferrisearch - Loaded index from blob')
       return true
-    } catch (e) {
-      console.warn('Ferrisearch - Failed to load index blob, will reindex', e)
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to load index blob, will reindex', error)
       // Re-create fresh WASM index
       this.nativeIndex = new WasmSearchIndex({
         ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
@@ -523,13 +535,13 @@ export class SearchEngine {
   private async getIndexedDocument(path: string): Promise<IndexedDocument | null> {
     try {
       path = normalizePath(path)
-      const { app } = this.plugin
-      const file = app.vault.getAbstractFileByPath(path)
+      const { app } = this.plugin,
+        file = app.vault.getAbstractFileByPath(path)
       if (!file || !(file instanceof TFile)) return null
 
-      const content = await app.vault.cachedRead(file)
-      const metadata = app.metadataCache.getFileCache(file)
-      const tags = getTagsFromMetadata(metadata)
+      const content = await app.vault.cachedRead(file),
+        metadata = app.metadataCache.getFileCache(file),
+        tags = getTagsFromMetadata(metadata)
 
       return {
         basename: file.basename,
@@ -548,15 +560,16 @@ export class SearchEngine {
             ].join(' ')
           : '',
       }
-    } catch (e) {
-      console.warn(`Ferrisearch: Error reading "${path}"`, e)
+    } catch (error) {
+      console.warn(`Ferrisearch: Error reading "${path}"`, error)
       return null
     }
   }
 
   private getIndexPath(): string {
     const configDir = this.plugin.app.vault.configDir
-    return `${this.plugin.app.vault.adapter.getBasePath()}/${configDir}/plugins/ferrisearch/tantivy-index`
+    const adapter = this.plugin.app.vault.adapter as unknown as NativeVaultAdapter
+    return `${adapter.getBasePath()}/${configDir}/plugins/ferrisearch/tantivy-index`
   }
 
   private getSidecarPath(): string {
@@ -568,23 +581,23 @@ export class SearchEngine {
   }
 
   private loadNativeModule(): NativeModule {
-    const path = require('node:path')
-    const pluginDir = path.join(
-      this.plugin.app.vault.adapter.basePath,
-      this.plugin.app.vault.configDir,
-      'plugins',
-      'ferrisearch',
-    )
-
-    const platform = process.platform
-    const arch = process.arch
-    const candidates = [`ferrisearch.${platform}-${arch}.node`, 'ferrisearch.node']
+    const path = require('node:path'),
+      adapter = this.plugin.app.vault.adapter as unknown as NativeVaultAdapter,
+      pluginDir = path.join(
+        adapter.basePath,
+        this.plugin.app.vault.configDir,
+        'plugins',
+        'ferrisearch',
+      ),
+      platform = process.platform,
+      arch = process.arch,
+      candidates = [`ferrisearch.${platform}-${arch}.node`, 'ferrisearch.node']
 
     for (const candidate of candidates) {
       try {
         return require(path.join(pluginDir, candidate))
-      } catch (e) {
-        logVerbose(`Failed to load ${candidate}:`, e)
+      } catch (error) {
+        logVerbose(`Failed to load ${candidate}:`, error)
       }
     }
     throw new Error(`Failed to load native module. Tried: ${candidates.join(', ')}`)

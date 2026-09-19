@@ -1,4 +1,5 @@
-import { describe, expect, it, mock } from 'bun:test'
+import { describe, it } from '@std/testing/bdd'
+import { expect, fn } from '@std/expect'
 import { Observable } from './globals'
 
 describe('Observable', () => {
@@ -14,17 +15,17 @@ describe('Observable', () => {
   })
 
   it('calls subscriber immediately with current value', () => {
-    const obs = new Observable(10)
-    const fn = mock(() => {})
-    obs.subscribe(fn)
-    expect(fn).toHaveBeenCalledTimes(1)
-    expect(fn).toHaveBeenCalledWith(10)
+    const obs = new Observable(10),
+      spy = fn(() => {}) as (v: number) => void
+    obs.subscribe(spy)
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledWith(10)
   })
 
   it('calls subscriber on each set()', () => {
-    const obs = new Observable(0)
-    const values: number[] = []
-    obs.subscribe(v => values.push(v))
+    const obs = new Observable(0),
+      values: number[] = []
+    obs.subscribe((v: number) => values.push(v))
     obs.set(1)
     obs.set(2)
     obs.set(3)
@@ -32,35 +33,34 @@ describe('Observable', () => {
   })
 
   it('returns unsubscribe function that stops notifications', () => {
-    const obs = new Observable('a')
-    const fn = mock(() => {})
-    const unsub = obs.subscribe(fn)
-    expect(fn).toHaveBeenCalledTimes(1) // initial
+    const obs = new Observable('a'),
+      spy = fn(() => {}) as (v: string) => void,
+      unsub = obs.subscribe(spy)
+    expect(spy).toHaveBeenCalledTimes(1) // Initial
 
     obs.set('b')
-    expect(fn).toHaveBeenCalledTimes(2)
+    expect(spy).toHaveBeenCalledTimes(2)
 
     unsub()
     obs.set('c')
-    expect(fn).toHaveBeenCalledTimes(2) // no more calls
+    expect(spy).toHaveBeenCalledTimes(2) // No more calls
   })
 
   it('supports multiple independent subscribers', () => {
-    const obs = new Observable(0)
-    const fn1 = mock(() => {})
-    const fn2 = mock(() => {})
-
-    const unsub1 = obs.subscribe(fn1)
-    obs.subscribe(fn2)
+    const obs = new Observable(0),
+      spy1 = fn(() => {}) as (v: number) => void,
+      spy2 = fn(() => {}) as (v: number) => void,
+      unsub1 = obs.subscribe(spy1)
+    obs.subscribe(spy2)
 
     obs.set(1)
-    expect(fn1).toHaveBeenCalledTimes(2) // initial + set
-    expect(fn2).toHaveBeenCalledTimes(2)
+    expect(spy1).toHaveBeenCalledTimes(2) // Initial + set
+    expect(spy2).toHaveBeenCalledTimes(2)
 
     unsub1()
     obs.set(2)
-    expect(fn1).toHaveBeenCalledTimes(2) // stopped
-    expect(fn2).toHaveBeenCalledTimes(3) // still going
+    expect(spy1).toHaveBeenCalledTimes(2) // Stopped
+    expect(spy2).toHaveBeenCalledTimes(3) // Still going
   })
 
   it('handles unsubscribe during set() iteration safely', () => {
@@ -71,11 +71,11 @@ describe('Observable', () => {
     obs.subscribe(() => {
       if (unsub2) unsub2()
     })
-    const fn2 = mock(() => {})
-    unsub2 = obs.subscribe(fn2)
+    const spy2 = fn(() => {}) as (v: number) => void
+    unsub2 = obs.subscribe(spy2)
 
-    // fn2 was called once (initial subscribe call)
-    expect(fn2).toHaveBeenCalledTimes(1)
+    // Spy2 was called once (initial subscribe call)
+    expect(spy2).toHaveBeenCalledTimes(1)
 
     // This set() triggers subscriber 1 which unsubs subscriber 2
     // Should not throw

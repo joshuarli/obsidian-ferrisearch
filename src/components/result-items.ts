@@ -5,12 +5,12 @@ import { showExcerpt } from '../settings/index'
 import { getExtension, pathWithoutFilename } from '../tools/utils'
 
 export function formatRelativeTime(mtime: number): string {
-  const diff = Date.now() - mtime
-  const minutes = Math.floor(diff / 60_000)
-  const hours = Math.floor(diff / 3_600_000)
-  const days = Math.floor(diff / 86_400_000)
-  const months = Math.floor(days / 30)
-  const years = Math.floor(days / 365)
+  const diff = Date.now() - mtime,
+    minutes = Math.floor(diff / 60_000),
+    hours = Math.floor(diff / 3_600_000),
+    days = Math.floor(diff / 86_400_000),
+    months = Math.floor(days / 30),
+    years = Math.floor(days / 365)
 
   if (minutes < 1) return 'just now'
   if (hours < 1) return `${minutes}m ago`
@@ -26,49 +26,47 @@ const unsubscribers = new WeakMap<HTMLElement, () => void>()
 export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugin): HTMLElement {
   const el = document.createElement('div')
   el.className = 'suggestion-item ferrisearch-result'
-  el.dataset.resultId = note.path
+  el.dataset['resultId'] = note.path
 
-  const wrapper = document.createElement('div')
-
-  // Title
-  const titleContainer = document.createElement('div')
+  const wrapper = document.createElement('div'),
+    // Title
+    titleContainer = document.createElement('div')
   titleContainer.className = 'ferrisearch-result__title-container'
 
   const titleSpan = document.createElement('span')
   titleSpan.className = 'ferrisearch-result__title'
 
-  const title = note.displayTitle || note.basename
-  const matchesTitle = plugin.textProcessor.getMatches(title, note.foundWords)
-
-  const iconSpan = document.createElement('span')
+  const title = note.displayTitle || note.basename,
+    matchesTitle = plugin.textProcessor.getMatches(title, note.foundWords),
+    iconSpan = document.createElement('span')
   setIcon(iconSpan, 'file')
-  titleSpan.appendChild(iconSpan)
+  titleSpan.append(iconSpan)
 
   const titleText = document.createElement('span')
   titleText.innerHTML = plugin.textProcessor.highlightText(title, matchesTitle)
-  titleSpan.appendChild(titleText)
+  titleSpan.append(titleText)
 
   if (!note.displayTitle) {
     const ext = document.createElement('span')
     ext.className = 'ferrisearch-result__extension'
     ext.textContent = `.${getExtension(note.path)}`
-    titleSpan.appendChild(ext)
+    titleSpan.append(ext)
   }
 
   if (note.matches.length > 0) {
     const counter = document.createElement('span')
     counter.className = 'ferrisearch-result__counter'
     counter.innerHTML = `${note.matches.length}&nbsp;${note.matches.length > 1 ? 'matches' : 'match'}`
-    titleSpan.appendChild(counter)
+    titleSpan.append(counter)
   }
 
   const mtimeSpan = document.createElement('span')
   mtimeSpan.className = 'ferrisearch-result__mtime'
   mtimeSpan.textContent = formatRelativeTime(note.mtime)
 
-  titleContainer.appendChild(titleSpan)
-  titleContainer.appendChild(mtimeSpan)
-  wrapper.appendChild(titleContainer)
+  titleContainer.append(titleSpan)
+  titleContainer.append(mtimeSpan)
+  wrapper.append(titleContainer)
 
   // Score breakdown
   if (plugin.settings.showScoreBreakdown && note.scoreBreakdown) {
@@ -78,20 +76,20 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
     let text = `Score: ${note.score.toPrecision(3)}`
     const parts: string[] = [`${bd.base.toPrecision(3)} base`]
     if (bd.fieldScores) {
-      const fs = bd.fieldScores
-      const fields: string[] = []
+      const fs = bd.fieldScores,
+        fields: string[] = []
       if (fs.displayTitle > 0) fields.push(`title:${fs.displayTitle.toPrecision(3)}`)
       if (fs.directory > 0) fields.push(`dir:${fs.directory.toPrecision(3)}`)
       if (fs.content > 0) fields.push(`content:${fs.content.toPrecision(3)}`)
       if (fs.headings > 0) fields.push(`headings:${fs.headings.toPrecision(3)}`)
-      if (fields.length) parts.push(`[${fields.join(' ')}]`)
+      if (fields.length > 0) parts.push(`[${fields.join(' ')}]`)
     }
-    if (bd.recency !== 1.0) parts.push(`\u00d7${bd.recency.toPrecision(3)} recency`)
-    if (bd.folderDownrank) parts.push('\u00f710 folder')
-    if (bd.tagBoost) parts.push('\u00d7100 tag')
-    if (parts.length > 1 || bd.recency !== 1.0) text += ` = ${parts.join(' ')}`
+    if (bd.recency !== 1) parts.push(`\u00D7${bd.recency.toPrecision(3)} recency`)
+    if (bd.folderDownrank) parts.push('\u00F710 folder')
+    if (bd.tagBoost) parts.push('\u00D7100 tag')
+    if (parts.length > 1 || bd.recency !== 1) text += ` = ${parts.join(' ')}`
     scoreDiv.textContent = text
-    wrapper.appendChild(scoreDiv)
+    wrapper.append(scoreDiv)
   }
 
   // Folder path
@@ -101,12 +99,12 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
     folderDiv.className = 'ferrisearch-result__folder-path'
     const folderIcon = document.createElement('span')
     setIcon(folderIcon, 'folder-open')
-    folderDiv.appendChild(folderIcon)
-    const matchesPath = plugin.textProcessor.getMatches(notePath, note.foundWords)
-    const folderText = document.createElement('span')
+    folderDiv.append(folderIcon)
+    const matchesPath = plugin.textProcessor.getMatches(notePath, note.foundWords),
+      folderText = document.createElement('span')
     folderText.innerHTML = plugin.textProcessor.highlightText(notePath, matchesPath)
-    folderDiv.appendChild(folderText)
-    wrapper.appendChild(folderDiv)
+    folderDiv.append(folderText)
+    wrapper.append(folderDiv)
   }
 
   // Excerpt body (reactive)
@@ -123,9 +121,9 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
       bodyDiv.style.display = v ? '' : 'none'
     }),
   )
-  wrapper.appendChild(bodyDiv)
+  wrapper.append(bodyDiv)
 
-  el.appendChild(wrapper)
+  el.append(wrapper)
   return el
 }
 
@@ -137,7 +135,7 @@ export function createInFileResultItem(
 ): HTMLElement {
   const el = document.createElement('div')
   el.className = 'suggestion-item ferrisearch-result'
-  el.dataset.resultId = index.toString()
+  el.dataset['resultId'] = index.toString()
 
   const bodyDiv = document.createElement('div')
   bodyDiv.className = 'ferrisearch-result__body'
@@ -145,7 +143,7 @@ export function createInFileResultItem(
     plugin.textProcessor.makeExcerpt(note.content ?? '', offset),
     note.matches,
   )
-  el.appendChild(bodyDiv)
+  el.append(bodyDiv)
   return el
 }
 

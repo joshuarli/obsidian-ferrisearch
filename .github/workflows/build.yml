@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [master]
-    tags: ["*"]
+    tags: ['*']
   pull_request:
 
 jobs:
@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - uses: dtolnay/rust-toolchain@master
         with:
           components: clippy, rustfmt
@@ -19,16 +21,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli@0.2.108
-      - run: bun install --frozen-lockfile
+      - run: deno install --frozen
 
       # Lint
-      - run: bunx biome check .
+      - run: deno task fmt:check
+      - run: deno task lint:check
+      - run: deno task typecheck
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
       # Test
       - run: cargo test --all
-      - run: bun test
+      - run: deno task test
       - run: WASM_BINDGEN_TEST_ONLY_NODE=1 cargo test -p ferrisearch-wasm --target wasm32-unknown-unknown
 
   # --- Release (only on version tags) ---
@@ -60,17 +64,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - uses: dtolnay/rust-toolchain@master
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli@0.2.108
-      - run: bun install --frozen-lockfile
+      - run: deno install --frozen
       - run: cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown
       - run: wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm
-      - run: bun run build
+      - run: deno task build
       - uses: actions/upload-artifact@v4
         with:
           name: plugin-dist

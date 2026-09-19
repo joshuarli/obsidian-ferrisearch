@@ -1,6 +1,6 @@
 import type { App, Plugin } from 'obsidian'
 import { K_DISABLE_FERRISEARCH, type RecencyCutoff } from '../globals'
-import { settings } from '.'
+import { settings } from './index'
 
 export function htmlDescription(innerHTML: string): DocumentFragment {
   const desc = new DocumentFragment()
@@ -30,7 +30,7 @@ export async function saveSettings(plugin: Plugin): Promise<void> {
 export interface FerrisearchSettings extends WeightingSettings {
   /** Boost more recent files */
   recencyBoost: RecencyCutoff
-  /** downrank files in the given folders */
+  /** Downrank files in the given folders */
   downrankedFoldersFilters: string[]
   /** Ignore diacritics when indexing files */
   ignoreDiacritics: boolean

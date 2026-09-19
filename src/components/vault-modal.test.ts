@@ -1,4 +1,6 @@
-import { describe, expect, it, mock } from 'bun:test'
+import { describe, it } from '@std/testing/bdd'
+import { expect, fn } from '@std/expect'
+import '../test-utils/setup'
 import { Action } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
@@ -20,12 +22,12 @@ async function flush(ms = 400) {
 }
 
 function createMockModal(): ModalHandle & {
-  close: ReturnType<typeof mock>
+  close: ReturnType<typeof fn>
   dispatch(action: string): void
 } {
   const handlers = new Map<string, (...args: unknown[]) => void>()
   return {
-    close: mock(() => {}),
+    close: fn(() => {}) as () => void,
     on(action: string, handler: (...args: unknown[]) => void) {
       handlers.set(action, handler)
     },
@@ -43,25 +45,25 @@ function setup(overrides?: {
   settings?: Record<string, unknown>
   searchResults?: unknown[]
 }) {
-  const container = document.createElement('div')
-  const plugin = createMockPlugin({
-    settings: overrides?.settings,
-    searchResults: overrides?.searchResults,
-  })
-  const modal = createMockModal()
-  const handle = renderVaultModal(container, {
-    plugin,
-    modal,
-    previousQuery: overrides?.previousQuery ?? '',
-  })
+  const container = document.createElement('div'),
+    plugin = createMockPlugin({
+      settings: overrides?.settings,
+      searchResults: overrides?.searchResults,
+    }),
+    modal = createMockModal(),
+    handle = renderVaultModal(container, {
+      plugin,
+      modal,
+      previousQuery: overrides?.previousQuery ?? '',
+    })
   return { container, plugin, modal, handle }
 }
 
 describe('renderVaultModal', () => {
   describe('DOM structure', () => {
     it('creates input with correct placeholder', () => {
-      const { container, handle } = setup()
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, handle } = setup(),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       expect(input).not.toBeNull()
       expect(input.placeholder).toBe('Ferrisearch - Vault')
       handle.destroy()
@@ -80,8 +82,8 @@ describe('renderVaultModal', () => {
     })
 
     it('sets input value to previousQuery', () => {
-      const { container, handle } = setup({ previousQuery: 'hello world' })
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, handle } = setup({ previousQuery: 'hello world' }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       expect(input.value).toBe('hello world')
       handle.destroy()
     })
@@ -89,8 +91,8 @@ describe('renderVaultModal', () => {
 
   describe('search behavior', () => {
     it('calls getSuggestions after debounce when input changes', async () => {
-      const { container, plugin, handle } = setup()
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, plugin, handle } = setup(),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test query'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -100,13 +102,12 @@ describe('renderVaultModal', () => {
 
     it('renders result items for search results', async () => {
       const notes = [
-        createMockResultNote({ path: 'a.md', basename: 'a' }),
-        createMockResultNote({ path: 'b.md', basename: 'b' }),
-      ]
-      const { container, handle } = setup({ searchResults: notes })
-
-      // Trigger search via input
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          createMockResultNote({ path: 'a.md', basename: 'a' }),
+          createMockResultNote({ path: 'b.md', basename: 'b' }),
+        ],
+        { container, handle } = setup({ searchResults: notes }),
+        // Trigger search via input
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -117,10 +118,9 @@ describe('renderVaultModal', () => {
     })
 
     it('clears results when input is emptied', async () => {
-      const notes = [createMockResultNote()]
-      const { container, handle } = setup({ searchResults: notes })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const notes = [createMockResultNote()],
+        { container, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       // First, search
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
@@ -140,13 +140,12 @@ describe('renderVaultModal', () => {
   describe('navigation', () => {
     it('arrow-down selects next item', async () => {
       const notes = [
-        createMockResultNote({ path: 'a.md', basename: 'a' }),
-        createMockResultNote({ path: 'b.md', basename: 'b' }),
-        createMockResultNote({ path: 'c.md', basename: 'c' }),
-      ]
-      const { container, modal, handle } = setup({ searchResults: notes })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          createMockResultNote({ path: 'a.md', basename: 'a' }),
+          createMockResultNote({ path: 'b.md', basename: 'b' }),
+          createMockResultNote({ path: 'c.md', basename: 'c' }),
+        ],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -166,12 +165,11 @@ describe('renderVaultModal', () => {
 
     it('arrow-up wraps to last item from first', async () => {
       const notes = [
-        createMockResultNote({ path: 'a.md', basename: 'a' }),
-        createMockResultNote({ path: 'b.md', basename: 'b' }),
-      ]
-      const { container, modal, handle } = setup({ searchResults: notes })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          createMockResultNote({ path: 'a.md', basename: 'a' }),
+          createMockResultNote({ path: 'b.md', basename: 'b' }),
+        ],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -186,10 +184,9 @@ describe('renderVaultModal', () => {
 
   describe('actions', () => {
     it('Enter closes modal when results exist', async () => {
-      const notes = [createMockResultNote()]
-      const { container, modal, handle } = setup({ searchResults: notes })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const notes = [createMockResultNote()],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -201,10 +198,9 @@ describe('renderVaultModal', () => {
     })
 
     it('Tab closes modal when selected note has matches', async () => {
-      const notes = [createMockResultNote({ matches: [{ match: 'test', offset: 0 }] })]
-      const { container, modal, handle } = setup({ searchResults: notes })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const notes = [createMockResultNote({ matches: [{ match: 'test', offset: 0 }] })],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -216,10 +212,9 @@ describe('renderVaultModal', () => {
     })
 
     it('Tab does nothing when selected note has no matches', async () => {
-      const notes = [createMockResultNote({ matches: [] })]
-      const { container, modal, handle } = setup({ searchResults: notes })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const notes = [createMockResultNote({ matches: [] })],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -233,30 +228,31 @@ describe('renderVaultModal', () => {
 
   describe('destroy()', () => {
     it('clears handlers so actions no longer fire', async () => {
-      const notes = [createMockResultNote()]
-      const { container, modal, handle } = setup({ searchResults: notes })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const notes = [createMockResultNote()],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
 
       handle.destroy()
-      modal.close.mockClear()
+      modal.close = fn(() => {}) as () => void
 
       modal.dispatch(Action.Enter)
       expect(modal.close).not.toHaveBeenCalled()
     })
 
     it('clears debounce timer', async () => {
-      const { container, plugin, handle } = setup()
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, plugin, handle } = setup(),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
 
       // Destroy before debounce fires
       handle.destroy()
-      ;(plugin.searchEngine.getSuggestions as ReturnType<typeof mock>).mockClear()
+      plugin.searchEngine.getSuggestions = fn(() =>
+        Promise.resolve([]),
+      ) as typeof plugin.searchEngine.getSuggestions
 
       await flush()
       expect(plugin.searchEngine.getSuggestions).not.toHaveBeenCalled()

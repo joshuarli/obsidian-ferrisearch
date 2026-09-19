@@ -7,7 +7,7 @@ export class Observable<T> {
   get(): T {
     return this.value
   }
-  set(v: T) {
+  set(v: T): void {
     this.value = v
     for (const fn of this.listeners) fn(v)
   }
@@ -23,27 +23,34 @@ export const excerptAfter = 300
 
 export const K_DISABLE_FERRISEARCH = 'ferrisearch-disabled'
 
-export enum Action {
-  Enter = 'enter',
-  OpenInBackground = 'open-in-background',
-  OpenInNewPane = 'open-in-new-pane',
-  InsertLink = 'insert-link',
-  Tab = 'tab',
-  ArrowUp = 'arrow-up',
-  ArrowDown = 'arrow-down',
-  OpenInNewLeaf = 'open-in-new-leaf',
+export const Action = {
+  Enter: 'enter',
+  OpenInBackground: 'open-in-background',
+  OpenInNewPane: 'open-in-new-pane',
+  InsertLink: 'insert-link',
+  Tab: 'tab',
+  ArrowUp: 'arrow-up',
+  ArrowDown: 'arrow-down',
+  OpenInNewLeaf: 'open-in-new-leaf',
+} as const
+
+export type Action = (typeof Action)[keyof typeof Action]
+
+export const RecencyCutoff = {
+  Disabled: '0',
+  Day: '1',
+  Week: '2',
+  Month: '3',
+} as const
+
+export type RecencyCutoff = (typeof RecencyCutoff)[keyof typeof RecencyCutoff]
+
+export interface DocumentRef {
+  path: string
+  mtime: number
 }
 
-export enum RecencyCutoff {
-  Disabled = '0',
-  Day = '1',
-  Week = '2',
-  Month = '3',
-}
-
-export type DocumentRef = { path: string; mtime: number }
-
-export type IndexedDocument = {
+export interface IndexedDocument {
   path: string
   basename: string
   displayTitle: string
@@ -55,19 +62,19 @@ export type IndexedDocument = {
   headings: string
 }
 
-export type SearchMatch = {
+export interface SearchMatch {
   match: string
   offset: number
 }
 
-export type FieldScores = {
+export interface FieldScores {
   displayTitle: number
   directory: number
   content: number
   headings: number
 }
 
-export type ScoreBreakdown = {
+export interface ScoreBreakdown {
   base: number
   recency: number
   folderDownrank: boolean
@@ -75,7 +82,7 @@ export type ScoreBreakdown = {
   fieldScores?: FieldScores
 }
 
-export type ResultNote = {
+export interface ResultNote {
   score: number
   scoreBreakdown?: ScoreBreakdown
   path: string

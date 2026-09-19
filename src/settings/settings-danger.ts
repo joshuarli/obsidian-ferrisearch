@@ -1,14 +1,19 @@
 import { Notice, Setting } from 'obsidian'
 import { K_DISABLE_FERRISEARCH } from '../globals'
 import type FerrisearchPlugin from '../main'
-import type { FerrisearchSettings } from './utils'
-import { htmlDescription, isPluginDisabled, needsARestart, saveSettings } from './utils'
+import {
+  type FerrisearchSettings,
+  htmlDescription,
+  isPluginDisabled,
+  needsARestart,
+  saveSettings,
+} from './utils'
 
 export function injectSettingsDanger(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
   containerEl: HTMLElement,
-) {
+): void {
   new Setting(containerEl).setName('Danger Zone').setHeading()
 
   new Setting(containerEl)
@@ -38,7 +43,7 @@ export function injectSettingsDanger(
           plugin.app.saveLocalStorage(K_DISABLE_FERRISEARCH, '1')
           new Notice('Ferrisearch - Disabled. Please restart Obsidian.')
         } else {
-          plugin.app.saveLocalStorage(K_DISABLE_FERRISEARCH) // No value = unset
+          plugin.app.saveLocalStorage(K_DISABLE_FERRISEARCH, null)
           new Notice('Ferrisearch - Enabled. Please restart Obsidian.')
         }
       }),

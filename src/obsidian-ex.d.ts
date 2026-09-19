@@ -4,16 +4,14 @@ import 'obsidian'
 declare module 'obsidian' {
   interface App {
     appId: string
-    loadLocalStorage(key: string): string | null
-    saveLocalStorage(key: string, value?: string): void
+    plugins: {
+      plugins: {
+        ferrisearch: { api?: unknown }
+      }
+    }
   }
 
   interface Vault {
-    getConfig(key: string): unknown
-  }
-
-  interface DataAdapter {
-    getBasePath(): string
-    basePath: string
+    getConfig: (key: string) => unknown
   }
 }

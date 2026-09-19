@@ -1,34 +1,36 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S deno run --allow-env --allow-ffi --allow-read --allow-run --allow-write
 /**
  * CLI test harness for the native NAPI search engine.
  * Indexes .md files from any directory, searches, and benchmarks query latency.
  *
  * Usage:
- *   bun scripts/test-search.ts <directory> <query> [fuzziness] [--file <path>]
+ *   deno task test-search <directory> <query> [fuzziness] [--file <path>]
  *
  * Examples:
- *   bun scripts/test-search.ts ~/my-vault powder 2
- *   bun scripts/test-search.ts ~/my-vault powder 1 --file baking/Ingredients/Dairy.md
- *   bun scripts/test-search.ts ~/my-vault "github actions" 0
+ *   deno task test-search ~/my-vault powder 2
+ *   deno task test-search ~/my-vault powder 1 --file baking/Ingredients/Dairy.md
+ *   deno task test-search ~/my-vault "github actions" 0
  */
 
+import { createRequire } from "node:module";
 import path from "node:path";
-import os from "node:os";
-import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(import.meta.dir, "..");
+const require = createRequire(import.meta.url);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const NODE_FILE = path.join(ROOT, "ferrisearch.darwin-arm64.node");
 
-if (!fs.existsSync(NODE_FILE)) {
+const nativeFile = await Deno.stat(NODE_FILE).catch(() => null);
+if (!nativeFile?.isFile) {
   console.error(`Native binary not found: ${NODE_FILE}`);
   console.error(
     "Run: cargo build --release -p ferrisearch-napi && cp target/release/libferrisearch_napi.dylib ferrisearch.darwin-arm64.node",
   );
-  process.exit(1);
+  Deno.exit(1);
 }
 
 // ── Parse args ──────────────────────────────────────────────────────────
-const args = process.argv.slice(2);
+const args = Deno.args;
 let dirArg: string | undefined;
 let query: string | undefined;
 let fuzziness = "1";
@@ -48,33 +50,32 @@ for (let i = 0; i < args.length; i++) {
 
 if (!dirArg || !query) {
   console.error(
-    "Usage: bun scripts/test-search.ts <directory> <query> [fuzziness] [--file <path>]",
+    "Usage: deno task test-search <directory> <query> [fuzziness] [--file <path>]",
   );
-  process.exit(1);
+  Deno.exit(1);
 }
 
 const VAULT_DIR = path.resolve(dirArg);
 
-if (!fs.existsSync(VAULT_DIR) || !fs.statSync(VAULT_DIR).isDirectory()) {
+const vaultStat = await Deno.stat(VAULT_DIR).catch(() => null);
+if (!vaultStat?.isDirectory) {
   console.error(`Directory not found: ${VAULT_DIR}`);
-  process.exit(1);
+  Deno.exit(1);
 }
 
 // ── Collect .md files via fd ─────────────────────────────────────────────
 async function collectMdFiles(): Promise<string[]> {
-  const proc = Bun.spawn(["fd", "-e", "md", "-t", "f", ".", VAULT_DIR], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [text, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  await proc.exited;
-  if (proc.exitCode !== 0) {
+  const output = await new Deno.Command("fd", {
+    args: ["-e", "md", "-t", "f", ".", VAULT_DIR],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  if (!output.success) {
+    const stderr = new TextDecoder().decode(output.stderr);
     console.error(stderr || "fd failed — is it installed? (brew install fd)");
-    process.exit(1);
+    Deno.exit(1);
   }
+  const text = new TextDecoder().decode(output.stdout);
   if (!text.length) return [];
   return text.trimEnd().split("\n").map((p) => path.relative(VAULT_DIR, p));
 }
@@ -90,8 +91,8 @@ const docs = await Promise.all(
   mdPaths.map(async (relPath) => {
     const fullPath = path.join(VAULT_DIR, relPath);
     const [content, stat] = await Promise.all([
-      Bun.file(fullPath).text(),
-      fs.promises.stat(fullPath),
+      Deno.readTextFile(fullPath),
+      Deno.stat(fullPath),
     ]);
     const basename = path.basename(relPath, ".md");
 
@@ -115,7 +116,7 @@ const docs = await Promise.all(
       headings,
       tags: [] as string[],
       unmarkedTags: [] as string[],
-      mtime: stat.mtimeMs,
+      mtime: stat.mtime?.getTime() ?? 0,
     };
   }),
 );
@@ -124,7 +125,7 @@ console.log(`Read ${docs.length} files in ${readMs.toFixed(1)}ms`);
 
 // ── Index ───────────────────────────────────────────────────────────────
 const native = require(NODE_FILE);
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ferrisearch-test-"));
+const tmpDir = await Deno.makeTempDir({ prefix: "ferrisearch-test-" });
 const indexPath = path.join(tmpDir, "tantivy-index");
 const index = new native.SearchIndex(indexPath, { ignoreDiacritics: true });
 
@@ -266,4 +267,4 @@ console.log(`  3σ:     ${(mean + 3 * stddev).toFixed(3)}ms`);
 
 // Cleanup
 index.close();
-fs.rmSync(tmpDir, { recursive: true });
+await Deno.remove(tmpDir, { recursive: true });

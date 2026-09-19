@@ -2,7 +2,7 @@ import { type CachedMetadata, getAllTags, Platform, parseFrontMatterAliases } fr
 
 export function pathWithoutFilename(path: string): string {
   const i = path.lastIndexOf('/')
-  return i < 0 ? '' : path.slice(0, i)
+  return i === -1 ? '' : path.slice(0, i)
 }
 
 export function wait(ms: number): Promise<void> {
@@ -18,7 +18,7 @@ export function loopIndex(index: number, nbItems: number): number {
 }
 
 export function stripMarkdownCharacters(text: string): string {
-  return text.replace(/(\*|_)+(.+?)(\*|_)+/g, (_match, _p1, p2) => p2)
+  return text.replaceAll(/(\*|_)+(.+?)(\*|_)+/g, (_match, _p1, p2) => p2)
 }
 
 export function getAliasesFromMetadata(metadata: CachedMetadata | null): string[] {
@@ -26,8 +26,8 @@ export function getAliasesFromMetadata(metadata: CachedMetadata | null): string[
 }
 
 export function getTagsFromMetadata(metadata: CachedMetadata | null): string[] {
-  const raw = metadata ? (getAllTags(metadata) ?? []) : []
-  const expanded: string[] = []
+  const raw = metadata ? (getAllTags(metadata) ?? []) : [],
+    expanded: string[] = []
   for (const tag of raw) {
     for (const part of tag.split('/')) {
       if (part) expanded.push(part.startsWith('#') ? part : `#${part}`)
@@ -43,13 +43,13 @@ export function removeDiacritics(str: string): string {
   if (!str) return ''
   // Backtick and caret are mangled by NFD normalization — protect them
   return str
-    .replaceAll('`', '\x00B')
-    .replaceAll('^', '\x00C')
+    .replaceAll('`', '\u0000B')
+    .replaceAll('^', '\u0000C')
     .normalize('NFD')
     .replace(diacriticsRegex, '')
     .normalize('NFC')
-    .replaceAll('\x00B', '`')
-    .replaceAll('\x00C', '^')
+    .replaceAll('\u0000B', '`')
+    .replaceAll('\u0000C', '^')
 }
 
 export function getCtrlKeyLabel(): 'Ctrl' | '⌘' {
@@ -62,7 +62,7 @@ export function getAltKeyLabel(): 'Alt' | '⌥' {
 
 export function getExtension(path: string): string {
   const i = path.lastIndexOf('.')
-  return i < 0 ? '' : path.slice(i + 1)
+  return i === -1 ? '' : path.slice(i + 1)
 }
 
 export function logVerbose(...args: unknown[]): void {
@@ -80,5 +80,5 @@ export function enableVerboseLogging(enable: boolean): void {
 
 /** Escapes special regex characters in a string */
 export function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }

@@ -18,24 +18,22 @@ export function renderVaultModal(
   container: HTMLElement,
   { plugin, modal, previousQuery }: VaultModalProps,
 ): { destroy(): void } {
-  let selectedIndex = 0
-  let searchQuery = previousQuery ?? ''
-  let resultNotes: ResultNote[] = []
-  let searching = true
-  let resultEls: HTMLElement[] = []
-  let currentObserver: IntersectionObserver | null = null
-  let historyItems: string[] = []
+  let selectedIndex = 0,
+    searchQuery = previousQuery ?? '',
+    resultNotes: ResultNote[] = [],
+    searching = true,
+    resultEls: HTMLElement[] = [],
+    currentObserver: IntersectionObserver | null = null,
+    historyItems: string[] = []
 
   // Build DOM
   const input = createSearchInput(container, 'Ferrisearch - Vault', previousQuery, value => {
-    searchQuery = value
-    onQueryChange()
-  })
-
-  const resultsDiv = createResultsContainer(container)
-
-  const ctrlKey = getCtrlKeyLabel()
-  const altKey = getAltKeyLabel()
+      searchQuery = value
+      onQueryChange()
+    }),
+    resultsDiv = createResultsContainer(container),
+    ctrlKey = getCtrlKeyLabel(),
+    altKey = getAltKeyLabel()
   createInstructions(container, [
     ['↑↓', 'to navigate'],
     ['↵', 'to open'],
@@ -67,8 +65,8 @@ export function renderVaultModal(
   async function updateResults() {
     searching = true
     renderStatusMessage()
-    const searchId = ++currentSearchId
-    const query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
+    const searchId = ++currentSearchId,
+      query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
     try {
       const results = await plugin.searchEngine.getSuggestions(query)
       if (searchId !== currentSearchId) return
@@ -116,7 +114,7 @@ export function renderVaultModal(
     if (isShowingHistory()) {
       for (let i = 0; i < historyItems.length; i++) {
         const wrapper = document.createElement('div')
-        wrapper.dataset.lazyIdx = i.toString()
+        wrapper.dataset['lazyIdx'] = i.toString()
 
         const item = document.createElement('div')
         item.className = 'suggestion-item ferrisearch-result'
@@ -124,11 +122,11 @@ export function renderVaultModal(
         const icon = document.createElement('span')
         icon.className = 'ferrisearch-result__history-icon'
         setIcon(icon, 'history')
-        item.appendChild(icon)
+        item.append(icon)
 
         const text = document.createElement('span')
-        text.textContent = historyItems[i]
-        item.appendChild(text)
+        text.textContent = historyItems[i] ?? null
+        item.append(text)
 
         updateSelection(item, i === selectedIndex)
         item.addEventListener('mousemove', () => setSelectedIndex(i))
@@ -137,8 +135,8 @@ export function renderVaultModal(
           selectHistoryItem(i)
         })
 
-        wrapper.appendChild(item)
-        resultsDiv.appendChild(wrapper)
+        wrapper.append(item)
+        resultsDiv.append(wrapper)
       }
       return
     }
@@ -148,11 +146,11 @@ export function renderVaultModal(
       entries => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue
-          const wrapper = entry.target as HTMLElement
-          const idx = parseInt(wrapper.dataset.lazyIdx ?? '0', 10)
-          const note = resultNotes[idx]
-          if (note && !wrapper.dataset.loaded) {
-            wrapper.dataset.loaded = '1'
+          const wrapper = entry.target as HTMLElement,
+            idx = parseInt(wrapper.dataset['lazyIdx'] ?? '0', 10),
+            note = resultNotes[idx]
+          if (note && !wrapper.dataset['loaded']) {
+            wrapper.dataset['loaded'] = '1'
             wrapper.style.height = 'auto'
             const item = createVaultResultItem(note, plugin)
             updateSelection(item, idx === selectedIndex)
@@ -167,7 +165,7 @@ export function renderVaultModal(
                 openNoteInNewPane()
               }
             })
-            wrapper.appendChild(item)
+            wrapper.append(item)
             resultEls.push(item)
           }
           observer.unobserve(wrapper)
@@ -180,8 +178,8 @@ export function renderVaultModal(
       const wrapper = document.createElement('div')
       wrapper.className = 'ferrisearch-lazy'
       wrapper.style.height = '100px'
-      wrapper.dataset.lazyIdx = i.toString()
-      resultsDiv.appendChild(wrapper)
+      wrapper.dataset['lazyIdx'] = i.toString()
+      resultsDiv.append(wrapper)
       observer.observe(wrapper)
     }
     currentObserver = observer
@@ -192,21 +190,21 @@ export function renderVaultModal(
   function renderStatusMessage() {
     resultsDiv.querySelector('.ferrisearch-status-msg')?.remove()
 
-    const belowMin = searchQuery && searchQuery.length < plugin.settings.minQueryLength
-    const msg = belowMin
-      ? `Type at least ${plugin.settings.minQueryLength} characters to search`
-      : !resultNotes.length && searchQuery && !searching
-        ? 'We found 0 results for your search here.'
-        : searching
-          ? 'Searching...'
-          : ''
+    const belowMin = searchQuery && searchQuery.length < plugin.settings.minQueryLength,
+      msg = belowMin
+        ? `Type at least ${plugin.settings.minQueryLength} characters to search`
+        : resultNotes.length === 0 && searchQuery && !searching
+          ? 'We found 0 results for your search here.'
+          : searching
+            ? 'Searching...'
+            : ''
 
     if (msg) {
       const msgDiv = document.createElement('div')
       msgDiv.className = 'ferrisearch-status-msg'
       msgDiv.style.textAlign = 'center'
       msgDiv.innerHTML = msg
-      resultsDiv.appendChild(msgDiv)
+      resultsDiv.append(msgDiv)
     }
   }
 
@@ -251,7 +249,11 @@ export function renderVaultModal(
   function onClick(evt?: MouseEvent) {
     const note = getSelectedNote()
     if (!note) return
-    evt?.ctrlKey ? openNoteInNewPane() : openNoteAndCloseModal()
+    if (evt?.ctrlKey) {
+      openNoteInNewPane()
+    } else {
+      openNoteAndCloseModal()
+    }
   }
 
   function openNoteAndCloseModal() {
@@ -284,9 +286,9 @@ export function renderVaultModal(
   function insertLink() {
     const selectedNote = getSelectedNote()
     if (!selectedNote) return
-    const file = plugin.app.vault.getMarkdownFiles().find(f => f.path === selectedNote.path)
-    const active = plugin.app.workspace.getActiveFile()
-    const view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
+    const file = plugin.app.vault.getMarkdownFiles().find(f => f.path === selectedNote.path),
+      active = plugin.app.workspace.getActiveFile(),
+      view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
     if (!view?.editor) {
       new Notice('Ferrisearch - Error - No active editor', 3000)
       return
@@ -314,7 +316,7 @@ export function renderVaultModal(
 
   function switchToInFileModal() {
     const selectedNote = getSelectedNote()
-    if (selectedNote && !selectedNote.matches.length) return
+    if (selectedNote && selectedNote.matches.length === 0) return
 
     saveCurrentQuery()
     modal.close()

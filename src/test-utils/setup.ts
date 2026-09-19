@@ -1,44 +1,33 @@
-import { mock } from 'bun:test'
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
+
+// Obsidian's real type declarations augment the global HTMLElement with these;
+// Declared here too since this file is checked standalone (see deno.json's
+// "typecheck" task), without the 'obsidian' package in its type program.
+declare global {
+  interface HTMLElement {
+    addClass(...classes: string[]): void
+    removeClass(...classes: string[]): void
+  }
+}
 
 // Register happy-dom globals (document, window, etc.)
 GlobalRegistrator.register()
 
-// Mock the 'obsidian' module (externalized, doesn't exist at test time)
-mock.module('obsidian', () => ({
-  setIcon: () => {},
-  Platform: { isMacOS: false, isMobileApp: false },
-  MarkdownView: class MarkdownView {},
-  Notice: class Notice {},
-  TFile: class TFile {},
-  Modal: class Modal {
-    modalEl = document.createElement('div')
-    containerEl = document.createElement('div')
-    scope = { register: () => {} }
-    open() {}
-    close() {}
-  },
-  Plugin: class Plugin {},
-  PluginSettingTab: class PluginSettingTab {},
-  Setting: class Setting {
-    setName() {
-      return this
-    }
-    setDesc() {
-      return this
-    }
-    setHeading() {
-      return this
-    }
-    addToggle() {
-      return this
-    }
-  },
-  App: class App {},
-  getAllTags: () => [],
-  parseFrontMatterAliases: () => [],
-  debounce: (fn: (...args: unknown[]) => unknown, _ms: number) => fn,
-}))
+// Deno fires a native "load" event on globalThis at module-completion time.
+// Happy-dom's patched window.dispatchEvent strictly requires its own Event
+// Class, so that native event crashes the process. Swallow it — it's Deno's
+// Runtime lifecycle, not a test assertion.
+const originalDispatchEvent = globalThis.dispatchEvent.bind(globalThis)
+globalThis.dispatchEvent = ((event: Event) => {
+  try {
+    return originalDispatchEvent(event)
+  } catch {
+    return true
+  }
+}) as typeof globalThis.dispatchEvent
+
+// The 'obsidian' module is mocked via deno.test.json's import map override
+// (see src/test-utils/obsidian-mock.ts), not at runtime here.
 
 // IntersectionObserver mock — immediately fires with isIntersecting: true
 class MockIntersectionObserver {
@@ -65,18 +54,18 @@ globalThis.IntersectionObserver = MockIntersectionObserver as unknown as typeof 
 
 // Obsidian monkey-patches HTMLElement with addClass/removeClass
 if (!HTMLElement.prototype.addClass) {
-  HTMLElement.prototype.addClass = function (...classes: string[]) {
+  HTMLElement.prototype.addClass = function addClass(...classes: string[]) {
     this.classList.add(...classes)
   }
 }
 if (!HTMLElement.prototype.removeClass) {
-  HTMLElement.prototype.removeClass = function (...classes: string[]) {
+  HTMLElement.prototype.removeClass = function removeClass(...classes: string[]) {
     this.classList.remove(...classes)
   }
 }
 
 // CSS.escape polyfill if happy-dom doesn't provide it
-if (typeof CSS === 'undefined' || typeof CSS.escape === 'undefined') {
+if (typeof CSS === 'undefined' || CSS.escape === undefined) {
   ;(globalThis as Record<string, unknown>).CSS = {
     ...((globalThis as Record<string, unknown>).CSS as object),
     escape: (s: string) => s,

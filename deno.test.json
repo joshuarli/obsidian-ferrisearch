@@ -1,0 +1,16 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "rolldown": "npm:rolldown@^1.2.0",
+    "typescript": "npm:typescript@^7.0.2",
+    "oxfmt": "npm:oxfmt@^0.68.0",
+    "oxlint": "npm:oxlint@^1.83.0",
+    "@napi-rs/cli": "npm:@napi-rs/cli@^3.10.4",
+    "obsidian": "./src/test-utils/obsidian-mock.ts",
+    "happy-dom": "npm:happy-dom@^20.6.3",
+    "@happy-dom/global-registrator": "npm:@happy-dom/global-registrator@^20.6.3",
+    "@types/node": "npm:@types/node@^26.1.1",
+    "@std/expect": "jsr:@std/expect@^1.0.20",
+    "@std/testing": "jsr:@std/testing@^1.0.20"
+  }
+}

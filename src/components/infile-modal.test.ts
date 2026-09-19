@@ -1,4 +1,6 @@
-import { describe, expect, it, mock } from 'bun:test'
+import { describe, it } from '@std/testing/bdd'
+import { expect, fn } from '@std/expect'
+import '../test-utils/setup'
 import { Action } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { createMockResultNote } from '../test-utils/mock-result-note'
@@ -17,12 +19,12 @@ async function flush(ms = 400) {
 }
 
 function createMockModal(): ModalHandle & {
-  close: ReturnType<typeof mock>
+  close: ReturnType<typeof fn>
   dispatch(action: string): void
 } {
   const handlers = new Map<string, (...args: unknown[]) => void>()
   return {
-    close: mock(() => {}),
+    close: fn(() => {}) as () => void,
     on(action: string, handler: (...args: unknown[]) => void) {
       handlers.set(action, handler)
     },
@@ -39,31 +41,31 @@ function setup(overrides?: {
   previousQuery?: string
   settings?: Record<string, unknown>
   searchResults?: unknown[]
-  parent?: unknown
+  parent?: ModalHandle | null
   singleFilePath?: string
 }) {
-  const container = document.createElement('div')
-  const plugin = createMockPlugin({
-    settings: overrides?.settings,
-    searchResults: overrides?.searchResults,
-  })
-  const modal = createMockModal()
-  const parent = overrides?.parent ?? null
-  const handle = renderInFileModal(container, {
-    plugin,
-    modal,
-    singleFilePath: overrides?.singleFilePath ?? 'test.md',
-    parent,
-    previousQuery: overrides?.previousQuery ?? '',
-  })
+  const container = document.createElement('div'),
+    plugin = createMockPlugin({
+      settings: overrides?.settings,
+      searchResults: overrides?.searchResults,
+    }),
+    modal = createMockModal(),
+    parent = overrides?.parent ?? null,
+    handle = renderInFileModal(container, {
+      plugin,
+      modal,
+      singleFilePath: overrides?.singleFilePath ?? 'test.md',
+      parent,
+      previousQuery: overrides?.previousQuery ?? '',
+    })
   return { container, plugin, modal, parent, handle }
 }
 
 describe('renderInFileModal', () => {
   describe('DOM structure', () => {
     it('creates input with correct placeholder', () => {
-      const { container, handle } = setup()
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, handle } = setup(),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       expect(input).not.toBeNull()
       expect(input.placeholder).toBe('Ferrisearch - File')
       handle.destroy()
@@ -88,15 +90,15 @@ describe('renderInFileModal', () => {
     })
 
     it('shows "to go back to Vault Search" when parent exists', () => {
-      const parent = { close: mock(() => {}) }
-      const { container, handle } = setup({ parent })
+      const parent = { close: fn(() => {}) as () => void } as ModalHandle,
+        { container, handle } = setup({ parent })
       expect(container.textContent).toContain('to go back to Vault Search')
       handle.destroy()
     })
 
     it('sets input value to previousQuery', () => {
-      const { container, handle } = setup({ previousQuery: 'hello' })
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, handle } = setup({ previousQuery: 'hello' }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       expect(input.value).toBe('hello')
       handle.destroy()
     })
@@ -104,8 +106,8 @@ describe('renderInFileModal', () => {
 
   describe('search behavior', () => {
     it('calls getSuggestions after debounce when input changes', async () => {
-      const { container, plugin, handle } = setup()
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, plugin, handle } = setup(),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test query'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -116,14 +118,13 @@ describe('renderInFileModal', () => {
     it('renders result items for grouped matches', async () => {
       // Two matches far apart (>300 chars) → two groups → two result items
       const note = createMockResultNote({
-        matches: [
-          { match: 'a', offset: 10 },
-          { match: 'b', offset: 500 },
-        ],
-      })
-      const { container, handle } = setup({ searchResults: [note] })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          matches: [
+            { match: 'a', offset: 10 },
+            { match: 'b', offset: 500 },
+          ],
+        }),
+        { container, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -136,14 +137,13 @@ describe('renderInFileModal', () => {
     it('groups matches within 300 chars into one result item', async () => {
       // Two matches close together (<300 chars) → one group → one result item
       const note = createMockResultNote({
-        matches: [
-          { match: 'a', offset: 10 },
-          { match: 'b', offset: 50 },
-        ],
-      })
-      const { container, handle } = setup({ searchResults: [note] })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          matches: [
+            { match: 'a', offset: 10 },
+            { match: 'b', offset: 50 },
+          ],
+        }),
+        { container, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -155,11 +155,10 @@ describe('renderInFileModal', () => {
 
     it('clears results when input is emptied', async () => {
       const note = createMockResultNote({
-        matches: [{ match: 'a', offset: 10 }],
-      })
-      const { container, handle } = setup({ searchResults: [note] })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          matches: [{ match: 'a', offset: 10 }],
+        }),
+        { container, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -177,15 +176,14 @@ describe('renderInFileModal', () => {
   describe('navigation', () => {
     it('arrow-down selects next item', async () => {
       const note = createMockResultNote({
-        matches: [
-          { match: 'a', offset: 10 },
-          { match: 'b', offset: 500 },
-          { match: 'c', offset: 1000 },
-        ],
-      })
-      const { container, modal, handle } = setup({ searchResults: [note] })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          matches: [
+            { match: 'a', offset: 10 },
+            { match: 'b', offset: 500 },
+            { match: 'c', offset: 1000 },
+          ],
+        }),
+        { container, modal, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -205,14 +203,13 @@ describe('renderInFileModal', () => {
 
     it('arrow-up wraps to last item from first', async () => {
       const note = createMockResultNote({
-        matches: [
-          { match: 'a', offset: 10 },
-          { match: 'b', offset: 500 },
-        ],
-      })
-      const { container, modal, handle } = setup({ searchResults: [note] })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          matches: [
+            { match: 'a', offset: 10 },
+            { match: 'b', offset: 500 },
+          ],
+        }),
+        { container, modal, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -228,17 +225,16 @@ describe('renderInFileModal', () => {
   describe('actions', () => {
     it('Enter closes modal when results exist', async () => {
       const note = createMockResultNote({
-        matches: [{ match: 'a', offset: 10 }],
-      })
-      const { container, modal, handle } = setup({ searchResults: [note] })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          matches: [{ match: 'a', offset: 10 }],
+        }),
+        { container, modal, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
 
       modal.dispatch(Action.Enter)
-      // openSelection is async — give it a tick
+      // OpenSelection is async — give it a tick
       await flush(50)
       expect(modal.close).toHaveBeenCalled()
 
@@ -246,16 +242,15 @@ describe('renderInFileModal', () => {
     })
 
     it('Enter closes both modal and parent when parent exists', async () => {
-      const parentModal = { close: mock(() => {}) }
-      const note = createMockResultNote({
-        matches: [{ match: 'a', offset: 10 }],
-      })
-      const { container, modal, handle } = setup({
-        searchResults: [note],
-        parent: parentModal,
-      })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const parentModal = { close: fn(() => {}) as () => void } as ModalHandle,
+        note = createMockResultNote({
+          matches: [{ match: 'a', offset: 10 }],
+        }),
+        { container, modal, handle } = setup({
+          searchResults: [note],
+          parent: parentModal,
+        }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -281,17 +276,16 @@ describe('renderInFileModal', () => {
   describe('destroy()', () => {
     it('clears handlers so actions no longer fire', async () => {
       const note = createMockResultNote({
-        matches: [{ match: 'a', offset: 10 }],
-      })
-      const { container, modal, handle } = setup({ searchResults: [note] })
-
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+          matches: [{ match: 'a', offset: 10 }],
+        }),
+        { container, modal, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
 
       handle.destroy()
-      modal.close.mockClear()
+      modal.close = fn(() => {}) as () => void
 
       modal.dispatch(Action.Enter)
       await flush(50)
@@ -299,14 +293,16 @@ describe('renderInFileModal', () => {
     })
 
     it('clears debounce timer', async () => {
-      const { container, plugin, handle } = setup()
-      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      const { container, plugin, handle } = setup(),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
 
       // Destroy before debounce fires
       handle.destroy()
-      ;(plugin.searchEngine.getSuggestions as ReturnType<typeof mock>).mockClear()
+      plugin.searchEngine.getSuggestions = fn(() =>
+        Promise.resolve([]),
+      ) as typeof plugin.searchEngine.getSuggestions
 
       await flush()
       expect(plugin.searchEngine.getSuggestions).not.toHaveBeenCalled()

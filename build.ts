@@ -1,12 +1,8 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { build } from 'rolldown'
 
-const prod = Bun.argv.includes('production')
-
-const result = await Bun.build({
-  entrypoints: ['./src/main.ts'],
-  outdir: './dist',
-  naming: 'main.js',
-  external: [
+const prod = Deno.args.includes('production'),
+  staticExternals = new Set([
     'obsidian',
     'electron',
     '@codemirror/autocomplete',
@@ -20,20 +16,28 @@ const result = await Bun.build({
     '@lezer/common',
     '@lezer/highlight',
     '@lezer/lr',
-    './ferrisearch.*.node',
-  ],
-  format: 'cjs',
-  target: 'browser',
-  sourcemap: prod ? 'none' : 'inline',
-  treeshaking: true,
-  minify: prod,
-})
+  ])
 
-if (!result.success) {
-  for (const log of result.logs) {
-    console.error(log)
-  }
-  process.exit(1)
+try {
+  await build({
+    input: './src/main.ts',
+    external(id: string) {
+      return staticExternals.has(id) || /^\.\/ferrisearch\.[^/]+\.node$/.test(id)
+    },
+    output: {
+      dir: './dist',
+      entryFileNames: 'main.js',
+      format: 'cjs',
+      sourcemap: prod ? false : 'inline',
+      minify: prod,
+    },
+    transform: {
+      target: 'es2022',
+    },
+  })
+} catch (error) {
+  console.error(error)
+  Deno.exit(1)
 }
 
 // Copy static assets to dist/
@@ -41,7 +45,7 @@ mkdirSync('./dist', { recursive: true })
 copyFileSync('manifest.json', 'dist/manifest.json')
 copyFileSync('assets/styles.css', 'dist/styles.css')
 
-// Copy WASM binary if it exists (built by: just build-wasm)
+// Copy WASM binary if it exists (built by: make build-wasm)
 const wasmBinary = 'wasm/pkg/ferrisearch_wasm_bg.wasm'
 if (existsSync(wasmBinary)) {
   copyFileSync(wasmBinary, 'dist/ferrisearch_wasm_bg.wasm')

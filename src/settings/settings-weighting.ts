@@ -2,14 +2,13 @@ import { Setting, type SliderComponent } from 'obsidian'
 import { RecencyCutoff } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { getDefaultSettings } from '../settings'
-import type { FerrisearchSettings, WeightingSettings } from './utils'
-import { saveSettings } from './utils'
+import { type FerrisearchSettings, saveSettings, type WeightingSettings } from './utils'
 
 export function injectSettingsWeighting(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
   containerEl: HTMLElement,
-) {
+): void {
   function weightSlider(cb: SliderComponent, key: keyof WeightingSettings): void {
     cb.setLimits(1, 10, 0.5)
       .setValue(settings[key])

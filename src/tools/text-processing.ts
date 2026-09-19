@@ -4,24 +4,28 @@ import type FerrisearchPlugin from '../main'
 import { escapeRegExp, removeDiacritics, warnVerbose } from './utils'
 
 export class TextProcessor {
-  constructor(private plugin: FerrisearchPlugin) {}
+  private plugin: FerrisearchPlugin
+
+  constructor(plugin: FerrisearchPlugin) {
+    this.plugin = plugin
+  }
 
   public highlightText(text: string, matches: SearchMatch[]): string {
-    if (!matches.length) return text
+    if (matches.length === 0) return text
     const cls = `suggestion-highlight ferrisearch-highlight ${
       this.plugin.settings.highlight ? 'ferrisearch-default-highlight' : ''
     }`
     try {
       const pattern = matches.map(m => escapeRegExp(m.match)).join('|')
-      return text.replace(new RegExp(`(${pattern})`, 'giu'), `<span class="${cls}">$1</span>`)
-    } catch (e) {
-      console.error('Ferrisearch - Error in highlightText()', e)
+      return text.replaceAll(new RegExp(`(${pattern})`, 'giu'), `<span class="${cls}">$1</span>`)
+    } catch (error) {
+      console.error('Ferrisearch - Error in highlightText()', error)
       return text
     }
   }
 
   public stringsToRegex(strings: string[]): RegExp {
-    if (!strings.length) return /^$/g
+    if (strings.length === 0) return /^$/g
     strings.sort((a, b) => b.length - a.length)
     const joined = strings.map(s => `\\b${escapeRegExp(s)}\\b|${escapeRegExp(s)}`).join('|')
     return new RegExp(`(${joined})`, 'gui')
@@ -29,14 +33,14 @@ export class TextProcessor {
 
   public getMatches(text: string, words: string[]): SearchMatch[] {
     words = words.map(escapeHTML)
-    const reg = this.stringsToRegex(words)
-    const originalText = text
+    const reg = this.stringsToRegex(words),
+      originalText = text
     if (this.plugin.settings.ignoreDiacritics) {
       text = removeDiacritics(text)
     }
 
-    const startTime = Date.now()
-    const matches: SearchMatch[] = []
+    const startTime = Date.now(),
+      matches: SearchMatch[] = []
     let count = 0
     for (let match = reg.exec(text); match; match = reg.exec(text)) {
       if (++count >= 100 || Date.now() - startTime > 50) {
@@ -55,8 +59,8 @@ export class TextProcessor {
 
   public makeExcerpt(content: string, offset: number): string {
     try {
-      const from = Math.max(0, offset - excerptBefore)
-      const to = Math.min(content.length, offset + excerptAfter)
+      const from = Math.max(0, offset - excerptBefore),
+        to = Math.min(content.length, offset + excerptAfter)
 
       if (offset > -1) {
         content =
@@ -84,9 +88,9 @@ export class TextProcessor {
       }
 
       return content
-    } catch (e) {
+    } catch (error) {
       new Notice('Ferrisearch - Error while creating excerpt, see developer console')
-      console.error('Ferrisearch - Error while creating excerpt', e)
+      console.error('Ferrisearch - Error while creating excerpt', error)
       return ''
     }
   }

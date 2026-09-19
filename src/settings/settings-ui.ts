@@ -1,14 +1,13 @@
 import { Setting } from 'obsidian'
 import type FerrisearchPlugin from '../main'
-import { showExcerpt } from '.'
-import type { FerrisearchSettings } from './utils'
-import { saveSettings } from './utils'
+import { showExcerpt } from './index'
+import { type FerrisearchSettings, saveSettings } from './utils'
 
 export function injectSettingsUserInterface(
   plugin: FerrisearchPlugin,
   settings: FerrisearchSettings,
   containerEl: HTMLElement,
-) {
+): void {
   new Setting(containerEl).setName('User Interface').setHeading()
 
   // Show context excerpt

@@ -1,6 +1,6 @@
 import { removeDiacritics } from '../tools/utils'
 
-type ParsedQuery = {
+interface ParsedQuery {
   text: string[]
   ext: string[]
   path: string[]
@@ -13,16 +13,15 @@ type ParsedQuery = {
 
 function parseQuery(input: string): ParsedQuery {
   const result: ParsedQuery = {
-    text: [],
-    ext: [],
-    path: [],
-    exclude: { text: [], ext: [], path: [] },
-  }
-
-  const regex = /-?"([^"]*)"|\S+/g
+      text: [],
+      ext: [],
+      path: [],
+      exclude: { text: [], ext: [], path: [] },
+    },
+    regex = /-?"([^"]*)"|\S+/g
   for (let match = regex.exec(input); match; match = regex.exec(input)) {
-    const full = match[0]
-    const quoted = match[1]
+    const full = match[0],
+      quoted = match[1]
 
     if (quoted !== undefined) {
       if (!quoted) continue
@@ -31,13 +30,12 @@ function parseQuery(input: string): ParsedQuery {
       continue
     }
 
-    const negated = full.startsWith('-') && full.length > 1
-    const raw = negated ? full.slice(1) : full
-
-    const colonIdx = raw.indexOf(':')
+    const negated = full.startsWith('-') && full.length > 1,
+      raw = negated ? full.slice(1) : full,
+      colonIdx = raw.indexOf(':')
     if (colonIdx > 0) {
-      const key = raw.slice(0, colonIdx)
-      const value = raw.slice(colonIdx + 1)
+      const key = raw.slice(0, colonIdx),
+        value = raw.slice(colonIdx + 1)
       if ((key === 'ext' || key === 'path') && value) {
         const target = negated ? result.exclude : result
         target[key].push(value)
@@ -64,11 +62,13 @@ export class Query {
     this.query.ext = [...new Set([...ext, ...this.query.ext])]
     this.query.text = this.query.text.filter(o => !o.startsWith('.'))
 
-    this.#inQuotes = text.match(/"([^"]+)"/g)?.map(o => o.replace(/"/g, '')) ?? []
+    this.#inQuotes = text.match(/"([^"]+)"/g)?.map(o => o.replaceAll('"', '')) ?? []
   }
 
   public isEmpty(): boolean {
-    return !this.query.text.length && !this.query.ext.length && !this.query.path.length
+    return (
+      this.query.text.length === 0 && this.query.ext.length === 0 && this.query.path.length === 0
+    )
   }
 
   public segmentsToStr(): string {
@@ -90,7 +90,7 @@ export class Query {
   }
 
   public getBestStringForExcerpt(): string {
-    if (this.#inQuotes.length) {
+    if (this.#inQuotes.length > 0) {
       return this.#inQuotes.sort((a, b) => b.length - a.length)[0] ?? ''
     }
     return this.segmentsToStr()

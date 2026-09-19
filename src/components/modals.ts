@@ -101,14 +101,13 @@ export class FerrisearchVaultModal extends FerrisearchModal {
     super(plugin)
 
     const selectedText = plugin.app.workspace
-      .getActiveViewOfType(MarkdownView)
-      ?.editor.getSelection()
-
-    const handle = renderVaultModal(this.modalEl, {
-      plugin,
-      modal: this,
-      previousQuery: query || selectedText || '',
-    })
+        .getActiveViewOfType(MarkdownView)
+        ?.editor.getSelection(),
+      handle = renderVaultModal(this.modalEl, {
+        plugin,
+        modal: this,
+        previousQuery: query || selectedText || '',
+      })
 
     this.onClose = () => handle.destroy()
   }

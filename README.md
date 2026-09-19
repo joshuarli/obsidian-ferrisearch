@@ -8,12 +8,13 @@ The solution to this was to replace minisearch with [tantivy](https://github.com
 Search is now so fast (~4ms for my vault) that input debouncing has been completely removed and results are pretty much instant.
 
 Extraneous features and customizability have been removed for simplicity. The majority use case should be supported very well.
+
 - Search is restricted to pure text.
 
 Also, non-build/app dependencies have been cut down to the minimum.
+
 - Svelte has been replaced with pure TS.
 - The remaining TS hotpaths (mainly, results highlighting) have been moved into rust.
-
 
 ## new features
 
@@ -22,7 +23,6 @@ fuzziness -> fuzzy results only
 This omits exact matches, which is useful for when you want to surface typos with correctly spelled search term.
 
 Obsidian's maximum fuzziness doesn't match simple typos when the search term is correctly spelled.
-
 
 ## native build
 

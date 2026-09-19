@@ -20,10 +20,10 @@ export function renderInFileModal(
   container: HTMLElement,
   { plugin, modal, singleFilePath, parent, previousQuery }: InFileModalProps,
 ): { destroy(): void } {
-  let searchQuery = previousQuery ?? ''
-  let groupedOffsets: number[] = []
-  let selectedIndex = 0
-  let note: ResultNote | undefined
+  let searchQuery = previousQuery ?? '',
+    groupedOffsets: number[] = [],
+    selectedIndex = 0,
+    note: ResultNote | undefined
 
   // Build DOM
   createSearchInput(container, 'Ferrisearch - File', previousQuery, value => {
@@ -31,9 +31,8 @@ export function renderInFileModal(
     updateResults()
   })
 
-  const resultsDiv = createResultsContainer(container)
-
-  const ctrlKey = getCtrlKeyLabel()
+  const resultsDiv = createResultsContainer(container),
+    ctrlKey = getCtrlKeyLabel()
   createInstructions(container, [
     ['↑↓', 'to navigate'],
     ['↵', 'to open'],
@@ -52,19 +51,19 @@ export function renderInFileModal(
       return
     }
 
-    const query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
-    const results = await plugin.searchEngine.getSuggestions(query, { singleFilePath })
+    const query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics }),
+      results = await plugin.searchEngine.getSuggestions(query, { singleFilePath })
     note = results[0]
 
     if (note) {
       let groups = getGroups(note.matches)
       const exactTerms = query.getExactTerms()
-      if (exactTerms.length) {
+      if (exactTerms.length > 0) {
         groups = groups.filter(group =>
           exactTerms.every(exact => group.some(m => m.match.includes(exact))),
         )
       }
-      groupedOffsets = groups.map(g => Math.round(g[0]?.offset))
+      groupedOffsets = groups.map(g => Math.round(g[0]!.offset))
     } else {
       groupedOffsets = []
     }
@@ -83,7 +82,7 @@ export function renderInFileModal(
       const group = matches.filter(
         m => m.offset > lastOffset && m.offset <= first.offset + excerptAfter,
       )
-      lastOffset = group[group.length - 1]?.offset
+      lastOffset = group.at(-1)!.offset
       groups.push(group)
     }
     return groups
@@ -93,9 +92,9 @@ export function renderInFileModal(
   function renderResults() {
     resultsDiv.innerHTML = ''
 
-    if (groupedOffsets.length && note) {
+    if (groupedOffsets.length > 0 && note) {
       for (let i = 0; i < groupedOffsets.length; i++) {
-        const item = createInFileResultItem(note, plugin, groupedOffsets[i], i)
+        const item = createInFileResultItem(note, plugin, groupedOffsets[i]!, i)
         updateSelection(item, i === selectedIndex)
         item.addEventListener('mousemove', () => setSelectedIndex(i))
         item.addEventListener('click', evt => {
@@ -108,16 +107,16 @@ export function renderInFileModal(
             openSelection(true)
           }
         })
-        resultsDiv.appendChild(item)
+        resultsDiv.append(item)
       }
     } else {
-      const belowMin = searchQuery && searchQuery.length < plugin.settings.minQueryLength
-      const msgDiv = document.createElement('div')
+      const belowMin = searchQuery && searchQuery.length < plugin.settings.minQueryLength,
+        msgDiv = document.createElement('div')
       msgDiv.style.textAlign = 'center'
       msgDiv.textContent = belowMin
         ? `Type at least ${plugin.settings.minQueryLength} characters to search`
         : 'We found 0 results for your search here.'
-      resultsDiv.appendChild(msgDiv)
+      resultsDiv.append(msgDiv)
     }
   }
 
@@ -158,8 +157,8 @@ export function renderInFileModal(
     const view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
     if (!view) return
 
-    const offset = groupedOffsets[selectedIndex] ?? 0
-    const pos = view.editor.offsetToPos(offset)
+    const offset = groupedOffsets[selectedIndex] ?? 0,
+      pos = view.editor.offsetToPos(offset)
     pos.ch = 0
     view.editor.setCursor(pos)
     view.editor.scrollIntoView({

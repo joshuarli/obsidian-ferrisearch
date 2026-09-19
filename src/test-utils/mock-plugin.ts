@@ -1,4 +1,4 @@
-import { mock } from 'bun:test'
+import { fn } from '@std/expect'
 import type FerrisearchPlugin from '../main'
 
 export function createMockPlugin(overrides?: {
@@ -26,37 +26,37 @@ export function createMockPlugin(overrides?: {
   return {
     settings,
     searchEngine: {
-      getSuggestions: mock(() => Promise.resolve(overrides?.searchResults ?? [])),
-      warmUp: mock(() => {}),
+      getSuggestions: fn(() => Promise.resolve(overrides?.searchResults ?? [])),
+      warmUp: fn(() => {}),
     },
     textProcessor: {
-      highlightText: mock((text: string) => text),
-      makeExcerpt: mock((content: string) => content.slice(0, 100)),
-      getMatches: mock(() => []),
-      stringsToRegex: mock(() => /test/gi),
+      highlightText: fn((text: string) => text),
+      makeExcerpt: fn((content: string) => content.slice(0, 100)),
+      getMatches: fn(() => []),
+      stringsToRegex: fn(() => /test/gi),
     },
     searchHistory: {
-      getHistory: mock(() => Promise.resolve([])),
-      addToHistory: mock(() => {}),
+      getHistory: fn(() => Promise.resolve([])),
+      addToHistory: fn(() => {}),
     },
     notesIndexer: {
-      refreshIndex: mock(() => Promise.resolve()),
+      refreshIndex: fn(() => Promise.resolve()),
     },
     app: {
       vault: {
-        getMarkdownFiles: mock(() => []),
-        getAbstractFileByPath: mock(() => null),
-        getConfig: mock(() => null),
+        getMarkdownFiles: fn(() => []),
+        getAbstractFileByPath: fn(() => null),
+        getConfig: fn(() => null),
       },
       workspace: {
-        getActiveViewOfType: mock(() => null),
-        getActiveFile: mock(() => null),
-        openLinkText: mock(() => Promise.resolve()),
-        iterateAllLeaves: mock(() => {}),
-        setActiveLeaf: mock(() => {}),
+        getActiveViewOfType: fn(() => null),
+        getActiveFile: fn(() => null),
+        openLinkText: fn(() => Promise.resolve()),
+        iterateAllLeaves: fn(() => {}),
+        setActiveLeaf: fn(() => {}),
       },
       fileManager: {
-        generateMarkdownLink: mock(() => '[[link]]'),
+        generateMarkdownLink: fn(() => '[[link]]'),
       },
     },
   } as unknown as FerrisearchPlugin

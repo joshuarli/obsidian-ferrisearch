@@ -14,7 +14,7 @@ export async function openNote(
       if (handled) return
       if (
         leaf.view instanceof MarkdownView &&
-        leaf.getViewState().state?.file === item.path &&
+        leaf.getViewState().state?.['file'] === item.path &&
         leaf.getViewState()?.pinned
       ) {
         app.workspace.setActiveLeaf(leaf, { focus: true })

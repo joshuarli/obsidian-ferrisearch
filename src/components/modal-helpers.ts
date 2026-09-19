@@ -17,9 +17,9 @@ export function createSearchInput(
   input.className = 'prompt-input'
   input.placeholder = placeholder
   input.spellcheck = false
-  inputField.appendChild(input)
-  inputContainer.appendChild(inputField)
-  container.appendChild(inputContainer)
+  inputField.append(input)
+  inputContainer.append(inputField)
+  container.append(inputContainer)
 
   if (previousQuery) input.value = previousQuery
   ;(async () => {
@@ -40,13 +40,13 @@ export function createResultsContainer(container: HTMLElement): HTMLElement {
   const resultsDiv = document.createElement('div')
   resultsDiv.className = 'prompt-results'
   resultsDiv.addEventListener('mousedown', e => e.preventDefault())
-  container.appendChild(resultsDiv)
+  container.append(resultsDiv)
   return resultsDiv
 }
 
 export function createInstructions(
   container: HTMLElement,
-  items: ReadonlyArray<readonly [string, string]>,
+  items: readonly (readonly [string, string])[],
 ): void {
   const instructions = document.createElement('div')
   instructions.className = 'prompt-instructions'
@@ -58,9 +58,9 @@ export function createInstructions(
     cmdSpan.textContent = cmd
     const descSpan = document.createElement('span')
     descSpan.textContent = desc
-    inst.appendChild(cmdSpan)
-    inst.appendChild(descSpan)
-    instructions.appendChild(inst)
+    inst.append(cmdSpan)
+    inst.append(descSpan)
+    instructions.append(inst)
   }
-  container.appendChild(instructions)
+  container.append(instructions)
 }
