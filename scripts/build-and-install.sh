@@ -7,9 +7,6 @@ VAULT_ROOT="/Users/josh/iCloud~md~obsidian/Documents"
 VAULT_NAMES=("Notes")
 CARGO_PROFILE="${1:-dev-fast}"
 
-# Ensure Rust toolchain is in PATH
-export PATH="$HOME/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH"
-
 # Detect platform
 PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"

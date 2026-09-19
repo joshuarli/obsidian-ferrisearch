@@ -1,7 +1,0 @@
-{
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/main.ts", "src/test-utils/setup.ts", "src/**/*.test.ts"],
-  "project": ["src/**/*.ts"],
-  "ignore": ["wasm/pkg/**"],
-  "ignoreDependencies": ["happy-dom", "tslib"]
-}

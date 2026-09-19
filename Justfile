@@ -3,12 +3,6 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
-setup:
-    prek install --install-hooks
-
-loc:
-    tokei
-
 bench:
     cargo build --profile dev-napi -p ferrisearch-napi
     cp target/dev-napi/libferrisearch_napi.dylib ferrisearch.darwin-arm64.node
@@ -67,8 +61,5 @@ fmt-rust:
 
 fmt-rust-check:
     cargo fmt --all -- --check
-
-pre-commit:
-    prek run --all-files
 
 ci: lint fmt-rust-check test build

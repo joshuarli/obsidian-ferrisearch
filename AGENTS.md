@@ -74,12 +74,13 @@ crates/
     index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. `filesystem` feature gates mmap/disk code; WASM uses in-memory only.
     search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost, per-field score explain. Uses js-sys::Date::now() on WASM (SystemTime panics on wasm32).
 scripts/
-  build-and-install.sh      # Build + install to multiple Obsidian vaults
+  build-and-install.sh      # Build + install to multiple Obsidian vaults (toolchain from rust-toolchain.toml)
   copy-to-android.sh        # Push built plugin to Android device via adb
   test-search.ts            # CLI smoke test: loads NAPI binary, indexes test-vault/*.md, searches, prints results
   test-vault/               # .md files used by test-search.ts (indexed from scratch each run)
 .cargo/
   config.toml               # Sets wasm-bindgen-test-runner for wasm32 target
+rust-toolchain.toml         # Pins nightly-2026-09-15 + wasm32 target (rustup + CI read this; no PATH hacks in scripts)
 ```
 
 ## Rust Search Engine
