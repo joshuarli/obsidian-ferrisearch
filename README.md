@@ -23,8 +23,9 @@ plugin, and installs it into the configured Obsidian vault. The default targets
 `/Users/josh/iCloud~md~obsidian/Documents/Notes`; override the destination with
 `make install VAULT_PLUGIN=/path/to/.obsidian/plugins/ferrisearch`.
 
-Use `PROFILE=release` for a production-oriented Rust build; the default
-`dev-fast` profile is quicker for local iteration.
+The Makefile automatically installs the `wasm-bindgen` CLI version resolved in
+`Cargo.lock`, and `make install` uses the `release` Rust profile by default.
+Use `PROFILE=dev-fast` for quicker local iteration.
 
 ## new features
 

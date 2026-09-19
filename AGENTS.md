@@ -159,7 +159,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - `cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown`: Build WASM module
 - `cargo test`: Run Rust tests (106 tests)
 - `cargo clippy --all-targets --all-features -- -D warnings`: Rust linter
-- `make install`: Build and install to the configured macOS arm64 Obsidian vault
+- `make install`: Build and install to the configured macOS arm64 Obsidian vault; automatically installs the `wasm-bindgen` CLI version resolved in `Cargo.lock` and uses the `release` Rust profile by default. Pass `PROFILE=dev-fast` for iteration builds.
 - `deno task test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
 - `PERF.md`: Benchmark method, recorded baselines, and performance targets
 
