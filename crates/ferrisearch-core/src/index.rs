@@ -62,9 +62,9 @@ impl IndexManager {
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
             .try_into()?;
-        // Single thread: Obsidian vaults are small enough that multi-threaded
-        // indexing adds overhead without benefit.
-        let writer = index.writer_with_num_threads(1, 50_000_000)?;
+        // Four workers are the fixed native default across machines. This
+        // avoids making startup latency depend on the host's CPU topology.
+        let writer = index.writer_with_num_threads(4, 120_000_000)?;
         Ok(Self {
             index,
             writer,
@@ -84,7 +84,7 @@ impl IndexManager {
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
             .try_into()?;
-        // Single thread — see new() comment
+        // Keep ephemeral test indices single-threaded to minimize setup cost.
         let writer = index.writer_with_num_threads(1, 15_000_000)?;
         Ok(Self {
             index,

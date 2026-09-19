@@ -129,11 +129,19 @@ const tmpDir = await Deno.makeTempDir({ prefix: "ferrisearch-test-" });
 const indexPath = path.join(tmpDir, "tantivy-index");
 const index = new native.SearchIndex(indexPath, { ignoreDiacritics: true });
 
+// Match the production startup path: bulk insertion avoids per-document upsert
+// deletes, and commitNoMerge avoids blocking startup on a force merge.
 const indexStart = performance.now();
-index.addDocuments(docs);
-index.commit();
+const addStart = performance.now();
+index.addDocumentsBulk(docs);
+const addMs = performance.now() - addStart;
+const commitStart = performance.now();
+index.commitNoMerge();
+const commitMs = performance.now() - commitStart;
 const indexMs = performance.now() - indexStart;
-console.log(`Indexed ${docs.length} files in ${indexMs.toFixed(1)}ms`);
+console.log(
+  `Indexed ${docs.length} files in ${indexMs.toFixed(1)}ms (bulk, no merge; add=${addMs.toFixed(1)}ms, commit=${commitMs.toFixed(1)}ms)`,
+);
 console.log(`Total: ${(crawlMs + readMs + indexMs).toFixed(1)}ms\n`);
 
 // ── Search ──────────────────────────────────────────────────────────────

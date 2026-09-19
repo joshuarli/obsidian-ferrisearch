@@ -30,6 +30,34 @@ impl Tokenizer for FerrisearchTokenizer {
     fn token_stream<'a>(&'a mut self, text: &'a str) -> Self::TokenStream<'a> {
         let mut tokens = Vec::new();
         let mut position = 0;
+
+        // For ASCII text, the configured Unicode separator classes cover every
+        // byte that is not an ASCII letter or digit. Avoid the Unicode regex
+        // engine for the common markdown path.
+        if text.is_ascii() {
+            let mut segment_start = 0;
+            for (byte_idx, byte) in text.bytes().enumerate() {
+                if !byte.is_ascii_alphanumeric() {
+                    if segment_start < byte_idx {
+                        emit_tokens(
+                            &mut tokens,
+                            &text[segment_start..byte_idx],
+                            segment_start,
+                            &mut position,
+                        );
+                    }
+                    segment_start = byte_idx + 1;
+                }
+            }
+            if segment_start < text.len() {
+                emit_tokens(&mut tokens, &text[segment_start..], segment_start, &mut position);
+            }
+            return FerrisearchTokenStream {
+                tokens,
+                index: usize::MAX,
+            };
+        }
+
         let mut last_end = 0;
 
         for mat in self.separator_re.find_iter(text) {
@@ -60,23 +88,100 @@ fn emit_tokens(tokens: &mut Vec<Token>, segment: &str, offset_from: usize, posit
         offset_from,
         offset_to,
         position: pos,
-        text: segment.to_lowercase(),
+        text: lowercase(segment),
         ..Default::default()
     });
 
     // CamelCase sub-tokens share the same position as the parent so that
-    // phrase queries still work across camelCase boundaries.
-    for part in split_camel_case(segment) {
-        tokens.push(Token {
-            offset_from,
-            offset_to,
-            position: pos,
-            text: part.to_lowercase(),
-            ..Default::default()
-        });
+    // phrase queries still work across camelCase boundaries. Scan the segment
+    // in place so ordinary prose does not allocate a temporary Vec<String>.
+    if segment.is_ascii() {
+        let mut part_start = 0;
+        let mut prev_lower = false;
+        let mut has_boundary = false;
+        for (byte_idx, byte) in segment.bytes().enumerate() {
+            if prev_lower && byte.is_ascii_uppercase() && byte_idx > part_start {
+                tokens.push(Token {
+                    offset_from,
+                    offset_to,
+                    position: pos,
+                    text: lowercase(&segment[part_start..byte_idx]),
+                    ..Default::default()
+                });
+                part_start = byte_idx;
+                has_boundary = true;
+            }
+            prev_lower = byte.is_ascii_lowercase();
+        }
+        if has_boundary {
+            tokens.push(Token {
+                offset_from,
+                offset_to,
+                position: pos,
+                text: lowercase(&segment[part_start..]),
+                ..Default::default()
+            });
+        }
+    } else {
+        let mut part_start = 0;
+        let mut prev_lower = false;
+        let mut has_boundary = false;
+        for (byte_idx, ch) in segment.char_indices() {
+            if prev_lower && ch.is_uppercase() && byte_idx > part_start {
+                tokens.push(Token {
+                    offset_from,
+                    offset_to,
+                    position: pos,
+                    text: lowercase(&segment[part_start..byte_idx]),
+                    ..Default::default()
+                });
+                part_start = byte_idx;
+                has_boundary = true;
+            }
+            prev_lower = ch.is_lowercase();
+        }
+        if has_boundary {
+            tokens.push(Token {
+                offset_from,
+                offset_to,
+                position: pos,
+                text: lowercase(&segment[part_start..]),
+                ..Default::default()
+            });
+        }
     }
 
     *position += 1;
+}
+
+#[inline]
+fn lowercase(text: &str) -> String {
+    if text.is_ascii() {
+        text.to_ascii_lowercase()
+    } else {
+        text.to_lowercase()
+    }
+}
+
+#[cfg(test)]
+fn split_camel_case(text: &str) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut prev_lower = false;
+
+    for ch in text.chars() {
+        if prev_lower && ch.is_uppercase() && !current.is_empty() {
+            parts.push(std::mem::take(&mut current));
+        }
+        prev_lower = ch.is_lowercase();
+        current.push(ch);
+    }
+
+    if !current.is_empty() {
+        parts.push(current);
+    }
+
+    if parts.len() <= 1 { Vec::new() } else { parts }
 }
 
 pub struct FerrisearchTokenStream {
@@ -99,27 +204,6 @@ impl TokenStream for FerrisearchTokenStream {
     }
 }
 
-/// Split camelCase: "fooBarBAZ" -> ["foo", "Bar", "BAZ"].
-/// Returns empty if no lowercase→uppercase boundary exists.
-fn split_camel_case(text: &str) -> Vec<String> {
-    let mut parts: Vec<String> = Vec::new();
-    let mut current = String::new();
-    let mut prev_lower = false;
-
-    for ch in text.chars() {
-        if prev_lower && ch.is_uppercase() && !current.is_empty() {
-            parts.push(std::mem::take(&mut current));
-        }
-        prev_lower = ch.is_lowercase();
-        current.push(ch);
-    }
-
-    if !current.is_empty() {
-        parts.push(current);
-    }
-
-    if parts.len() <= 1 { Vec::new() } else { parts }
-}
 
 // ── Diacritic filter ────────────────────────────────────────────────
 

@@ -43,22 +43,27 @@ pub fn build_schema() -> (Schema, FieldHandles) {
         .set_indexing_options(indexing)
         .set_stored();
 
-    // Short fields: stored, no fieldnorms (length normalization is noise)
-    let short_stored = TextOptions::default()
+    // Searchable short fields: stored, no fieldnorms (length normalization is noise)
+    let searchable_short_stored = TextOptions::default()
         .set_indexing_options(indexing_no_norms.clone())
         .set_stored();
+
+    // These values are returned with results but are not searched by the core
+    // query builder. Keeping them stored-only avoids tokenizing and writing
+    // postings that no query can use.
+    let stored_only = TextOptions::default().set_stored();
 
     // Short fields: not stored, no fieldnorms
     let short = TextOptions::default().set_indexing_options(indexing_no_norms);
 
-    let basename = b.add_text_field("basename", short_stored.clone());
-    let display_title = b.add_text_field("display_title", short_stored.clone());
+    let basename = b.add_text_field("basename", stored_only.clone());
+    let display_title = b.add_text_field("display_title", searchable_short_stored.clone());
     let directory = b.add_text_field("directory", short.clone());
-    let aliases = b.add_text_field("aliases", short_stored.clone());
+    let aliases = b.add_text_field("aliases", stored_only.clone());
     let content = b.add_text_field("content", content_opts);
-    let headings = b.add_text_field("headings", short_stored.clone());
-    let tags_text = b.add_text_field("tags_text", short.clone());
-    let unmarked_tags = b.add_text_field("unmarked_tags", short_stored);
+    let headings = b.add_text_field("headings", searchable_short_stored);
+    let tags_text = b.add_text_field("tags_text", TextOptions::default());
+    let unmarked_tags = b.add_text_field("unmarked_tags", stored_only);
     let tags_stored = b.add_json_field("tags_stored", STORED);
     let mtime = b.add_u64_field("mtime", STORED | FAST);
 

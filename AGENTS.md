@@ -71,13 +71,14 @@ crates/
     types.rs               # Core types: DocumentInput, SearchResult (recency_multiplier, optional FieldScoreBreakdown), SearchOptions (score_breakdown flag), FieldBoosts, IndexConfig
     schema.rs              # Tantivy schema (4 searched fields) + FieldHandles
     tokenizer.rs           # FerrisearchTokenizer (Unicode-category separator regex, camelCase split) + DiacriticFilter
-    index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. `filesystem` feature gates mmap/disk code; WASM uses in-memory only.
+    index.rs               # IndexManager: create/open index, add/remove/commit, stored IndexReader. Native indexing uses a fixed four-worker writer; `filesystem` gates mmap/disk code and WASM uses in-memory only.
     search.rs              # Search: two-phase (exact+prefix then fuzzy), phrase queries, PhrasePrefixQuery, recency boost, per-field score explain. Uses Tantivy 0.26 collectors and js-sys::Date::now() on WASM (SystemTime panics on wasm32).
 scripts/
   copy-to-android.sh        # Push built plugin to Android device via adb
-  test-search.ts            # CLI smoke test: loads NAPI binary, indexes test-vault/*.md, searches, prints results
+  test-search.ts            # CLI smoke test and production-aligned benchmark: bulk-indexes a markdown directory, searches, prints results
   test-vault/               # .md files used by test-search.ts (indexed from scratch each run)
 Makefile                     # Local macOS-arm64 build and install workflow
+PERF.md                      # Benchmark method, baselines, and indexing target
 .cargo/
   config.toml               # Sets wasm-bindgen-test-runner for wasm32 target
 rust-toolchain.toml         # Pins nightly-2026-09-15 + wasm32 target (rustup + CI read this; no PATH hacks in scripts)
@@ -87,10 +88,10 @@ rust-toolchain.toml         # Pins nightly-2026-09-15 + wasm32 target (rustup + 
 
 ### Tokenizer (`tokenizer.rs`)
 
-`FerrisearchTokenizer` splits text on Unicode punctuation/symbols/separators/control chars (`\p{P}\p{Z}\p{Cc}\p{S}`). For each token, it emits:
+`FerrisearchTokenizer` splits text on Unicode punctuation/symbols/separators/control chars (`\p{P}\p{Z}\p{Cc}\p{S}`). ASCII text uses a byte fast path; Unicode text uses the configured regex. For each token, it emits:
 
 1. The full lowercased token at position N
-2. CamelCase sub-tokens (e.g. "fooBar" → "foo", "bar") also at position N
+2. CamelCase sub-tokens (e.g. "fooBar" → "foo", "bar") also at position N. ASCII tokens use a byte fast path, and the scan avoids temporary allocations for ordinary prose.
 
 Sub-tokens sharing the parent position is critical for phrase queries: `"variable is"` matches `myVariable is` because "variable" (sub-token at pos 0) and "is" (pos 1) are consecutive.
 
@@ -98,7 +99,7 @@ Sub-tokens sharing the parent position is critical for phrase queries: `"variabl
 
 ### Schema (`schema.rs`)
 
-4 fields are searched: `display_title`, `directory`, `content`, `headings`. Others are indexed but not searched (basename, aliases, tags_text, unmarked_tags — disabled for performance). All text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization). `aliases`, `headings`, and `unmarked_tags` are stored (needed for `reconstruct_docs_buffer` after blob load).
+4 fields are searched: `display_title`, `directory`, `content`, `headings`. Result-only fields (`basename`, `aliases`, `tags_text`, `unmarked_tags`) are stored without indexing, avoiding postings that the query builder never reads. All searched text fields use `WithFreqsAndPositions` for phrase query support. Fieldnorms disabled on all short fields (only content has length normalization). `aliases`, `headings`, and `unmarked_tags` are stored (needed for `reconstruct_docs_buffer` after blob load).
 
 ### Search (`search.rs`)
 
@@ -123,7 +124,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 ### Index (`index.rs`)
 
-`IndexManager` stores an `Index`, `IndexWriter`, and `IndexReader`. Uses explicit single-threaded writer — Obsidian vaults are small enough that multi-threaded indexing adds overhead without benefit. Heap size: 50MB for disk, 15MB for in-memory (tests).
+`IndexManager` stores an `Index`, `IndexWriter`, and `IndexReader`. Native indexing uses a fixed four-worker writer with a 30MB heap budget per worker to reduce initial commit latency without making startup depend on host CPU topology. Ephemeral in-memory test indices remain single-threaded. Heap size: 120MB for disk, 15MB for in-memory (tests).
 
 **Native/darwin-arm64 (filesystem feature):** On `commit()`, force-merges to a single segment (best-effort — background merge policy may already have consolidated). Single-segment means a single FST traversal per query. `warm_up()` pre-loads FST pages into the OS page cache.
 
@@ -160,6 +161,7 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - `cargo clippy --all-targets --all-features -- -D warnings`: Rust linter
 - `make install`: Build and install to the configured macOS arm64 Obsidian vault
 - `deno task test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
+- `PERF.md`: Benchmark method, recorded baselines, and performance targets
 
 - **Build tool:** Rolldown via Deno (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
 - **Test runner:** Deno's test runner with `happy-dom` for DOM APIs. The `obsidian` module is mocked in `setup.ts`. `IntersectionObserver` is mocked to fire immediately.
