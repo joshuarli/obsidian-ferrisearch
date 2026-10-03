@@ -1,5 +1,4 @@
-import { describe, it } from '@std/testing/bdd'
-import { expect, fn } from '@std/expect'
+import { describe, expect, it, vi } from 'vitest'
 import { Observable } from './globals'
 
 describe('Observable', () => {
@@ -16,7 +15,7 @@ describe('Observable', () => {
 
   it('calls subscriber immediately with current value', () => {
     const obs = new Observable(10),
-      spy = fn(() => {}) as (v: number) => void
+      spy = vi.fn(() => {}) as (v: number) => void
     obs.subscribe(spy)
     expect(spy).toHaveBeenCalledTimes(1)
     expect(spy).toHaveBeenCalledWith(10)
@@ -34,7 +33,7 @@ describe('Observable', () => {
 
   it('returns unsubscribe function that stops notifications', () => {
     const obs = new Observable('a'),
-      spy = fn(() => {}) as (v: string) => void,
+      spy = vi.fn(() => {}) as (v: string) => void,
       unsub = obs.subscribe(spy)
     expect(spy).toHaveBeenCalledTimes(1) // Initial
 
@@ -48,8 +47,8 @@ describe('Observable', () => {
 
   it('supports multiple independent subscribers', () => {
     const obs = new Observable(0),
-      spy1 = fn(() => {}) as (v: number) => void,
-      spy2 = fn(() => {}) as (v: number) => void,
+      spy1 = vi.fn(() => {}) as (v: number) => void,
+      spy2 = vi.fn(() => {}) as (v: number) => void,
       unsub1 = obs.subscribe(spy1)
     obs.subscribe(spy2)
 
@@ -71,7 +70,7 @@ describe('Observable', () => {
     obs.subscribe(() => {
       if (unsub2) unsub2()
     })
-    const spy2 = fn(() => {}) as (v: number) => void
+    const spy2 = vi.fn(() => {}) as (v: number) => void
     unsub2 = obs.subscribe(spy2)
 
     // Spy2 was called once (initial subscribe call)

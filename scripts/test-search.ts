@@ -4,12 +4,12 @@
  * Indexes .md files from any directory, searches, and benchmarks query latency.
  *
  * Usage:
- *   deno task test-search <directory> <query> [fuzziness] [--file <path>]
+ *   pnpm run test-search <directory> <query> [fuzziness] [--file <path>]
  *
  * Examples:
- *   deno task test-search ~/my-vault powder 2
- *   deno task test-search ~/my-vault powder 1 --file baking/Ingredients/Dairy.md
- *   deno task test-search ~/my-vault "github actions" 0
+ *   pnpm run test-search ~/my-vault powder 2
+ *   pnpm run test-search ~/my-vault powder 1 --file baking/Ingredients/Dairy.md
+ *   pnpm run test-search ~/my-vault "github actions" 0
  */
 
 import { createRequire } from "node:module";
@@ -50,7 +50,7 @@ for (let i = 0; i < args.length; i++) {
 
 if (!dirArg || !query) {
   console.error(
-    "Usage: deno task test-search <directory> <query> [fuzziness] [--file <path>]",
+    "Usage: pnpm run test-search <directory> <query> [fuzziness] [--file <path>]",
   );
   Deno.exit(1);
 }

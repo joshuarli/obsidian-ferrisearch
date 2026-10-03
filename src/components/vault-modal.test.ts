@@ -1,5 +1,4 @@
-import { describe, it } from '@std/testing/bdd'
-import { expect, fn } from '@std/expect'
+import { describe, expect, it, vi } from 'vitest'
 import '../test-utils/setup'
 import { Action } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
@@ -27,7 +26,7 @@ function createMockModal(): ModalHandle & {
 } {
   const handlers = new Map<string, (...args: unknown[]) => void>()
   return {
-    close: fn(() => {}) as () => void,
+    close: vi.fn(() => {}) as () => void,
     on(action: string, handler: (...args: unknown[]) => void) {
       handlers.set(action, handler)
     },
@@ -236,7 +235,7 @@ describe('renderVaultModal', () => {
       await flush()
 
       handle.destroy()
-      modal.close = fn(() => {}) as () => void
+      modal.close = vi.fn(() => {}) as () => void
 
       modal.dispatch(Action.Enter)
       expect(modal.close).not.toHaveBeenCalled()
@@ -250,7 +249,7 @@ describe('renderVaultModal', () => {
 
       // Destroy before debounce fires
       handle.destroy()
-      plugin.searchEngine.getSuggestions = fn(() =>
+      plugin.searchEngine.getSuggestions = vi.fn(() =>
         Promise.resolve([]),
       ) as typeof plugin.searchEngine.getSuggestions
 

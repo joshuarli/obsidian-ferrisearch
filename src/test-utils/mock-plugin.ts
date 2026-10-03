@@ -1,4 +1,4 @@
-import { fn } from '@std/expect'
+import { vi } from 'vitest'
 import type FerrisearchPlugin from '../main'
 
 export function createMockPlugin(overrides?: {
@@ -26,37 +26,37 @@ export function createMockPlugin(overrides?: {
   return {
     settings,
     searchEngine: {
-      getSuggestions: fn(() => Promise.resolve(overrides?.searchResults ?? [])),
-      warmUp: fn(() => {}),
+      getSuggestions: vi.fn(() => Promise.resolve(overrides?.searchResults ?? [])),
+      warmUp: vi.fn(() => {}),
     },
     textProcessor: {
-      highlightText: fn((text: string) => text),
-      makeExcerpt: fn((content: string) => content.slice(0, 100)),
-      getMatches: fn(() => []),
-      stringsToRegex: fn(() => /test/gi),
+      highlightText: vi.fn((text: string) => text),
+      makeExcerpt: vi.fn((content: string) => content.slice(0, 100)),
+      getMatches: vi.fn(() => []),
+      stringsToRegex: vi.fn(() => /test/gi),
     },
     searchHistory: {
-      getHistory: fn(() => Promise.resolve([])),
-      addToHistory: fn(() => {}),
+      getHistory: vi.fn(() => Promise.resolve([])),
+      addToHistory: vi.fn(() => {}),
     },
     notesIndexer: {
-      refreshIndex: fn(() => Promise.resolve()),
+      refreshIndex: vi.fn(() => Promise.resolve()),
     },
     app: {
       vault: {
-        getMarkdownFiles: fn(() => []),
-        getAbstractFileByPath: fn(() => null),
-        getConfig: fn(() => null),
+        getMarkdownFiles: vi.fn(() => []),
+        getAbstractFileByPath: vi.fn(() => null),
+        getConfig: vi.fn(() => null),
       },
       workspace: {
-        getActiveViewOfType: fn(() => null),
-        getActiveFile: fn(() => null),
-        openLinkText: fn(() => Promise.resolve()),
-        iterateAllLeaves: fn(() => {}),
-        setActiveLeaf: fn(() => {}),
+        getActiveViewOfType: vi.fn(() => null),
+        getActiveFile: vi.fn(() => null),
+        openLinkText: vi.fn(() => Promise.resolve()),
+        iterateAllLeaves: vi.fn(() => {}),
+        setActiveLeaf: vi.fn(() => {}),
       },
       fileManager: {
-        generateMarkdownLink: fn(() => '[[link]]'),
+        generateMarkdownLink: vi.fn(() => '[[link]]'),
       },
     },
   } as unknown as FerrisearchPlugin

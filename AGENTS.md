@@ -146,24 +146,24 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 
 ## Build & Test
 
-- `deno task build`: Production build → `dist/main.js` (CJS, minified, tree-shaken)
-- `deno task dev`: Watch mode build
-- `deno task test`: Run TypeScript tests (56 tests across 4 files)
-- `deno task fmt:check`: Check formatting with Oxfmt
-- `deno task fmt`: Apply formatting with Oxfmt
-- `deno task lint:check`: Check lint with Oxlint
-- `deno task lint`: Apply Oxlint fixes
-- `deno task typecheck`: Run TypeScript 7 and Deno type checks
-- `deno task build:rust`: Build native module via napi-rs
-- `deno task build:wasm`: Build the WASM module and wasm-bindgen output
-- `deno task build:all`: Rust + WASM + TypeScript build
+- `pnpm run build`: Production build → `dist/main.js` (CJS, minified, tree-shaken)
+- `pnpm run dev`: Watch mode build
+- `pnpm run test`: Run TypeScript tests (56 tests across 4 files)
+- `pnpm run fmt:check`: Check formatting with Oxfmt
+- `pnpm run fmt`: Apply formatting with Oxfmt
+- `pnpm run lint:check`: Check lint with Oxlint
+- `pnpm run lint`: Apply Oxlint fixes
+- `pnpm run typecheck`: Run TypeScript 7 and Deno type checks
+- `pnpm run build:rust`: Build native module via napi-rs
+- `pnpm run build:wasm`: Build the WASM module and wasm-bindgen output
+- `pnpm run build:all`: Rust + WASM + TypeScript build
 - `cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown`: Build WASM module
 - `cargo test`: Run Rust tests (106 tests)
 - `cargo clippy --all-targets --all-features -- -D warnings`: Rust linter
 - `make install`: Build and install to the configured macOS arm64 Obsidian vault; automatically installs the `wasm-bindgen` CLI version resolved in `Cargo.lock` and uses the `release` Rust profile by default. Pass `PROFILE=dev-fast` for iteration builds.
 - `make package`: Build the plugin and create `ferrisearch.zip` with the five files required by `make install`.
 - `make install-remote`: Download the newest non-draft GitHub prerelease archive with `gh` and install it to the configured vault.
-- `deno task test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
+- `pnpm run test-search <dir> <query> [fuzziness]`: Native CLI search harness and benchmark
 - `PERF.md`: Benchmark method, recorded baselines, and performance targets
 
 The GitHub Actions workflow is `workflow_dispatch`-only. It runs on the `macos-26`
@@ -171,13 +171,13 @@ arm64 runner, builds `ferrisearch.zip`, uploads that archive as the only Actions
 artifact, and publishes it as a GitHub prerelease asset.
 
 - **Build tool:** Rolldown via Deno (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
-- **Test runner:** Deno's test runner with `happy-dom` for DOM APIs. The `obsidian` module is mocked in `setup.ts`. `IntersectionObserver` is mocked to fire immediately.
+- **Test runner:** Vitest with `happy-dom` for DOM APIs. The `obsidian` module is aliased to its local mock. `IntersectionObserver` is mocked to fire immediately.
 - **Linter/Formatter:** Oxfmt and Oxlint (TS/JS), cargo clippy + cargo fmt (Rust), shfmt + shellcheck (shell).
 
 ## Dependencies
 
 - **Runtime:** None (zero runtime dependencies). Query parsing is a custom ~50-line function in `query.ts`.
-- **Dev:** Deno, TypeScript 7, Oxfmt, Oxlint, Rolldown, `happy-dom`, `@types/node`, `obsidian`
+- **Dev:** pnpm, Deno, TypeScript 7, Vitest, Oxfmt, Oxlint, Rolldown, `happy-dom`, `@types/node`, `obsidian`
 - **TypeScript compatibility:** `tsconfig.json` skips library declaration checking because Obsidian 1.13.1 currently contains internal `HistoryHandler` declaration errors under TypeScript 7; project sources remain strictly checked.
 - **Native:** Rust crate `ferrisearch-core` using Tantivy 0.26 for full-text search, exposed via `napi-rs` (darwin-arm64 only) and `wasm-bindgen` (all other platforms). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
 - **WASM:** `wasm-bindgen` 0.2.128, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen --target web`. The `wasm-bindgen-cli` version (currently 0.2.128) must match the resolved crate version in `Cargo.lock`.

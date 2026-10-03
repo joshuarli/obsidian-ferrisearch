@@ -1,0 +1,37 @@
+{
+  "name": "ferrisearch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.0.2",
+  "scripts": {
+    "typecheck": "tsc --noEmit && deno check --unstable-sloppy-imports build.ts scripts/test-search.ts src/obsidian-ex.d.ts",
+    "lint": "oxlint --fix",
+    "lint:check": "oxlint",
+    "fmt": "oxfmt --write",
+    "fmt:check": "oxfmt --check",
+    "fmtlint": "pnpm run fmt && pnpm run lint",
+    "prebuild": "pnpm run fmt:check && pnpm run lint:check && pnpm run typecheck",
+    "dev": "deno run -A --watch build.ts",
+    "build:plugin": "deno run -A build.ts production",
+    "build": "pnpm run prebuild && pnpm run build:plugin",
+    "build:rust": "cd napi && napi build --release",
+    "build:wasm": "cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown && wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm",
+    "build:all": "pnpm run build:rust && pnpm run build:wasm && pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test-search": "deno run --allow-ffi --allow-read --allow-run --allow-write scripts/test-search.ts"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "20.14.5",
+    "@napi-rs/cli": "3.10.4",
+    "@types/node": "26.6.1",
+    "happy-dom": "20.14.5",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "obsidian": "1.13.1",
+    "rolldown": "1.2.9",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

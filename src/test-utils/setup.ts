@@ -1,8 +1,8 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 
 // Obsidian's real type declarations augment the global HTMLElement with these;
-// Declared here too since this file is checked standalone (see deno.json's
-// "typecheck" task), without the 'obsidian' package in its type program.
+// Declared here too since this file is checked standalone without the
+// 'obsidian' package in its type program.
 declare global {
   interface HTMLElement {
     addClass(...classes: string[]): void
@@ -12,22 +12,6 @@ declare global {
 
 // Register happy-dom globals (document, window, etc.)
 GlobalRegistrator.register()
-
-// Deno fires a native "load" event on globalThis at module-completion time.
-// Happy-dom's patched window.dispatchEvent strictly requires its own Event
-// Class, so that native event crashes the process. Swallow it — it's Deno's
-// Runtime lifecycle, not a test assertion.
-const originalDispatchEvent = globalThis.dispatchEvent.bind(globalThis)
-globalThis.dispatchEvent = ((event: Event) => {
-  try {
-    return originalDispatchEvent(event)
-  } catch {
-    return true
-  }
-}) as typeof globalThis.dispatchEvent
-
-// The 'obsidian' module is mocked via deno.test.json's import map override
-// (see src/test-utils/obsidian-mock.ts), not at runtime here.
 
 // IntersectionObserver mock — immediately fires with isIntersecting: true
 class MockIntersectionObserver {

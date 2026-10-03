@@ -35,7 +35,7 @@ build-wasm: ensure-wasm-bindgen
 	"$(WASM_BINDGEN)" --target web --out-dir wasm/pkg "$(WASM_BINARY)"
 
 build-plugin: build-wasm
-	deno run -A build.ts production
+	pnpm run build:plugin
 
 package: build
 	rm -f "$(PACKAGE)"

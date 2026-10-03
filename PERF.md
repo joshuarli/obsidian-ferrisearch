@@ -10,7 +10,7 @@ Run the native harness on macOS arm64 with a release NAPI binary:
 
 ```sh
 make build-native PROFILE=release
-deno task test-search \
+pnpm run test-search \
   "/Users/josh/iCloud~md~obsidian/Documents/Notes" \
   "search" 0
 ```

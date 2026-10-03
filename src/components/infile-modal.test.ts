@@ -1,5 +1,4 @@
-import { describe, it } from '@std/testing/bdd'
-import { expect, fn } from '@std/expect'
+import { describe, expect, it, vi } from 'vitest'
 import '../test-utils/setup'
 import { Action } from '../globals'
 import { createMockPlugin } from '../test-utils/mock-plugin'
@@ -24,7 +23,7 @@ function createMockModal(): ModalHandle & {
 } {
   const handlers = new Map<string, (...args: unknown[]) => void>()
   return {
-    close: fn(() => {}) as () => void,
+    close: vi.fn(() => {}) as () => void,
     on(action: string, handler: (...args: unknown[]) => void) {
       handlers.set(action, handler)
     },
@@ -90,7 +89,7 @@ describe('renderInFileModal', () => {
     })
 
     it('shows "to go back to Vault Search" when parent exists', () => {
-      const parent = { close: fn(() => {}) as () => void } as ModalHandle,
+      const parent = { close: vi.fn(() => {}) as () => void } as ModalHandle,
         { container, handle } = setup({ parent })
       expect(container.textContent).toContain('to go back to Vault Search')
       handle.destroy()
@@ -242,7 +241,7 @@ describe('renderInFileModal', () => {
     })
 
     it('Enter closes both modal and parent when parent exists', async () => {
-      const parentModal = { close: fn(() => {}) as () => void } as ModalHandle,
+      const parentModal = { close: vi.fn(() => {}) as () => void } as ModalHandle,
         note = createMockResultNote({
           matches: [{ match: 'a', offset: 10 }],
         }),
@@ -285,7 +284,7 @@ describe('renderInFileModal', () => {
       await flush()
 
       handle.destroy()
-      modal.close = fn(() => {}) as () => void
+      modal.close = vi.fn(() => {}) as () => void
 
       modal.dispatch(Action.Enter)
       await flush(50)
@@ -300,7 +299,7 @@ describe('renderInFileModal', () => {
 
       // Destroy before debounce fires
       handle.destroy()
-      plugin.searchEngine.getSuggestions = fn(() =>
+      plugin.searchEngine.getSuggestions = vi.fn(() =>
         Promise.resolve([]),
       ) as typeof plugin.searchEngine.getSuggestions
 

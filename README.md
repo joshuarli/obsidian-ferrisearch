@@ -18,6 +18,13 @@ Also, non-build/app dependencies have been cut down to the minimum.
 
 ## Local build
 
+Set up the pinned pnpm CLI and project dependencies once:
+
+```sh
+deno task bootstrap
+pnpm install
+```
+
 On macOS arm64, `make install` builds the native and WASM engines, bundles the
 plugin, and installs it into the configured Obsidian vault. The default targets
 `/Users/josh/iCloud~md~obsidian/Documents/Notes`; override the destination with

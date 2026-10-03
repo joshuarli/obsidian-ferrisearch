@@ -1,5 +1,5 @@
-// Mock of the 'obsidian' module surface used by tests, swapped in for the real
-// 'obsidian' package via deno.test.json's import map override (see AGENTS.md).
+// Mock of the 'obsidian' module surface used by tests, selected by Vitest's
+// resolve alias because the real package only exists inside Obsidian.
 // 'obsidian' is externalized in the production build and doesn't exist as a
 // Runnable module at test time.
 
