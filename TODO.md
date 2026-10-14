@@ -1,15 +1,6 @@
 Prefix: FERR
 Next: 11
 
-### FERR-6 · P2 · Parse query terms with the index tokenizer
-
-- **Area:** Search fields
-- **Where:** `crates/ferrisearch-core/src/search.rs:20-74,212-213`; `crates/ferrisearch-core/src/tokenizer.rs:13,28-40`
-- **Problem:** The index tokenizer splits punctuation and symbols, but the query parser splits terms only on whitespace and passes each term directly to Tantivy. Queries such as `C++` or `foo-bar` therefore do not use the same tokens as indexed notes and can miss expected matches.
-- **Recommendation:** Normalize unquoted query terms with the same tokenizer used during indexing while preserving quoted-phrase behavior.
-- **Fix with:** reference-parity
-- **Effort:** M
-
 ### FERR-7 · P2 · Bound persisted result limits before collection
 
 - **Area:** Config

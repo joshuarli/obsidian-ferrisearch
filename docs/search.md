@@ -16,6 +16,10 @@ The query builder does not search aliases or tag metadata as fields. Inline tag 
 
 Path matching ignores case. Prefix searches apply to the title, text, and headings. The search does not use Obsidian's search operators.
 
+Query text uses the same tokenizer as indexed fields. Punctuation and symbols split unquoted terms, so `foo-bar` requires both `foo` and `bar`, and `C++` searches for `c`.
+
+Quoted text keeps one token per tokenizer position, in order, and requires adjacent positions. For example, `"foo-bar baz"` matches `foo bar baz` but not `foo extra bar baz`.
+
 ## Fuzziness and ranking
 
 Fuzziness `0` searches exact terms and prefixes. For unquoted terms, levels `1` and `2` add fuzzy matches if exact and prefix searches return fewer than five results. Their fuzzy term queries search note text. Level `3` searches fuzzy matches across the four fields and skips exact and prefix queries for unquoted terms. Terms shorter than four bytes have no fuzzy edit distance.
@@ -24,6 +28,6 @@ The default field boosts are 10 for displayed titles, 7 for directories, 5 for h
 
 The search engine applies query filters and ranking adjustments before the result limit.
 
-The default tokenizer splits on Unicode punctuation, symbols, separators, and control characters. It emits camel-case sub-terms at the same position as the full token. Quoted phrases can therefore match across camel-case boundaries. Diacritics are ignored by default. Changing that setting requires a restart.
+The default tokenizer splits on Unicode punctuation, symbols, separators, and control characters. It emits camel-case sub-terms at the same position as the full token. Quoted phrases can therefore match across camel-case boundaries. Diacritics are ignored by default for both indexing and queries. Changing that setting requires a restart.
 
 The query builder is in [`search.rs`](../crates/ferrisearch-core/src/search.rs). The searched fields are defined in [`schema.rs`](../crates/ferrisearch-core/src/schema.rs), and the tokenizer is in [`tokenizer.rs`](../crates/ferrisearch-core/src/tokenizer.rs).

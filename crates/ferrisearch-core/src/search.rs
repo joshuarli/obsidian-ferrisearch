@@ -4,12 +4,14 @@ use tantivy::query::{
     TermQuery,
 };
 use tantivy::schema::{IndexRecordOption, Value};
+use tantivy::tokenizer::{TokenFilter, TokenStream, Tokenizer};
 use tantivy::{DocAddress, Searcher, Term};
 
 use unicode_normalization::UnicodeNormalization;
 
 use crate::index::{IndexError, IndexManager};
 use crate::schema::{doc_text, extract_tags};
+use crate::tokenizer::{DiacriticFilter, FerrisearchTokenizer};
 use crate::types::{FieldScoreBreakdown, MatchInfo, SearchOptions, SearchResult};
 
 struct ParsedQuery {
@@ -17,7 +19,28 @@ struct ParsedQuery {
     phrases: Vec<Vec<String>>,
 }
 
-fn parse_query(input: &str) -> ParsedQuery {
+fn tokenize_query_text(input: &str, ignore_diacritics: bool) -> Vec<(usize, String)> {
+    fn collect_tokens<T: Tokenizer>(tokenizer: &mut T, input: &str) -> Vec<(usize, String)> {
+        let mut stream = tokenizer.token_stream(input);
+        let mut tokens = Vec::new();
+        while stream.advance() {
+            let token = stream.token();
+            tokens.push((token.position, token.text.clone()));
+        }
+        tokens
+    }
+
+    if ignore_diacritics {
+        collect_tokens(
+            &mut DiacriticFilter.transform(FerrisearchTokenizer::new()),
+            input,
+        )
+    } else {
+        collect_tokens(&mut FerrisearchTokenizer::new(), input)
+    }
+}
+
+fn parse_query(input: &str, ignore_diacritics: bool) -> ParsedQuery {
     let mut terms = Vec::new();
     let mut phrases = Vec::new();
     let mut chars = input.chars().peekable();
@@ -42,19 +65,25 @@ fn parse_query(input: &str) -> ParsedQuery {
             }
 
             if closed {
-                let words: Vec<String> = phrase_text
-                    .split_whitespace()
-                    .map(|w| w.to_lowercase())
-                    .collect();
+                let mut words = Vec::new();
+                let mut last_position = None;
+                for (position, word) in tokenize_query_text(&phrase_text, ignore_diacritics) {
+                    if last_position != Some(position) {
+                        words.push(word);
+                        last_position = Some(position);
+                    }
+                }
                 match words.len() {
                     0 => {}
                     1 => terms.push(words.into_iter().next().unwrap()),
                     _ => phrases.push(words),
                 }
             } else {
-                for word in phrase_text.split_whitespace() {
-                    terms.push(word.to_lowercase());
-                }
+                terms.extend(
+                    tokenize_query_text(&phrase_text, ignore_diacritics)
+                        .into_iter()
+                        .map(|(_, token)| token),
+                );
             }
         } else {
             let mut word = String::new();
@@ -66,7 +95,11 @@ fn parse_query(input: &str) -> ParsedQuery {
                 chars.next();
             }
             if !word.is_empty() {
-                terms.push(word.to_lowercase());
+                terms.extend(
+                    tokenize_query_text(&word, ignore_diacritics)
+                        .into_iter()
+                        .map(|(_, token)| token),
+                );
             }
         }
     }
@@ -100,7 +133,7 @@ impl IndexManager {
             _ => 0.2,
         };
 
-        let parsed = parse_query(query_str);
+        let parsed = parse_query(query_str, self.ignore_diacritics);
         if parsed.terms.is_empty() && parsed.phrases.is_empty() {
             return Ok(Vec::new());
         }
@@ -1164,6 +1197,45 @@ mod tests {
         );
     }
 
+    #[test]
+    fn punctuation_query_terms_match_index_tokens() {
+        let mgr = setup_index(vec![make_doc("a.md", "note", "C++ foo-bar")]);
+        let options = SearchOptions {
+            fuzziness: "0".into(),
+            ..Default::default()
+        };
+
+        for query in ["C++", "foo-bar"] {
+            let results = mgr.search(query, &options).unwrap();
+            assert_eq!(results.len(), 1, "query: {query}");
+            assert_eq!(results[0].path, "a.md");
+        }
+    }
+
+    #[test]
+    fn query_uses_index_diacritic_filter() {
+        let mgr = setup_index(vec![make_doc("a.md", "note", "Café")]);
+
+        let results = mgr.search("café", &SearchOptions::default()).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "a.md");
+        assert_eq!(results[0].matched_terms, vec!["cafe"]);
+    }
+
+    #[test]
+    fn quoted_punctuation_phrase_uses_index_tokens_and_adjacency() {
+        let mgr = setup_index(vec![
+            make_doc("a.md", "a", "before foo-bar baz after"),
+            make_doc("b.md", "b", "before foo extra bar baz after"),
+        ]);
+
+        let results = mgr
+            .search("\"foo-bar baz\"", &SearchOptions::default())
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "a.md");
+    }
+
 
     #[test]
     fn phrase_basic_match() {
@@ -1289,56 +1361,56 @@ mod tests {
 
     #[test]
     fn parse_query_simple_terms() {
-        let p = parse_query("hello world");
+        let p = parse_query("hello world", false);
         assert_eq!(p.terms, vec!["hello", "world"]);
         assert!(p.phrases.is_empty());
     }
 
     #[test]
     fn parse_query_single_phrase() {
-        let p = parse_query("\"quick brown\"");
+        let p = parse_query("\"quick brown\"", false);
         assert!(p.terms.is_empty());
         assert_eq!(p.phrases, vec![vec!["quick", "brown"]]);
     }
 
     #[test]
     fn parse_query_phrase_and_terms() {
-        let p = parse_query("hello \"quick brown\" world");
+        let p = parse_query("hello \"quick brown\" world", false);
         assert_eq!(p.terms, vec!["hello", "world"]);
         assert_eq!(p.phrases, vec![vec!["quick", "brown"]]);
     }
 
     #[test]
     fn parse_query_single_word_phrase_promoted() {
-        let p = parse_query("\"hello\"");
+        let p = parse_query("\"hello\"", false);
         assert_eq!(p.terms, vec!["hello"]);
         assert!(p.phrases.is_empty());
     }
 
     #[test]
     fn parse_query_empty_phrase_ignored() {
-        let p = parse_query("\"\"");
+        let p = parse_query("\"\"", false);
         assert!(p.terms.is_empty());
         assert!(p.phrases.is_empty());
     }
 
     #[test]
     fn parse_query_unclosed_quote() {
-        let p = parse_query("\"hello world");
+        let p = parse_query("\"hello world", false);
         assert_eq!(p.terms, vec!["hello", "world"]);
         assert!(p.phrases.is_empty());
     }
 
     #[test]
     fn parse_query_multiple_phrases() {
-        let p = parse_query("\"foo bar\" \"baz qux\"");
+        let p = parse_query("\"foo bar\" \"baz qux\"", false);
         assert!(p.terms.is_empty());
         assert_eq!(p.phrases, vec![vec!["foo", "bar"], vec!["baz", "qux"]]);
     }
 
     #[test]
     fn parse_query_lowercases() {
-        let p = parse_query("Hello \"FOO Bar\"");
+        let p = parse_query("Hello \"FOO Bar\"", false);
         assert_eq!(p.terms, vec!["hello"]);
         assert_eq!(p.phrases, vec![vec!["foo", "bar"]]);
     }
