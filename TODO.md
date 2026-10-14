@@ -11,15 +11,6 @@ Next: 11
 - **Effort:** M
 - **Design:** [FERR-7 RFC](docs/rfc/FERR-7-result-limit.md)
 
-### FERR-9 · P3 · Declare the global plugin API in TypeScript
-
-- **Area:** Types
-- **Where:** `src/main.ts:64,172`
-- **Problem:** Two `@ts-expect-error` directives suppress missing `globalThis.ferrisearch` type errors when the plugin registers and removes its global API. Removing the directives makes the current typecheck fail, so the runtime API lacks an enforceable TypeScript contract.
-- **Recommendation:** Declare the global API shape and remove both suppressions.
-- **Fix with:** api-surface-and-module-boundaries
-- **Effort:** S
-
 ### FERR-10 · P3 · Avoid sentinel collisions in diacritic removal
 
 - **Area:** Search fields

@@ -21,6 +21,17 @@ interface ResultNoteApi {
   excerpt: string
 }
 
+interface FerrisearchApi {
+  search(query: string): Promise<ResultNoteApi[]>
+  registerOnIndexed(callback: () => void): void
+  unregisterOnIndexed(callback: () => void): void
+  refreshIndex(): Promise<void>
+}
+
+declare global {
+  var ferrisearch: FerrisearchApi | undefined
+}
+
 let apiNotified = false,
   onIndexedCallbacks: (() => void)[] = []
 
@@ -46,7 +57,7 @@ function registerAPI(plugin: FerrisearchPlugin): void {
     new FerrisearchVaultModal(plugin, params['query']).open()
   })
 
-  const api = {
+  const api: FerrisearchApi = {
     async search(q: string): Promise<ResultNoteApi[]> {
       const query = new Query(q, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
       return mapApiResults(plugin, await plugin.searchEngine.getSuggestions(query))
@@ -61,7 +72,6 @@ function registerAPI(plugin: FerrisearchPlugin): void {
     refreshIndex: () => plugin.notesIndexer.refreshIndex(),
   }
 
-  // @ts-expect-error
   globalThis.ferrisearch = api
   plugin.app.plugins.plugins.ferrisearch.api = api
 }
@@ -169,8 +179,7 @@ export default class FerrisearchPlugin extends Plugin {
   }
 
   override async onunload(): Promise<void> {
-    // @ts-expect-error
-    delete globalThis.ferrisearch
+    Reflect.deleteProperty(globalThis, 'ferrisearch')
 
     await this.searchEngine.saveSidecar()
     await this.searchEngine.saveIndexBlob()

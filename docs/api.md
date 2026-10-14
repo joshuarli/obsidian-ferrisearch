@@ -23,6 +23,17 @@ interface SearchResult {
 }
 ```
 
+The global `ferrisearch` value has this API:
+
+```ts
+interface FerrisearchApi {
+  search(query: string): Promise<SearchResult[]>
+  registerOnIndexed(callback: () => void): void
+  unregisterOnIndexed(callback: () => void): void
+  refreshIndex(): Promise<void>
+}
+```
+
 The `offset` values are JavaScript string offsets. The query uses the active Ferrisearch settings and result limit.
 
 `registerOnIndexed(callback)` runs the callback after initial indexing. It runs it immediately if initial indexing has already completed. Call `unregisterOnIndexed(callback)` with the same function to remove it.
