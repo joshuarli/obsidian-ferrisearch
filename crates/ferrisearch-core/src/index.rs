@@ -62,8 +62,6 @@ impl IndexManager {
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
             .try_into()?;
-        // Four workers are the fixed native default across machines. This
-        // avoids making startup latency depend on the host's CPU topology.
         let writer = index.writer_with_num_threads(4, 120_000_000)?;
         Ok(Self {
             index,
@@ -84,7 +82,6 @@ impl IndexManager {
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
             .try_into()?;
-        // Keep ephemeral test indices single-threaded to minimize setup cost.
         let writer = index.writer_with_num_threads(1, 15_000_000)?;
         Ok(Self {
             index,
@@ -99,7 +96,6 @@ impl IndexManager {
     #[cfg(not(feature = "filesystem"))]
     pub fn new_in_memory(config: IndexConfig) -> Result<Self, IndexError> {
         let (schema, fields) = build_schema();
-        // Disable the dedicated compression thread (WASM has no threads)
         let settings = tantivy::IndexSettings {
             docstore_compress_dedicated_thread: false,
             ..Default::default()
@@ -132,7 +128,6 @@ impl IndexManager {
         }
     }
 
-    /// Build a TantivyDocument from a DocumentInput.
     fn build_tantivy_doc(fields: &FieldHandles, doc: &DocumentInput) -> tantivy::TantivyDocument {
         use std::collections::BTreeMap;
         use tantivy::schema::OwnedValue;
@@ -162,9 +157,7 @@ impl IndexManager {
         d
     }
 
-    // ── Desktop (threaded IndexWriter) ──────────────────────────────────────
 
-    /// Add a single document (upsert: removes existing document with same path first).
     #[cfg(feature = "filesystem")]
     fn add_document(&mut self, doc: &DocumentInput) -> Result<(), IndexError> {
         self.delete_by_path(&doc.path);
@@ -224,7 +217,6 @@ impl IndexManager {
             .delete_term(Term::from_field_text(self.fields.path, path));
     }
 
-    // ── WASM (single-threaded, rebuild on commit) ───────────────────────────
 
     #[cfg(not(feature = "filesystem"))]
     fn add_document(&mut self, doc: &DocumentInput) -> Result<(), IndexError> {
@@ -285,7 +277,6 @@ impl IndexManager {
         Ok(())
     }
 
-    // ── Blob persistence (used by WASM for mobile index caching) ─────────
 
     const BLOB_MAGIC: &'static [u8; 4] = b"FERI";
     const BLOB_VERSION: u32 = 1;
@@ -297,16 +288,11 @@ impl IndexManager {
 
         let dir = self.index.directory();
 
-        // Collect all files: meta.json + segment files
         let mut files: Vec<(String, Vec<u8>)> = Vec::new();
 
-        // meta.json
         let meta_bytes = dir.atomic_read(Path::new("meta.json"))?;
         files.push(("meta.json".into(), meta_bytes));
 
-        // Segment files — use atomic_read to get raw bytes (including footer),
-        // since ManagedDirectory::open_read strips the footer.
-        // Skip .del files that may not exist after merges.
         let metas = self.index.searchable_segment_metas()?;
         for meta in &metas {
             for file_path in meta.list_files() {
@@ -320,13 +306,11 @@ impl IndexManager {
             }
         }
 
-        // Build blob: header + file map
         let mut blob = Vec::new();
         blob.extend_from_slice(Self::BLOB_MAGIC);
         blob.extend_from_slice(&Self::BLOB_VERSION.to_le_bytes());
         blob.push(self.ignore_diacritics as u8);
 
-        // File map
         blob.extend_from_slice(&(files.len() as u32).to_le_bytes());
         for (name, data) in &files {
             let name_bytes = name.as_bytes();
@@ -344,7 +328,6 @@ impl IndexManager {
         use std::path::Path;
         use tantivy::directory::{Directory, RamDirectory};
 
-        // Parse header
         if blob.len() < 9 {
             return Err(IndexError::Blob("blob too short".into()));
         }
@@ -360,7 +343,6 @@ impl IndexManager {
             return Err(IndexError::Blob("diacritics config mismatch".into()));
         }
 
-        // Parse file map directly after header
         let mut cursor = 9usize;
         let read_u32 = |c: &mut usize| -> Result<u32, IndexError> {
             if *c + 4 > blob.len() {
@@ -479,7 +461,6 @@ impl IndexManager {
         for reader in searcher.segment_readers() {
             for (_, field) in self.fields.text_fields() {
                 let inv = reader.inverted_index(field)?;
-                // Access the term dictionary to fault in the mmap'd FST pages
                 let _ = inv.terms().num_terms();
             }
         }

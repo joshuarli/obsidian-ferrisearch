@@ -14,9 +14,10 @@ It works on desktop and mobile and requires Obsidian 1.11.7 or later.
 Click the Ferrisearch ribbon icon or run **Vault search** from the command palette. Type a query to search note titles, folders, text, and headings. Ferrisearch indexes `.md` files only.
 
 Separate words to require each word in a result. Put words in quotes to search for a phrase. Use `path:` to match a folder or file path, and prefix a word with `-` to exclude it from note text.
+Use `ext:` to filter results by file extension.
 
 ```text
-"project plan" path:work -draft
+"project plan" path:work ext:md -draft
 ```
 
 Use the arrow keys to move through results. Press Enter to open a result. Press Tab to switch to In-file search. Ferrisearch saves a query when you open one of its vault results. Open vault search with an empty query to see the ten most recent saved queries.

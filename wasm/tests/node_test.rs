@@ -1,5 +1,3 @@
-// Integration tests that run the WASM module in a real wasm32 environment via wasm-bindgen-test.
-// Run with: just test-wasm
 
 use serde::Serialize;
 use wasm_bindgen::JsValue;
@@ -98,7 +96,6 @@ fn search_returns_results() {
     });
     let results = idx.search("hello", js(&opts)).unwrap();
 
-    // Deserialize results to check them
     let results: Vec<serde_json::Value> = serde_wasm_bindgen::from_value(results).unwrap();
     assert!(!results.is_empty());
     assert_eq!(results[0]["path"], "notes/hello.md");
@@ -206,17 +203,14 @@ fn serialize_and_load_blob() {
     idx.commit().unwrap();
     assert_eq!(idx.document_count().unwrap(), 2.0);
 
-    // Serialize to blob
     let blob = idx.serialize_index().unwrap();
     assert!(!blob.is_empty());
 
-    // Load from blob
     let loaded = SearchIndex::load_from_blob(&blob, JsValue::NULL).unwrap();
     assert_eq!(loaded.document_count().unwrap(), 2.0);
     assert!(loaded.has_document("notes/hello.md").unwrap());
     assert!(loaded.has_document("notes/other.md").unwrap());
 
-    // Search works on loaded index
     let results = loaded.search("hello", JsValue::NULL).unwrap();
     let results: Vec<serde_json::Value> = serde_wasm_bindgen::from_value(results).unwrap();
     assert!(!results.is_empty());
@@ -246,7 +240,6 @@ fn fuzzy_only_finds_typo_wasm() {
     idx.add_documents(js(&docs)).unwrap();
     idx.commit().unwrap();
 
-    // Fuzzy-only mode (fuzziness "3")
     let opts = serde_json::json!({
         "fuzziness": "3",
         "prefixLength": 1.0,
@@ -275,7 +268,6 @@ fn fuzzy_only_single_file_wasm() {
     idx.add_documents(js(&docs)).unwrap();
     idx.commit().unwrap();
 
-    // Fuzzy-only mode with singleFilePath (in-file search)
     let opts = serde_json::json!({
         "fuzziness": "3",
         "prefixLength": 1.0,
@@ -304,12 +296,10 @@ fn load_blob_then_add_more_docs() {
     idx.add_documents(js(&docs)).unwrap();
     idx.commit().unwrap();
 
-    // Serialize and load
     let blob = idx.serialize_index().unwrap();
     let mut loaded = SearchIndex::load_from_blob(&blob, JsValue::NULL).unwrap();
     assert_eq!(loaded.document_count().unwrap(), 1.0);
 
-    // Add more documents after loading from blob
     let more_docs = serde_json::json!([{
         "path": "b.md", "basename": "b", "displayTitle": "Beta",
         "aliases": "", "content": "charlie delta", "headings": "",

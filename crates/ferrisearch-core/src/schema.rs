@@ -38,22 +38,16 @@ pub fn build_schema() -> (Schema, FieldHandles) {
         .set_index_option(IndexRecordOption::WithFreqsAndPositions);
     let indexing_no_norms = indexing.clone().set_fieldnorms(false);
 
-    // Content: stored + fieldnorms (length normalization matters for long text)
     let content_opts = TextOptions::default()
         .set_indexing_options(indexing)
         .set_stored();
 
-    // Searchable short fields: stored, no fieldnorms (length normalization is noise)
     let searchable_short_stored = TextOptions::default()
         .set_indexing_options(indexing_no_norms.clone())
         .set_stored();
 
-    // These values are returned with results but are not searched by the core
-    // query builder. Keeping them stored-only avoids tokenizing and writing
-    // postings that no query can use.
     let stored_only = TextOptions::default().set_stored();
 
-    // Short fields: not stored, no fieldnorms
     let short = TextOptions::default().set_indexing_options(indexing_no_norms);
 
     let basename = b.add_text_field("basename", stored_only.clone());
@@ -85,7 +79,6 @@ pub fn build_schema() -> (Schema, FieldHandles) {
     )
 }
 
-/// Extract a text field value from a TantivyDocument, returning empty string if missing.
 pub(crate) fn doc_text(doc: &TantivyDocument, field: Field) -> String {
     doc.get_first(field)
         .and_then(|v| v.as_str())
@@ -93,7 +86,6 @@ pub(crate) fn doc_text(doc: &TantivyDocument, field: Field) -> String {
         .to_string()
 }
 
-/// Extract tags array from the stored JSON field.
 pub(crate) fn extract_tags(doc: &TantivyDocument, tags_stored: Field) -> Vec<String> {
     doc.get_first(tags_stored)
         .and_then(|v| v.as_object())

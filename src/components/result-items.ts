@@ -29,7 +29,6 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
   el.dataset['resultId'] = note.path
 
   const wrapper = document.createElement('div'),
-    // Title
     titleContainer = document.createElement('div')
   titleContainer.className = 'ferrisearch-result__title-container'
 
@@ -68,7 +67,6 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
   titleContainer.append(mtimeSpan)
   wrapper.append(titleContainer)
 
-  // Score breakdown
   if (plugin.settings.showScoreBreakdown && note.scoreBreakdown) {
     const scoreDiv = document.createElement('div')
     scoreDiv.className = 'ferrisearch-result__score'
@@ -92,7 +90,6 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
     wrapper.append(scoreDiv)
   }
 
-  // Folder path
   const notePath = pathWithoutFilename(note.path)
   if (notePath) {
     const folderDiv = document.createElement('div')
@@ -107,7 +104,6 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
     wrapper.append(folderDiv)
   }
 
-  // Excerpt body (reactive)
   const bodyDiv = document.createElement('div')
   bodyDiv.className = 'ferrisearch-result__body'
   bodyDiv.innerHTML = plugin.textProcessor.highlightText(

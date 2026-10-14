@@ -8,9 +8,6 @@ import { injectSettingsUserInterface } from './settings-ui'
 import { injectSettingsWeighting } from './settings-weighting'
 import { type FerrisearchSettings, saveSettings } from './utils'
 
-/**
- * A store to reactively toggle the `showExcerpt` setting on the fly
- */
 export const showExcerpt: Observable<boolean> = new Observable<boolean>(false)
 
 export class SettingsTab extends PluginSettingTab {
@@ -36,7 +33,6 @@ export class SettingsTab extends PluginSettingTab {
       span.innerHTML = `<strong style="color: var(--text-accent)">FERRISEARCH IS DISABLED</strong>`
     }
 
-    // Settings main title
     containerEl.createEl('h1', { text: 'Ferrisearch' })
 
     injectSettingsBehavior(this.plugin, settings, containerEl)
@@ -48,7 +44,6 @@ export class SettingsTab extends PluginSettingTab {
     injectSettingsDanger(this.plugin, settings, containerEl)
     containerEl.createEl('hr')
 
-    //#region Debugging
 
     new Setting(containerEl).setName('Debugging').setHeading()
 
@@ -65,7 +60,6 @@ export class SettingsTab extends PluginSettingTab {
         }),
       )
 
-    //#endregion Debugging
   }
 }
 

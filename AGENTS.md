@@ -24,6 +24,7 @@ Ferrisearch is an Obsidian plugin for full-text search across Markdown notes.
 - Index updates and persisted data: [indexing](docs/indexing.md).
 - Platform selection and engine layout: [architecture](docs/architecture.md).
 - Integrations with other Obsidian plugins: [plugin API](docs/api.md).
+- Result limit proposal: [FERR-7 RFC](docs/rfc/FERR-7-result-limit.md).
 - Local setup and development commands: [development](docs/development.md).
 - Package and prerelease workflow: [releases](docs/releases.md).
 - Benchmark method and recorded results: [performance](docs/performance.md).

@@ -6,15 +6,11 @@ import { createMockResultNote } from '../test-utils/mock-result-note'
 import type { ModalHandle } from './modals'
 import { renderVaultModal } from './vault-modal'
 
-// Flush microtasks and timers
 async function flush(ms = 400) {
-  // Flush microtasks first
   for (let i = 0; i < 5; i++) {
     await Promise.resolve()
   }
-  // Then wait for debounce timers
   await new Promise(r => setTimeout(r, ms))
-  // Flush any remaining microtasks
   for (let i = 0; i < 5; i++) {
     await Promise.resolve()
   }
@@ -105,7 +101,6 @@ describe('renderVaultModal', () => {
           createMockResultNote({ path: 'b.md', basename: 'b' }),
         ],
         { container, handle } = setup({ searchResults: notes }),
-        // Trigger search via input
         input = container.querySelector('input.prompt-input') as HTMLInputElement
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
@@ -120,12 +115,10 @@ describe('renderVaultModal', () => {
       const notes = [createMockResultNote()],
         { container, handle } = setup({ searchResults: notes }),
         input = container.querySelector('input.prompt-input') as HTMLInputElement
-      // First, search
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      // Then clear
       input.value = ''
       input.dispatchEvent(new Event('input'))
       await flush()
@@ -149,11 +142,9 @@ describe('renderVaultModal', () => {
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      // First item should be selected initially
       const firstItem = container.querySelector('[data-result-id="a.md"]')
       expect(firstItem?.classList.contains('is-selected')).toBe(true)
 
-      // Arrow down
       modal.dispatch(Action.ArrowDown)
       const secondItem = container.querySelector('[data-result-id="b.md"]')
       expect(secondItem?.classList.contains('is-selected')).toBe(true)
@@ -247,7 +238,6 @@ describe('renderVaultModal', () => {
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
 
-      // Destroy before debounce fires
       handle.destroy()
       plugin.searchEngine.getSuggestions = vi.fn(() =>
         Promise.resolve([]),

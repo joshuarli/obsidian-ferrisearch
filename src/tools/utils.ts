@@ -41,7 +41,6 @@ const diacriticsRegex = /(?!\u30FC|\u309A|\u3099)\p{Diacritic}/gu
 
 export function removeDiacritics(str: string): string {
   if (!str) return ''
-  // Backtick and caret are mangled by NFD normalization — protect them
   return str
     .replaceAll('`', '\u0000B')
     .replaceAll('^', '\u0000C')
@@ -78,7 +77,6 @@ export function enableVerboseLogging(enable: boolean): void {
   verboseLoggingEnabled = enable
 }
 
-/** Escapes special regex characters in a string */
 export function escapeRegExp(s: string): string {
   return s.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }

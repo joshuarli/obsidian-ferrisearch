@@ -10,6 +10,7 @@ The query builder does not search aliases or tag metadata as fields. Inline tag 
 - Put words in double quotes to require consecutive terms in one field.
 - Combine a text query with `path:fragment` to keep results whose vault-relative path contains `fragment`.
 - Combine a text query with `-path:fragment` to remove results whose path contains `fragment`.
+- Add `ext:md` to keep results whose file extension starts with `md`.
 - Add `-word` to a text query to exclude results whose note text contains `word`.
 
 Path matching ignores case. Prefix searches apply to the title, text, and headings. The search does not use Obsidian's search operators.

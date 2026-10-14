@@ -1,6 +1,4 @@
 import { Notice, normalizePath, Platform, TFile } from 'obsidian'
-// WASM glue code — bundled into main.js (~23KB), used on mobile and non-darwin-arm64 desktop.
-// Build requires: make build-wasm (or build-all)
 import {
   SearchIndex as WasmSearchIndex,
   initSync as wasmInitSync,
@@ -137,7 +135,6 @@ export class SearchEngine {
     } catch (error) {
       console.error('Ferrisearch - Failed to initialize search engine', error)
       if (Platform.isMobileApp) {
-        // No console on mobile — write error to a file
         const msg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error)
         const logPath = `${this.plugin.app.vault.configDir}/plugins/ferrisearch/error.log`
         try {
@@ -347,7 +344,6 @@ export class SearchEngine {
 
     logVerbose(`Found ${results.length} results`, results)
 
-    // Post-filter: extension
     if (query.query.ext.length > 0) {
       results = results.filter(r => {
         const ext = `.${r.path.slice(r.path.lastIndexOf('.') + 1)}`
@@ -355,7 +351,6 @@ export class SearchEngine {
       })
     }
 
-    // Post-filter: path include/exclude
     if (query.query.path.length > 0) {
       results = results.filter(r =>
         query.query.path.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
@@ -373,7 +368,6 @@ export class SearchEngine {
       return results.filter(r => r.path === options.singleFilePath)
     }
 
-    // Downrank folders + tag boost
     logVerbose('searching with downranked folders', settings.downrankedFoldersFilters)
     const tags = query.getTags(),
       filters = settings.downrankedFoldersFilters
@@ -400,7 +394,6 @@ export class SearchEngine {
 
     logVerbose('Filtered results:', results)
 
-    // Exact-term and exclusion filters — use content already returned by Tantivy
     const exactTerms = query.getExactTerms()
     if (exactTerms.length > 0) {
       logVerbose('Filtering with quoted terms:', exactTerms)
@@ -420,7 +413,6 @@ export class SearchEngine {
       })
     }
 
-    // Dedupe
     const seen = new Set<string>()
     results = results.filter(r => {
       if (seen.has(r.path)) return false
@@ -441,13 +433,11 @@ export class SearchEngine {
       const foundWords = [...result.matchedTerms, ...query.getExactTerms(), ...query.getTags()]
       logVerbose('Matching tokens:', foundWords)
 
-      // Use matches computed by Rust (fast regex in native code)
       const matches = result.matches.map(m => ({ match: m.matchText, offset: m.offset }))
       logVerbose(`Matches for note "${result.path}"`, matches)
 
       const rb = result as NativeSearchResultWithBreakdown,
         recency = result.recencyMultiplier ?? 1
-      // Reverse TS adjustments to recover the score before recency
       let base = result.score
       if (rb._tagBoost) base /= 100
       if (rb._folderDownrank) base *= 10
@@ -522,7 +512,6 @@ export class SearchEngine {
       return true
     } catch (error) {
       console.warn('Ferrisearch - Failed to load index blob, will reindex', error)
-      // Re-create fresh WASM index
       this.nativeIndex = new WasmSearchIndex({
         ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
       }) as unknown as NativeSearchIndex

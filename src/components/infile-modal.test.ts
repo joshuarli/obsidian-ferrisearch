@@ -6,7 +6,6 @@ import { createMockResultNote } from '../test-utils/mock-result-note'
 import { renderInFileModal } from './infile-modal'
 import type { ModalHandle } from './modals'
 
-// Flush microtasks and timers
 async function flush(ms = 400) {
   for (let i = 0; i < 5; i++) {
     await Promise.resolve()
@@ -115,7 +114,6 @@ describe('renderInFileModal', () => {
     })
 
     it('renders result items for grouped matches', async () => {
-      // Two matches far apart (>300 chars) → two groups → two result items
       const note = createMockResultNote({
           matches: [
             { match: 'a', offset: 10 },
@@ -134,7 +132,6 @@ describe('renderInFileModal', () => {
     })
 
     it('groups matches within 300 chars into one result item', async () => {
-      // Two matches close together (<300 chars) → one group → one result item
       const note = createMockResultNote({
           matches: [
             { match: 'a', offset: 10 },
@@ -187,11 +184,9 @@ describe('renderInFileModal', () => {
       input.dispatchEvent(new Event('input'))
       await flush()
 
-      // First item selected initially
       const first = container.querySelector('[data-result-id="0"]')
       expect(first?.classList.contains('is-selected')).toBe(true)
 
-      // Arrow down
       modal.dispatch(Action.ArrowDown)
       const second = container.querySelector('[data-result-id="1"]')
       expect(second?.classList.contains('is-selected')).toBe(true)
@@ -233,7 +228,6 @@ describe('renderInFileModal', () => {
       await flush()
 
       modal.dispatch(Action.Enter)
-      // OpenSelection is async — give it a tick
       await flush(50)
       expect(modal.close).toHaveBeenCalled()
 
@@ -297,7 +291,6 @@ describe('renderInFileModal', () => {
       input.value = 'test'
       input.dispatchEvent(new Event('input'))
 
-      // Destroy before debounce fires
       handle.destroy()
       plugin.searchEngine.getSuggestions = vi.fn(() =>
         Promise.resolve([]),

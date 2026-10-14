@@ -24,10 +24,10 @@ pnpm install
 
 `pnpm run build` does not build Rust or WASM artifacts. Use `pnpm run build:all` when you need all three plugin components. The `pnpm run build:wasm` script expects the matching `wasm-bindgen` CLI on `PATH`. `make build-wasm` installs the locked version if needed. The build scripts are defined in [`package.json`](../package.json) and [`build.ts`](../build.ts).
 
-The native CLI harness requires a macOS arm64 native build and `fd`:
+The native CLI harness requires a macOS arm64 native build and `fd`. Its optional `--file` argument prints that file's rank and indexed fields:
 
 ```sh
-pnpm run test-search <markdown-directory> <query> [fuzziness]
+pnpm run test-search <markdown-directory> <query> [fuzziness] [--file <path>]
 ```
 
 See [performance](performance.md) for its benchmark method. Use [releases](releases.md) for packaging and installation commands.

@@ -23,7 +23,6 @@ pub struct DocumentInput {
     pub display_title: String,
     pub aliases: String,
     pub content: String,
-    /// Space-joined headings from all levels (H1-H3). Searched with 5x boost.
     pub headings: String,
     /// Obsidian tags from frontmatter and inline `#tag` syntax, e.g. ["#rust", "#code"].
     /// Stored as JSON for post-search retrieval. Indexed as text but not searched by default.

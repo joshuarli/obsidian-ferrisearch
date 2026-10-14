@@ -12,15 +12,11 @@ use crate::index::{IndexError, IndexManager};
 use crate::schema::{doc_text, extract_tags};
 use crate::types::{FieldScoreBreakdown, MatchInfo, SearchOptions, SearchResult};
 
-/// Parsed query: individual terms and quoted phrases.
 struct ParsedQuery {
     terms: Vec<String>,
     phrases: Vec<Vec<String>>,
 }
 
-/// Parse a query string into individual terms and quoted phrases.
-/// `"foo bar" baz` → phrases: \[\["foo", "bar"\]\], terms: \["baz"\]
-/// Single-word phrases are promoted to terms. Unclosed quotes are treated as terms.
 fn parse_query(input: &str) -> ParsedQuery {
     let mut terms = Vec::new();
     let mut phrases = Vec::new();
@@ -33,7 +29,7 @@ fn parse_query(input: &str) -> ParsedQuery {
         }
 
         if ch == '"' {
-            chars.next(); // consume opening quote
+            chars.next();
             let mut phrase_text = String::new();
             let mut closed = false;
 
@@ -56,7 +52,6 @@ fn parse_query(input: &str) -> ParsedQuery {
                     _ => phrases.push(words),
                 }
             } else {
-                // Unclosed quote: treat contents as individual terms
                 for word in phrase_text.split_whitespace() {
                     terms.push(word.to_lowercase());
                 }
@@ -110,7 +105,6 @@ impl IndexManager {
             return Ok(Vec::new());
         }
 
-        // All individual words (terms + phrase words) for matched_terms / highlighting
         let all_words: Vec<String> = parsed
             .terms
             .iter()
@@ -118,7 +112,6 @@ impl IndexManager {
             .cloned()
             .collect();
 
-        // Pre-compile the match extractor for exact term highlighting
         let matcher = MatchExtractor::new(&all_words, self.ignore_diacritics);
         let mp = MatchParams {
             query_words: &all_words,
@@ -128,7 +121,6 @@ impl IndexManager {
         };
 
         let (results, effective_fuzziness) = if fuzzy_only {
-            // Fuzzy-only mode: skip exact+prefix, go straight to fuzzy on all fields
             let query = self.build_search_query(&parsed, options, fuzziness, true);
             let r = searcher.search(
                 &*query,
@@ -156,11 +148,10 @@ impl IndexManager {
             (results, eff_fuzz)
         };
 
-        // Recency boost (applied post-hoc)
         let recency_decay = match options.recency_boost.as_str() {
-            "1" => Some(-3.0_f64), // Day
-            "2" => Some(-0.3_f64), // Week
-            "3" => Some(-0.1_f64), // Month
+            "1" => Some(-3.0_f64),
+            "2" => Some(-0.3_f64),
+            "3" => Some(-0.1_f64),
             _ => None,
         };
         let now = now_epoch_millis();
@@ -202,9 +193,6 @@ impl IndexManager {
         Ok(search_results)
     }
 
-    /// Build the complete search query. When `fuzziness > 0`, fuzzy sub-queries
-    /// are added on the content field only (typos in prose, not titles/paths).
-    /// When `fuzzy_only` is true, only fuzzy queries are emitted (on all fields).
     fn build_search_query(
         &self,
         parsed: &ParsedQuery,
@@ -212,7 +200,6 @@ impl IndexManager {
         fuzziness: f32,
         fuzzy_only: bool,
     ) -> Box<dyn Query> {
-        // For each term: exact on all fields, prefix on non-directory, fuzzy on content
         let mut must_clauses: Vec<(Occur, Box<dyn Query>)> = parsed
             .terms
             .iter()
@@ -227,8 +214,6 @@ impl IndexManager {
                         let mut queries: Vec<(Occur, Box<dyn Query>)> = Vec::with_capacity(3);
 
                         if fuzzy_only {
-                            // Fuzzy-only mode: only fuzzy queries, on all searched fields.
-                            // No exact or prefix queries — only typo-tolerant matching.
                             let dist = fuzzy_distance(lower, fuzziness);
                             if dist > 0 {
                                 queries.push((
@@ -240,7 +225,6 @@ impl IndexManager {
                                 ));
                             }
                         } else {
-                            // Exact match (all fields)
                             queries.push((
                                 Occur::Should,
                                 Box::new(BoostQuery::new(
@@ -252,7 +236,6 @@ impl IndexManager {
                                 )),
                             ));
 
-                            // Prefix match (skip directory — exact is sufficient for paths)
                             if *name != "directory" && lower.len() >= options.prefix_length as usize
                             {
                                 queries.push((
@@ -264,7 +247,6 @@ impl IndexManager {
                                 ));
                             }
 
-                            // Fuzzy match (content only)
                             if *name == "content" && fuzziness > 0.0 {
                                 let dist = fuzzy_distance(lower, fuzziness);
                                 if dist > 0 {
@@ -290,7 +272,6 @@ impl IndexManager {
             })
             .collect();
 
-        // Phrase queries: each phrase must match in at least one field
         for phrase_words in &parsed.phrases {
             let field_queries: Vec<(Occur, Box<dyn Query>)> = self
                 .fields
@@ -318,7 +299,6 @@ impl IndexManager {
 
         let mut query: Box<dyn Query> = Box::new(BooleanQuery::new(must_clauses));
 
-        // Optional single-file filter
         if let Some(ref file_path) = options.single_file_path {
             let path_term = Term::from_field_text(self.fields.path, file_path);
             query = Box::new(BooleanQuery::new(vec![
@@ -345,7 +325,6 @@ impl IndexManager {
 
         let content = doc_text(&doc, f.content);
         let matches = if mp.fuzzy_only {
-            // Fuzzy-only: only typo-variant matches (distance > 0), full distance
             find_fuzzy_matches(
                 &content,
                 mp.query_words,
@@ -355,9 +334,6 @@ impl IndexManager {
         } else {
             let mut m = mp.matcher.find_matches(&content);
             if mp.fuzziness > 0.0 {
-                // Also highlight close typos (cap at distance 1 to avoid false positives
-                // like "Wonder" matching "powder"). The Tantivy query uses the full
-                // distance to FIND documents; this only affects which words get highlighted.
                 let fuzzy = find_fuzzy_matches(
                     &content,
                     mp.query_words,
@@ -384,10 +360,6 @@ impl IndexManager {
             matches,
         })
     }
-    /// Compute per-field score breakdown for a single document using Tantivy's explain API.
-    /// For each searched field, explains each individual sub-query (exact, prefix, fuzzy)
-    /// separately and sums the scores. Only called when `SearchOptions::score_breakdown`
-    /// is true.
     fn explain_per_field(
         &self,
         searcher: &Searcher,
@@ -403,8 +375,6 @@ impl IndexManager {
             let boost = options.field_boosts.for_field(name);
             let mut field_score = 0.0_f64;
 
-            // Individual terms — explain each sub-query independently to avoid
-            // Tantivy seek-ordering issues with BooleanQuery::explain.
             for lower in &parsed.terms {
                 let term = Term::from_field_text(*field, lower);
 
@@ -420,7 +390,6 @@ impl IndexManager {
                         }
                     }
                 } else {
-                    // Exact
                     let q: Box<dyn Query> = Box::new(BoostQuery::new(
                         Box::new(TermQuery::new(term.clone(), IndexRecordOption::WithFreqs)),
                         boost,
@@ -429,7 +398,6 @@ impl IndexManager {
                         field_score += expl.value() as f64;
                     }
 
-                    // Prefix (skip directory)
                     if *name != "directory" && lower.len() >= options.prefix_length as usize {
                         let q: Box<dyn Query> = Box::new(BoostQuery::new(
                             Box::new(PhrasePrefixQuery::new(vec![term.clone()])),
@@ -440,7 +408,6 @@ impl IndexManager {
                         }
                     }
 
-                    // Fuzzy (content only)
                     if *name == "content" && fuzziness > 0.0 {
                         let dist = fuzzy_distance(lower, fuzziness);
                         if dist > 0 {
@@ -456,7 +423,6 @@ impl IndexManager {
                 }
             }
 
-            // Phrase queries
             for phrase_words in &parsed.phrases {
                 let terms: Vec<Term> = phrase_words
                     .iter()
@@ -482,7 +448,6 @@ impl IndexManager {
     }
 }
 
-/// Parameters for extracting match highlights from document content.
 struct MatchParams<'a> {
     query_words: &'a [String],
     matcher: &'a MatchExtractor,
@@ -490,16 +455,10 @@ struct MatchParams<'a> {
     fuzzy_only: bool,
 }
 
-/// Maximum number of matches to extract per document.
 const MAX_MATCHES: usize = 100;
 
-/// Fuzziness used for match highlighting in normal fuzzy modes (fuzziness "1"/"2").
-/// Capped at 0.1 (→ max edit distance 1) to only highlight close typos like "pwoder",
-/// not distant words like "Wonder". The Tantivy search query uses the full fuzziness
-/// to find documents; this only limits which content words get highlighted.
 const MATCH_FUZZINESS: f32 = 0.1;
 
-/// Pre-compiled match extractor. Built once per search, reused across all results.
 struct MatchExtractor {
     re: Option<regex::Regex>,
     ignore_diacritics: bool,
@@ -514,12 +473,10 @@ impl MatchExtractor {
             };
         }
 
-        // Sort by length descending and dedup (longer matches take priority)
         let mut sorted: Vec<&str> = terms.iter().map(|s| s.as_str()).collect();
         sorted.sort_by_key(|b| std::cmp::Reverse(b.len()));
         sorted.dedup();
 
-        // Simple case-insensitive alternation — no \b needed for global find-all
         let pattern = sorted
             .iter()
             .map(|t| regex::escape(t))
@@ -543,7 +500,6 @@ impl MatchExtractor {
             return Vec::new();
         }
 
-        // Fast path: skip diacritics stripping if content is ASCII
         let needs_diacritics = self.ignore_diacritics && !content.is_ascii();
 
         let (stripped, byte_map) = if needs_diacritics {
@@ -563,7 +519,6 @@ impl MatchExtractor {
                 break;
             }
 
-            // Map byte offsets back to original content positions
             let (orig_start, orig_end) = if let Some(ref map) = byte_map {
                 let start = map[m.start()];
                 let end = if m.end() < map.len() {
@@ -576,14 +531,12 @@ impl MatchExtractor {
                 (m.start(), m.end())
             };
 
-            // Advance UTF-16 position counter through original content
             utf16_pos += content[last_orig_byte..orig_start]
                 .chars()
                 .map(|c| c.len_utf16() as u32)
                 .sum::<u32>();
             last_orig_byte = orig_start;
 
-            // Extract matched text from original content (preserves case and diacritics)
             let match_text = content[orig_start..orig_end].trim();
 
             if !match_text.is_empty() {
@@ -598,20 +551,15 @@ impl MatchExtractor {
     }
 }
 
-/// Strip diacritics from text and return a byte offset mapping.
-/// `byte_map[i]` = the byte position in the original text corresponding to
-/// byte position `i` in the stripped text.
 fn strip_diacritics_with_mapping(text: &str) -> (String, Vec<usize>) {
     let mut result = String::new();
     let mut byte_map: Vec<usize> = Vec::new();
 
     for (orig_start, orig_char) in text.char_indices() {
-        // NFD decompose this character, then filter combining marks
         for nfd_char in orig_char.nfd() {
             if unicode_normalization::char::is_combining_mark(nfd_char) {
                 continue;
             }
-            // Each byte of this base character maps back to the original character
             for _ in 0..nfd_char.len_utf8() {
                 byte_map.push(orig_start);
             }
@@ -622,8 +570,6 @@ fn strip_diacritics_with_mapping(text: &str) -> (String, Vec<usize>) {
     (result, byte_map)
 }
 
-/// Optimal String Alignment distance (Damerau-Levenshtein variant).
-/// Adjacent transpositions count as 1 edit, matching Tantivy's `transposition_cost_one=true`.
 #[allow(clippy::needless_range_loop)]
 fn osa_distance(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
@@ -661,8 +607,6 @@ fn osa_distance(a: &str, b: &str) -> usize {
     dp[n][m]
 }
 
-/// Scan content for words that are within fuzzy edit distance of the query terms
-/// but NOT exact matches (distance > 0). Returns match positions for typo-variant words.
 fn find_fuzzy_matches(
     content: &str,
     terms: &[String],
@@ -673,7 +617,6 @@ fn find_fuzzy_matches(
         return Vec::new();
     }
 
-    // Pre-compute max distances
     let term_dists: Vec<(&str, u8)> = terms
         .iter()
         .map(|t| (t.as_str(), fuzzy_distance(t, fuzziness)))
@@ -684,7 +627,6 @@ fn find_fuzzy_matches(
         return Vec::new();
     }
 
-    // Match word-like tokens (everything that's not a separator)
     let word_re = regex::Regex::new(r"[^\p{P}\p{Z}\p{Cc}\p{S}]+").unwrap();
 
     let needs_diacritics = ignore_diacritics && !content.is_ascii();
@@ -707,7 +649,6 @@ fn find_fuzzy_matches(
 
         let word_lower = word_match.as_str().to_lowercase();
 
-        // Check each query term for a fuzzy (non-exact) match
         let is_fuzzy_match = term_dists.iter().any(|(term, max_dist)| {
             let dist = osa_distance(&word_lower, term);
             dist > 0 && dist <= *max_dist as usize
@@ -717,7 +658,6 @@ fn find_fuzzy_matches(
             continue;
         }
 
-        // Map byte offsets back to original content
         let (orig_start, orig_end) = if let Some(ref map) = byte_map {
             let start = map[word_match.start()];
             let end = if word_match.end() < map.len() {
@@ -764,7 +704,6 @@ fn now_epoch_millis() -> f64 {
     }
 }
 
-/// Determine fuzzy edit distance based on term length and fuzziness level.
 fn fuzzy_distance(term: &str, fuzziness: f32) -> u8 {
     let len = term.len();
     if len <= 3 {
@@ -940,12 +879,12 @@ mod tests {
 
     #[test]
     fn osa_distance_values() {
-        assert_eq!(osa_distance("powder", "powder"), 0); // exact
-        assert_eq!(osa_distance("powder", "pwoder"), 1); // transposition
-        assert_eq!(osa_distance("powder", "powdr"), 1); // deletion
-        assert_eq!(osa_distance("powder", "poweder"), 1); // insertion
-        assert_eq!(osa_distance("powder", "pawder"), 1); // substitution
-        assert_eq!(osa_distance("restaurant", "restaurnt"), 1); // deletion
+        assert_eq!(osa_distance("powder", "powder"), 0);
+        assert_eq!(osa_distance("powder", "pwoder"), 1);
+        assert_eq!(osa_distance("powder", "powdr"), 1);
+        assert_eq!(osa_distance("powder", "poweder"), 1);
+        assert_eq!(osa_distance("powder", "pawder"), 1);
+        assert_eq!(osa_distance("restaurant", "restaurnt"), 1);
         assert_eq!(osa_distance("", "abc"), 3);
         assert_eq!(osa_distance("abc", ""), 3);
         assert_eq!(osa_distance("", ""), 0);
@@ -967,7 +906,6 @@ mod tests {
 
     #[test]
     fn fuzziness2_finds_pwoder() {
-        // fuzziness "2" (standard fuzzy) should find "pwoder" when searching "powder"
         let mgr = setup_index(vec![make_doc(
             "typo.md",
             "typo",
@@ -983,7 +921,6 @@ mod tests {
             "fuzziness=2 should find 'pwoder' when searching 'powder'"
         );
         assert_eq!(results[0].path, "typo.md");
-        // Matches should include "pwoder" as a fuzzy match
         let match_texts: Vec<&str> = results[0]
             .matches
             .iter()
@@ -998,8 +935,6 @@ mod tests {
 
     #[test]
     fn fuzziness2_matches_both_exact_and_fuzzy() {
-        // With fuzziness "2", matches should include both exact ("powder") and close typos ("pwoder")
-        // but NOT distant words like "Wonder" (distance 2) — match extraction caps at distance 1.
         let mgr = setup_index(vec![make_doc(
             "recipe.md",
             "recipe",
@@ -1041,7 +976,6 @@ mod tests {
             fuzziness: "3".into(),
             ..Default::default()
         };
-        // "restaurant" should fuzzy-match the typo "restaurnt"
         let results = mgr.search("restaurant", &opts).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].path, "a.md");
@@ -1049,8 +983,6 @@ mod tests {
 
     #[test]
     fn fuzzy_only_finds_typo_in_mixed_doc() {
-        // Document contains both "powder" (exact) and "pwoder" (typo).
-        // Fuzzy-only should find the document and match only the typo, not the exact word.
         let mgr = setup_index(vec![make_doc(
             "recipe.md",
             "recipe",
@@ -1063,7 +995,6 @@ mod tests {
         let results = mgr.search("powder", &opts).unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].path, "recipe.md");
-        // Matches should point to "pwoder" (the typo), NOT "powder" (exact)
         let match_texts: Vec<&str> = results[0]
             .matches
             .iter()
@@ -1091,26 +1022,20 @@ mod tests {
             ..Default::default()
         };
         let results = mgr.search("powder", &opts).unwrap();
-        // Both docs are found by FuzzyTermQuery (distance 0 and 1 both within dist 2)
         assert_eq!(results.len(), 2);
-        // The typo doc should have a match for "pwoder"
         let typo_doc = results.iter().find(|r| r.path == "typo.md").unwrap();
         assert_eq!(typo_doc.matches[0].match_text, "pwoder");
-        // The exact doc should have NO matches (exact is excluded from fuzzy match extraction)
         let exact_doc = results.iter().find(|r| r.path == "exact.md").unwrap();
         assert!(exact_doc.matches.is_empty());
     }
 
     #[test]
     fn fuzzy_only_skips_short_terms() {
-        // With fuzzy-only, short terms (<=3 chars) get distance 0 and produce
-        // no fuzzy queries, so they won't match anything.
         let mgr = setup_index(vec![make_doc("a.md", "a", "the fox is here")]);
         let opts = SearchOptions {
             fuzziness: "3".into(),
             ..Default::default()
         };
-        // "fox" is 3 chars → fuzzy_distance returns 0 → no fuzzy query → no results
         assert!(mgr.search("fox", &opts).unwrap().is_empty());
     }
 
@@ -1170,8 +1095,6 @@ mod tests {
 
     #[test]
     fn disabled_fields_not_searched() {
-        // aliases, tags_text, and unmarked_tags are indexed but not in text_fields(),
-        // so searching for their content alone should return no results.
         let mut doc = make_doc("a.md", "a", "body text");
         doc.aliases = "nickname".into();
         doc.tags = vec!["#programming".into()];
@@ -1241,7 +1164,6 @@ mod tests {
         );
     }
 
-    // ── Phrase query tests ─────────────────────────────────────────────
 
     #[test]
     fn phrase_basic_match() {
@@ -1323,7 +1245,6 @@ mod tests {
     #[test]
     fn unclosed_quote_as_terms() {
         let mgr = setup_index(vec![make_doc("a.md", "a", "hello beautiful world")]);
-        // Unclosed quote: words treated as individual terms (AND, not phrase)
         let results = mgr
             .search("\"hello world", &SearchOptions::default())
             .unwrap();
@@ -1346,8 +1267,6 @@ mod tests {
     #[test]
     fn phrase_across_camel_case_boundary() {
         let mgr = setup_index(vec![make_doc("a.md", "a", "myVariable is great")]);
-        // "variable is" matches because sub-token "variable" (pos 0) and "is" (pos 1)
-        // are at consecutive positions
         let results = mgr
             .search("\"variable is\"", &SearchOptions::default())
             .unwrap();
@@ -1367,7 +1286,6 @@ mod tests {
         assert!(results[0].matched_terms.contains(&"fox".into()));
     }
 
-    // ── Query parser tests ─────────────────────────────────────────────
 
     #[test]
     fn parse_query_simple_terms() {
@@ -1425,7 +1343,6 @@ mod tests {
         assert_eq!(p.phrases, vec![vec!["foo", "bar"]]);
     }
 
-    // ── find_matches tests ────────────────────────────────────────────
 
     fn extract(content: &str, terms: &[String], ignore_diacritics: bool) -> Vec<MatchInfo> {
         MatchExtractor::new(terms, ignore_diacritics).find_matches(content)
@@ -1478,14 +1395,12 @@ mod tests {
     fn find_matches_diacritics() {
         let matches = extract("café résumé", &["cafe".into(), "resume".into()], true);
         assert_eq!(matches.len(), 2);
-        // Original text preserved (with diacritics)
         assert_eq!(matches[0].match_text, "café");
         assert_eq!(matches[1].match_text, "résumé");
     }
 
     #[test]
     fn find_matches_ascii_skips_diacritics() {
-        // ASCII content with ignore_diacritics=true should still work (fast path)
         let matches = extract("hello world", &["hello".into()], true);
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].match_text, "hello");
@@ -1493,19 +1408,16 @@ mod tests {
 
     #[test]
     fn find_matches_utf16_offsets() {
-        // Each CJK character is 1 UTF-16 code unit but 3 UTF-8 bytes
         let matches = extract("世界hello", &["hello".into()], false);
         assert_eq!(matches.len(), 1);
-        // "世界" = 2 chars, 2 UTF-16 code units
         assert_eq!(matches[0].offset, 2);
     }
 
     #[test]
     fn find_matches_emoji_utf16_offsets() {
-        // 😀 is 4 UTF-8 bytes but 2 UTF-16 code units (surrogate pair)
         let matches = extract("😀hello", &["hello".into()], false);
         assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].offset, 2); // surrogate pair = 2 UTF-16 code units
+        assert_eq!(matches[0].offset, 2);
     }
 
     #[test]
@@ -1541,7 +1453,6 @@ mod tests {
         assert!(match_texts.contains(&"test"));
     }
 
-    // ── Score breakdown tests ────────────────────────────────────────
 
     #[test]
     fn score_breakdown_disabled_by_default() {
@@ -1565,7 +1476,6 @@ mod tests {
         let results = mgr.search("hello", &opts).unwrap();
         assert!(!results.is_empty());
         let fs = results[0].field_scores.as_ref().unwrap();
-        // "hello" appears in display_title and content — both should have positive scores
         assert!(
             fs.display_title > 0.0,
             "display_title should be > 0, got {}",
@@ -1595,7 +1505,6 @@ mod tests {
             "headings should be > 0, got {}",
             fs.headings
         );
-        // "important" is not in display_title
         assert_eq!(fs.display_title, 0.0);
     }
 

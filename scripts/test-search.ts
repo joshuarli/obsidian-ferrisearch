@@ -1,17 +1,4 @@
 #!/usr/bin/env -S deno run --allow-env --allow-ffi --allow-read --allow-run --allow-write
-/**
- * CLI test harness for the native NAPI search engine.
- * Indexes .md files from any directory, searches, and benchmarks query latency.
- *
- * Usage:
- *   pnpm run test-search <directory> <query> [fuzziness] [--file <path>]
- *
- * Examples:
- *   pnpm run test-search ~/my-vault powder 2
- *   pnpm run test-search ~/my-vault powder 1 --file baking/Ingredients/Dairy.md
- *   pnpm run test-search ~/my-vault "github actions" 0
- */
-
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,7 +16,6 @@ if (!nativeFile?.isFile) {
   Deno.exit(1);
 }
 
-// ── Parse args ──────────────────────────────────────────────────────────
 const args = Deno.args;
 let dirArg: string | undefined;
 let query: string | undefined;
@@ -63,7 +49,6 @@ if (!vaultStat?.isDirectory) {
   Deno.exit(1);
 }
 
-// ── Collect .md files via fd ─────────────────────────────────────────────
 async function collectMdFiles(): Promise<string[]> {
   const output = await new Deno.Command("fd", {
     args: ["-e", "md", "-t", "f", ".", VAULT_DIR],
@@ -85,7 +70,6 @@ const mdPaths = await collectMdFiles();
 const crawlMs = performance.now() - crawlStart;
 console.log(`Found ${mdPaths.length} .md files in ${crawlMs.toFixed(1)}ms`);
 
-// ── Read files + build document inputs (parallel async I/O) ─────────────
 const readStart = performance.now();
 const docs = await Promise.all(
   mdPaths.map(async (relPath) => {
@@ -96,7 +80,6 @@ const docs = await Promise.all(
     ]);
     const basename = path.basename(relPath, ".md");
 
-    // Extract headings: ATX (# Heading) and setext (Heading\n=== or Heading\n---)
     const atxHeadings = (content.match(/^#{1,3}\s+(.+)$/gm) || [])
       .map((h) => h.replace(/^#{1,3}\s+/, ""));
     const setextHeadings = (content.match(/^(.+)\n[=-]{2,}$/gm) || [])
@@ -123,14 +106,11 @@ const docs = await Promise.all(
 const readMs = performance.now() - readStart;
 console.log(`Read ${docs.length} files in ${readMs.toFixed(1)}ms`);
 
-// ── Index ───────────────────────────────────────────────────────────────
 const native = require(NODE_FILE);
 const tmpDir = await Deno.makeTempDir({ prefix: "ferrisearch-test-" });
 const indexPath = path.join(tmpDir, "tantivy-index");
 const index = new native.SearchIndex(indexPath, { ignoreDiacritics: true });
 
-// Match the production startup path: bulk insertion avoids per-document upsert
-// deletes, and commitNoMerge avoids blocking startup on a force merge.
 const indexStart = performance.now();
 const addStart = performance.now();
 index.addDocumentsBulk(docs);
@@ -144,7 +124,6 @@ console.log(
 );
 console.log(`Total: ${(crawlMs + readMs + indexMs).toFixed(1)}ms\n`);
 
-// ── Search ──────────────────────────────────────────────────────────────
 const opts = {
   fuzziness,
   prefixLength: 1,
@@ -211,12 +190,10 @@ if (results.length === 0) {
   }
 }
 
-// ── Debug single file ───────────────────────────────────────────────────
 if (debugFile) {
   console.log("\n" + "─".repeat(70));
   console.log(`\nDebug: ${debugFile}`);
 
-  // Search with a high limit to find the file's true rank and score
   const allResults: SearchResult[] = index.search(query, { ...opts, limit: 500 });
   const idx = allResults.findIndex((r) => r.path === debugFile);
 
@@ -226,7 +203,6 @@ if (debugFile) {
     console.log("  No match for this file.");
   }
 
-  // Show indexed doc fields for inspection
   const doc = docs.find((d) => d.path === debugFile);
   if (doc) {
     console.log("\n  Indexed fields:");
@@ -247,11 +223,9 @@ if (debugFile) {
 
 console.log("\n" + "─".repeat(70));
 
-// ── Benchmark ───────────────────────────────────────────────────────────
 const RUNS = 100;
 const latencies = new Float64Array(RUNS);
 
-// Warm up (5 runs, discarded)
 for (let i = 0; i < 5; i++) index.search(query, opts);
 
 for (let i = 0; i < RUNS; i++) {
@@ -273,6 +247,5 @@ console.log(`  mean:   ${mean.toFixed(3)}ms`);
 console.log(`  stddev: ${stddev.toFixed(3)}ms`);
 console.log(`  3σ:     ${(mean + 3 * stddev).toFixed(3)}ms`);
 
-// Cleanup
 index.close();
 await Deno.remove(tmpDir, { recursive: true });

@@ -35,14 +35,14 @@ describe('Observable', () => {
     const obs = new Observable('a'),
       spy = vi.fn(() => {}) as (v: string) => void,
       unsub = obs.subscribe(spy)
-    expect(spy).toHaveBeenCalledTimes(1) // Initial
+    expect(spy).toHaveBeenCalledTimes(1)
 
     obs.set('b')
     expect(spy).toHaveBeenCalledTimes(2)
 
     unsub()
     obs.set('c')
-    expect(spy).toHaveBeenCalledTimes(2) // No more calls
+    expect(spy).toHaveBeenCalledTimes(2)
   })
 
   it('supports multiple independent subscribers', () => {
@@ -53,31 +53,27 @@ describe('Observable', () => {
     obs.subscribe(spy2)
 
     obs.set(1)
-    expect(spy1).toHaveBeenCalledTimes(2) // Initial + set
+    expect(spy1).toHaveBeenCalledTimes(2)
     expect(spy2).toHaveBeenCalledTimes(2)
 
     unsub1()
     obs.set(2)
-    expect(spy1).toHaveBeenCalledTimes(2) // Stopped
-    expect(spy2).toHaveBeenCalledTimes(3) // Still going
+    expect(spy1).toHaveBeenCalledTimes(2)
+    expect(spy2).toHaveBeenCalledTimes(3)
   })
 
   it('handles unsubscribe during set() iteration safely', () => {
     const obs = new Observable(0)
     let unsub2: (() => void) | null = null
 
-    // First subscriber removes the second
     obs.subscribe(() => {
       if (unsub2) unsub2()
     })
     const spy2 = vi.fn(() => {}) as (v: number) => void
     unsub2 = obs.subscribe(spy2)
 
-    // Spy2 was called once (initial subscribe call)
     expect(spy2).toHaveBeenCalledTimes(1)
 
-    // This set() triggers subscriber 1 which unsubs subscriber 2
-    // Should not throw
     obs.set(1)
   })
 })

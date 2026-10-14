@@ -9,8 +9,6 @@ pub struct FerrisearchTokenizer {
 
 impl FerrisearchTokenizer {
     pub fn new() -> Self {
-        // \p{P} = punctuation, \p{Z} = separators/spaces,
-        // \p{Cc} = control chars (\t\n\r), \p{S} = symbols (|^=<>~ etc.)
         Self {
             separator_re: regex::Regex::new(r"[\p{P}\p{Z}\p{Cc}\p{S}]+")
                 .expect("Invalid separator regex"),
@@ -31,9 +29,6 @@ impl Tokenizer for FerrisearchTokenizer {
         let mut tokens = Vec::new();
         let mut position = 0;
 
-        // For ASCII text, the configured Unicode separator classes cover every
-        // byte that is not an ASCII letter or digit. Avoid the Unicode regex
-        // engine for the common markdown path.
         if text.is_ascii() {
             let mut segment_start = 0;
             for (byte_idx, byte) in text.bytes().enumerate() {
@@ -92,9 +87,6 @@ fn emit_tokens(tokens: &mut Vec<Token>, segment: &str, offset_from: usize, posit
         ..Default::default()
     });
 
-    // CamelCase sub-tokens share the same position as the parent so that
-    // phrase queries still work across camelCase boundaries. Scan the segment
-    // in place so ordinary prose does not allocate a temporary Vec<String>.
     if segment.is_ascii() {
         let mut part_start = 0;
         let mut prev_lower = false;
@@ -205,7 +197,6 @@ impl TokenStream for FerrisearchTokenStream {
 }
 
 
-// ── Diacritic filter ────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub struct DiacriticFilter;
@@ -442,7 +433,6 @@ mod tests {
         while stream.advance() {
             tokens.push((stream.token().text.clone(), stream.token().position));
         }
-        // "foobar", "foo", "bar" all at position 0; "baz" at position 1
         assert!(tokens.contains(&("foobar".into(), 0)));
         assert!(tokens.contains(&("foo".into(), 0)));
         assert!(tokens.contains(&("bar".into(), 0)));

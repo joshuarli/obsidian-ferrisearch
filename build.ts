@@ -40,12 +40,10 @@ try {
   Deno.exit(1)
 }
 
-// Copy static assets to dist/
 mkdirSync('./dist', { recursive: true })
 copyFileSync('manifest.json', 'dist/manifest.json')
 copyFileSync('assets/styles.css', 'dist/styles.css')
 
-// Copy WASM binary if it exists (built by: make build-wasm)
 const wasmBinary = 'wasm/pkg/ferrisearch_wasm_bg.wasm'
 if (existsSync(wasmBinary)) {
   copyFileSync(wasmBinary, 'dist/ferrisearch_wasm_bg.wasm')

@@ -10,7 +10,6 @@ import { type FerrisearchSettings, isPluginDisabled } from './settings/utils'
 import { TextProcessor } from './tools/text-processing'
 import { logVerbose } from './tools/utils'
 
-// --- Public API (exposed on globalThis.ferrisearch) ---
 
 interface ResultNoteApi {
   score: number
@@ -67,7 +66,6 @@ function registerAPI(plugin: FerrisearchPlugin): void {
   plugin.app.plugins.plugins.ferrisearch.api = api
 }
 
-// --- Plugin ---
 
 export default class FerrisearchPlugin extends Plugin {
   public override settings: FerrisearchSettings = getDefaultSettings()
@@ -97,17 +95,14 @@ export default class FerrisearchPlugin extends Plugin {
       return
     }
 
-    // Initialize native search engine
     await this.searchEngine.initialize()
 
     registerAPI(this)
 
-    // Always add ribbon button
     this.addRibbonIcon('search', 'Ferrisearch', () => {
       new FerrisearchVaultModal(this).open()
     })
 
-    // Commands to display Ferrisearch modals
     this.addCommand({
       id: 'show-modal',
       name: 'Vault search',
@@ -129,7 +124,6 @@ export default class FerrisearchPlugin extends Plugin {
     const searchEngine = this.searchEngine
 
     this.app.workspace.onLayoutReady(async () => {
-      // Listeners to keep the search index up-to-date
       this.registerEvent(
         this.app.vault.on('create', file => {
           if (!(file instanceof TFile)) return
@@ -178,7 +172,6 @@ export default class FerrisearchPlugin extends Plugin {
     // @ts-expect-error
     delete globalThis.ferrisearch
 
-    // Save sidecar + blob (WASM) and close the index
     await this.searchEngine.saveSidecar()
     await this.searchEngine.saveIndexBlob()
     this.searchEngine.close()
@@ -190,13 +183,11 @@ export default class FerrisearchPlugin extends Plugin {
       files = this.app.vault.getFiles().filter(f => this.notesIndexer.isFileIndexable(f.path))
     console.debug(`Ferrisearch - ${files.length} files total`)
 
-    // Try to load cached index (blob for WASM users, sidecar-only for native)
     const tCache = performance.now()
     let hasCache: boolean
     if (searchEngine.isNative) {
       hasCache = await searchEngine.loadSidecar()
     } else {
-      // WASM: try loading the serialized index blob + sidecar
       hasCache = await searchEngine.loadIndexBlob()
       if (hasCache) {
         await searchEngine.loadSidecar()
@@ -252,7 +243,6 @@ export default class FerrisearchPlugin extends Plugin {
     }
     notifyOnIndexed()
 
-    // Pre-warm term dictionaries so the first search is fast
     this.searchEngine.warmUp()
   }
 
@@ -264,7 +254,6 @@ export default class FerrisearchPlugin extends Plugin {
       await this.app.vault.adapter.write(logPath, `[${timestamp}]\n${msg}\n`)
       new Notice('Ferrisearch: error logged to .obsidian/plugins/ferrisearch/error.log', 10_000)
     } catch {
-      // Adapter may not be ready — nothing we can do
     }
   }
 }

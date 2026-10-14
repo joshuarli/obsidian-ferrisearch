@@ -1,0 +1,93 @@
+Prefix: FERR
+Next: 11
+
+### FERR-1 · P1 · Apply filters and ranking boosts before limiting search results
+
+- **Area:** Search fields
+- **Where:** `src/search/search-engine.ts:322-414`; `src/search/query.ts:33-43`; `crates/ferrisearch-core/src/search.rs:123-148`
+- **Problem:** The core returns at most `resultLimit` documents before the TypeScript layer applies extension, path, quoted-term, and text exclusion filters or tag and folder boosts. A qualifying result outside that initial set is omitted, and a tag match cannot raise its score into the final results. The query parser also records `-ext:` exclusions that the search engine never applies.
+- **Recommendation:** Apply every parsed query filter and ranking adjustment before selecting the final `resultLimit` documents.
+- **Fix with:** none
+- **Effort:** M
+
+### FERR-2 · P2 · Render note titles and paths as text before highlighting
+
+- **Area:** Security
+- **Where:** `src/components/result-items.ts:38-46,100-103`; `src/tools/text-processing.ts:13-24`
+- **Problem:** Note titles and folder paths reach `innerHTML` without HTML escaping. A focused DOM proof showed a title containing `<img src=x onerror=...>` becomes an image element with an event-handler attribute in the result row. Obsidian's content security policy was not verified, so handler execution is unproven.
+- **Recommendation:** Build highlights with text nodes and elements, or escape note text before adding highlight markup.
+- **Fix with:** none
+- **Effort:** S
+
+### FERR-3 · P2 · Preserve reindex requests queued during a refresh
+
+- **Area:** Concurrency
+- **Where:** `src/notes-indexer.ts:17-24`
+- **Problem:** `refreshIndex()` snapshots queued notes, awaits document reads, then clears the entire queue. A modification queued during that await is cleared without being indexed. A focused reproduction expected two reads but observed only one.
+- **Recommendation:** Remove only the entries handled by the current refresh, leaving later requests queued for the next refresh.
+- **Fix with:** lifecycle-concurrency
+- **Effort:** S
+
+### FERR-4 · P2 · Bind the exposed refresh method to its indexer
+
+- **Area:** Architecture
+- **Where:** `src/main.ts:49-62`; `src/notes-indexer.ts:17-24`; `docs/api.md`
+- **Problem:** The API stores `plugin.notesIndexer.refreshIndex` as a bare function. Calling `api.refreshIndex()` rejects with `TypeError` because `NotesIndexer.refreshIndex()` reads `this.notesToReindex` and `this.plugin`. A focused reproduction confirmed the failure, and the API docs already describe it.
+- **Recommendation:** Expose a wrapper that calls `plugin.notesIndexer.refreshIndex()`.
+- **Fix with:** api-surface-and-module-boundaries
+- **Effort:** S
+
+### FERR-5 · P2 · Remove renamed notes when they leave the Markdown index
+
+- **Area:** Data
+- **Where:** `src/main.ts:157-163`; `src/notes-indexer.ts:27-29`
+- **Problem:** The rename handler removes the old path only when the new path ends in `.md`. Renaming an indexed Markdown note to another extension leaves its old document in the index, so searches can return a path that no longer exists.
+- **Recommendation:** Remove the old indexed path for every rename, then add the new path only when it is indexable.
+- **Fix with:** none
+- **Effort:** S
+
+### FERR-6 · P2 · Parse query terms with the index tokenizer
+
+- **Area:** Search fields
+- **Where:** `crates/ferrisearch-core/src/search.rs:20-74,212-213`; `crates/ferrisearch-core/src/tokenizer.rs:13,28-40`
+- **Problem:** The index tokenizer splits punctuation and symbols, but the query parser splits terms only on whitespace and passes each term directly to Tantivy. Queries such as `C++` or `foo-bar` therefore do not use the same tokens as indexed notes and can miss expected matches.
+- **Recommendation:** Normalize unquoted query terms with the same tokenizer used during indexing while preserving quoted-phrase behavior.
+- **Fix with:** reference-parity
+- **Effort:** M
+
+### FERR-7 · P2 · Bound persisted result limits before collection
+
+- **Area:** Config
+- **Where:** `src/settings/index.ts:90-94`; `src/search/search-engine.ts:322-339`; `crates/ferrisearch-core/src/search.rs:125-145`
+- **Problem:** Settings load persisted `resultLimit` without validation. The Rust binding converts the numeric limit to `usize` and passes it to Tantivy; limit zero asserts, while a very large limit sizes a large top-results buffer. The settings UI's lower-bound check does not protect persisted values or impose an upper bound.
+- **Recommendation:** Choose a documented maximum and validate persisted settings and core search options as a nonzero bounded limit.
+- **Fix with:** make-invalid-states-unrepresentable
+- **Effort:** M
+- **Design:** [FERR-7 RFC](docs/rfc/FERR-7-result-limit.md)
+
+### FERR-8 · P2 · Run checks before publishing prereleases
+
+- **Area:** Build
+- **Where:** `.github/workflows/build.yml:1-28`; `Makefile:16,35-38`; `package.json:10-20`
+- **Problem:** The prerelease workflow runs `make package`, which builds the plugin through `pnpm run build:plugin`; that path skips `prebuild`, tests, and type checking. A broken release can therefore be published even though the repository defines checks for those failures.
+- **Recommendation:** Run the focused lint, typecheck, and test commands before packaging and publishing.
+- **Fix with:** none
+- **Effort:** S
+
+### FERR-9 · P3 · Declare the global plugin API in TypeScript
+
+- **Area:** Types
+- **Where:** `src/main.ts:64,172`
+- **Problem:** Two `@ts-expect-error` directives suppress missing `globalThis.ferrisearch` type errors when the plugin registers and removes its global API. Removing the directives makes the current typecheck fail, so the runtime API lacks an enforceable TypeScript contract.
+- **Recommendation:** Declare the global API shape and remove both suppressions.
+- **Fix with:** api-surface-and-module-boundaries
+- **Effort:** S
+
+### FERR-10 · P3 · Avoid sentinel collisions in diacritic removal
+
+- **Area:** Search fields
+- **Where:** `src/tools/utils.ts:42-52`
+- **Problem:** `removeDiacritics()` replaces backticks and carets with NUL-prefixed sentinels, then restores every matching sentinel. A note containing the literal sequence `NUL+B` or `NUL+C` is changed into a backtick or caret when diacritics are ignored.
+- **Recommendation:** Remove diacritics without reserving input strings as sentinels.
+- **Fix with:** comment-cleanup
+- **Effort:** S

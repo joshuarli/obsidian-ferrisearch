@@ -12,7 +12,6 @@ pub struct DocumentInput {
     pub tags: Vec<String>,
     pub unmarked_tags: Vec<String>,
     /// Modification time as Unix epoch milliseconds.
-    /// f64 for JS compatibility (all JS numbers are f64).
     pub mtime: f64,
 }
 
@@ -68,9 +67,7 @@ impl Default for IndexConfig {
 pub struct SearchOptions {
     pub field_boosts: FieldBoosts,
     pub fuzziness: String,
-    /// f64 for JS compatibility (all JS numbers are f64).
     pub prefix_length: f64,
-    /// f64 for JS compatibility (all JS numbers are f64).
     pub limit: f64,
     pub single_file_path: Option<String>,
     pub recency_boost: String,

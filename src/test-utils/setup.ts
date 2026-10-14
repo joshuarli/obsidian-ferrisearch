@@ -10,10 +10,8 @@ declare global {
   }
 }
 
-// Register happy-dom globals (document, window, etc.)
 GlobalRegistrator.register()
 
-// IntersectionObserver mock — immediately fires with isIntersecting: true
 class MockIntersectionObserver {
   private callback: IntersectionObserverCallback
 

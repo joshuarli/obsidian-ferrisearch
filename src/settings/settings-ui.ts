@@ -10,7 +10,6 @@ export function injectSettingsUserInterface(
 ): void {
   new Setting(containerEl).setName('User Interface').setHeading()
 
-  // Show context excerpt
   new Setting(containerEl)
     .setName('Show excerpts')
     .setDesc(
@@ -22,7 +21,6 @@ export function injectSettingsUserInterface(
       }),
     )
 
-  // Keep line returns in excerpts
   new Setting(containerEl)
     .setName('Render line return in excerpts')
     .setDesc('Activate this option to render line returns in result excerpts.')
@@ -33,7 +31,6 @@ export function injectSettingsUserInterface(
       }),
     )
 
-  // Highlight results
   new Setting(containerEl)
     .setName('Highlight matching words in results')
     .setDesc('Will highlight matching results when enabled.')
@@ -44,7 +41,6 @@ export function injectSettingsUserInterface(
       }),
     )
 
-  // Score breakdown
   new Setting(containerEl)
     .setName('Show score breakdown')
     .setDesc('Display detailed score breakdown for each search result.')

@@ -26,7 +26,6 @@ export function renderVaultModal(
     currentObserver: IntersectionObserver | null = null,
     historyItems: string[] = []
 
-  // Build DOM
   const input = createSearchInput(container, 'Ferrisearch - Vault', previousQuery, value => {
       searchQuery = value
       onQueryChange()
@@ -59,7 +58,6 @@ export function renderVaultModal(
     }
   }
 
-  // Search
   let currentSearchId = 0
 
   async function updateResults() {
@@ -105,7 +103,6 @@ export function renderVaultModal(
     updateResults()
   }
 
-  // Rendering
   function renderResults() {
     for (const el of resultEls) cleanupResultItem(el)
     resultEls = []
@@ -141,7 +138,6 @@ export function renderVaultModal(
       return
     }
 
-    // Lazy-loading results
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
@@ -236,7 +232,6 @@ export function renderVaultModal(
     }
   }
 
-  // Actions
   function saveCurrentQuery() {
     if (searchQuery) plugin.searchHistory.addToHistory(searchQuery)
   }
@@ -351,7 +346,6 @@ export function renderVaultModal(
     }
   }
 
-  // Register action handlers on the modal
   modal.on(Action.Enter, openNoteAndCloseModal)
   modal.on(Action.OpenInBackground, openNoteInBackground)
   modal.on(Action.OpenInNewPane, openNoteInNewPane)
@@ -361,7 +355,6 @@ export function renderVaultModal(
   modal.on(Action.ArrowDown, () => moveIndex(1))
   modal.on(Action.OpenInNewLeaf, openNoteInNewLeaf)
 
-  // Initial load — warm up term dictionaries
   plugin.searchEngine.warmUp()
   if (searchQuery) {
     updateResults()

@@ -25,7 +25,6 @@ export function renderInFileModal(
     selectedIndex = 0,
     note: ResultNote | undefined
 
-  // Build DOM
   createSearchInput(container, 'Ferrisearch - File', previousQuery, value => {
     searchQuery = value
     updateResults()
@@ -41,7 +40,6 @@ export function renderInFileModal(
     [`${ctrlKey} ↵`, 'to open in a new pane'],
   ])
 
-  // Search
   async function updateResults() {
     if (!searchQuery || searchQuery.length < plugin.settings.minQueryLength) {
       note = undefined
@@ -88,7 +86,6 @@ export function renderInFileModal(
     return groups
   }
 
-  // Rendering
   function renderResults() {
     resultsDiv.innerHTML = ''
 
@@ -172,14 +169,12 @@ export function renderInFileModal(
     modal.close()
   }
 
-  // Register action handlers on the modal
   modal.on(Action.Enter, () => openSelection())
   modal.on(Action.OpenInNewPane, () => openSelection(true))
   modal.on(Action.ArrowUp, () => moveIndex(-1))
   modal.on(Action.ArrowDown, () => moveIndex(1))
   modal.on(Action.Tab, switchToVaultModal)
 
-  // Initial search
   if (searchQuery) {
     updateResults()
   } else {

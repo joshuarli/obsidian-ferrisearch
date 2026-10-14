@@ -33,7 +33,6 @@ abstract class FerrisearchModal extends Modal {
 
     const dispatch = (action: string) => this.handlers.get(action)?.()
 
-    // Arrow key navigation
     this.scope.register([], 'ArrowDown', e => {
       e.preventDefault()
       dispatch(Action.ArrowDown)
@@ -43,7 +42,6 @@ abstract class FerrisearchModal extends Modal {
       dispatch(Action.ArrowUp)
     })
 
-    // Vim-like navigation (Ctrl/Cmd + j/k/n/p)
     for (const { k, dir } of [
       { k: 'J', dir: 'down' },
       { k: 'K', dir: 'up' },
@@ -55,25 +53,21 @@ abstract class FerrisearchModal extends Modal {
       }
     }
 
-    // Open in new pane
     this.scope.register(['Mod'], 'Enter', e => {
       e.preventDefault()
       dispatch(Action.OpenInNewPane)
     })
 
-    // Open in a new leaf
     this.scope.register(['Mod', 'Alt'], 'Enter', e => {
       e.preventDefault()
       dispatch(Action.OpenInNewLeaf)
     })
 
-    // Insert link
     this.scope.register(['Alt'], 'Enter', e => {
       e.preventDefault()
       dispatch(Action.InsertLink)
     })
 
-    // Open in current pane
     this.scope.register([], 'Enter', e => {
       if (!isInputComposition()) {
         e.preventDefault()
@@ -81,7 +75,6 @@ abstract class FerrisearchModal extends Modal {
       }
     })
 
-    // Open in background
     this.scope.register(['Mod'], 'O', e => {
       if (!isInputComposition()) {
         e.preventDefault()

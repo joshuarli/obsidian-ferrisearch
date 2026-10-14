@@ -9,8 +9,6 @@ WASM_BINARY := target/wasm32-unknown-unknown/$(PROFILE)/ferrisearch_wasm.wasm
 PACKAGE := ferrisearch.zip
 PACKAGE_FILES := dist/main.js dist/manifest.json dist/styles.css dist/ferrisearch_wasm_bg.wasm $(NATIVE_FILE)
 
-# wasm-bindgen's CLI schema must match the Rust crate that produced the Wasm.
-# Read the resolved crate version instead of maintaining a second version pin.
 WASM_BINDGEN_VERSION := $(shell awk '$$0 == "name = \"wasm-bindgen\"" { getline; sub(/^version = "/, ""); sub(/"$$/, ""); print; exit }' Cargo.lock)
 WASM_BINDGEN_ROOT ?= target/wasm-bindgen-cli
 WASM_BINDGEN ?= $(WASM_BINDGEN_ROOT)/bin/wasm-bindgen
