@@ -4,8 +4,6 @@ use napi_derive::napi;
 use ferrisearch_core::index::IndexManager;
 use ferrisearch_core::types;
 
-/// Bump this whenever the NAPI interface changes (new methods, renamed fields, etc.)
-/// so the TS layer can detect a stale dlopen-cached binary and prompt a restart.
 const NAPI_VERSION: u32 = 5;
 
 #[napi]
@@ -14,12 +12,6 @@ pub fn napi_version() -> u32 {
 }
 
 /// A document to be indexed. Maps to a single Obsidian note.
-///
-/// **Searched fields** (queries match against these via exact, prefix, and fuzzy):
-///   `display_title`, `directory` (derived from path), `content`, `headings`
-///
-/// **Indexed but not searched** (stored for retrieval/filtering, not matched by queries):
-///   `basename`, `aliases`, `tags`, `unmarked_tags`
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct DocumentInput {
@@ -27,23 +19,15 @@ pub struct DocumentInput {
     /// Used as the unique document key for upsert/delete. Also used to derive the
     /// `directory` search field (everything before the last `/`).
     pub path: String,
-    /// Filename without extension, e.g. "my-note". Indexed and stored but not searched.
     pub basename: String,
-    /// User-facing title from frontmatter `title:` field, or the basename if absent.
-    /// Searched with high boost (10x).
     pub display_title: String,
-    /// Alternative names from frontmatter `aliases:` field, space-separated.
-    /// Indexed but not currently searched by default.
     pub aliases: String,
-    /// Full markdown body of the note (without frontmatter). Primary search field.
     pub content: String,
     /// Space-joined headings from all levels (H1-H3). Searched with 5x boost.
     pub headings: String,
     /// Obsidian tags from frontmatter and inline `#tag` syntax, e.g. ["#rust", "#code"].
     /// Stored as JSON for post-search retrieval. Indexed as text but not searched by default.
     pub tags: Vec<String>,
-    /// Tags inferred from note content that aren't explicit `#tag` syntax.
-    /// Indexed as text but not searched by default.
     pub unmarked_tags: Vec<String>,
     /// Last modification time as Unix epoch milliseconds. Used for recency boosting.
     pub mtime: f64,

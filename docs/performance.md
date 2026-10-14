@@ -1,23 +1,22 @@
 # Performance
 
-This document records the repeatable performance measurements for Ferrisearch.
-The goal is to keep search and startup-indexing changes comparable across dependency
-and implementation updates.
+This page records the native harness method and dated Ferrisearch measurements.
 
 ## Benchmark method
 
-Run the native harness on macOS arm64 with a release NAPI binary:
+Run the native harness on macOS arm64 with a release NAPI binary. Replace the
+directory with a folder of Markdown notes:
 
 ```sh
 make build-native PROFILE=release
 pnpm run test-search \
-  "/Users/josh/iCloud~md~obsidian/Documents/Notes" \
+  "<markdown-directory>" \
   "search" 0
 ```
 
 The benchmark uses a fresh temporary Tantivy index for every invocation and indexes
 the markdown corpus from scratch. It reports file discovery, file reads, indexing,
-and total startup time. Search latency uses five discarded warmups followed by 100
+and their sum as `Total`. Search latency uses five discarded warmups followed by 100
 timed searches and reports p50, mean, standard deviation, and mean + 3σ.
 
 The current harness follows the production native startup sequence: it calls
@@ -41,8 +40,8 @@ directional unless repeated across several runs.
 Recorded 2026-09-19 after the dependency upgrade to Tantivy 0.26.2 and the current
 Rust/TypeScript dependency locks. These measurements use the legacy harness path:
 `addDocuments()` followed by force-merging `commit()`. The production startup path
-uses bulk insertion and `commitNoMerge()`; a production-aligned baseline is recorded
-separately below.
+uses bulk insertion and `commitNoMerge()`. A production-aligned baseline is
+recorded separately below.
 
 | Query | Fuzziness | Index | Total | Search p50 | Search mean |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -57,15 +56,16 @@ p50/mean of 3.027/3.182 ms, 75.773/76.901 ms, and 49.919/50.987 ms respectively.
 
 The startup target is a full initial native index under 1 second for this corpus.
 The benchmark must use the production sequence (`addDocumentsBulk()` plus
-`commitNoMerge()`) before evaluating this target; force-merging is not part of the
+`commitNoMerge()`) before evaluating this target. Force-merging is not part of the
 normal startup path.
 
 Before the writer change, the production-aligned sequence took 2,031.8 ms to index
-and 2,538.5 ms end to end for `search`/fuzziness 0. The optimized configuration
-uses up to six writer threads based on available parallelism, with a 30 MB budget
-per worker, stores result-only fields without postings, and uses an allocation-light
-tokenizer path. Two release-profile runs of the earlier three-worker configuration
-measured:
+and 2,538.5 ms end to end for `search`/fuzziness 0. The release-profile sweep
+tested a configuration with up to six writer threads based on available
+parallelism, a 30 MB budget per worker, stored result-only fields without
+postings, and an allocation-light tokenizer. The production default is now
+fixed at four workers. Two release-profile runs of the earlier three-worker
+configuration measured:
 
 - Indexing: **857.9–863.7 ms**; add/marshalling: **53.0–54.3 ms**; commit: **804.8–809.4 ms**
 - End to end: **1,362.9–1,369.2 ms**
@@ -80,6 +80,6 @@ measured these median indexing times:
 | Median | 1,849 ms | 1,060 ms | 851 ms | 783 ms | 784 ms | **767 ms** | 801 ms | 859 ms |
 
 The production default is now fixed at four workers. This is slightly slower than
-the six-worker median on the reference machine, but avoids making startup latency
-depend on host CPU topology; four workers still measured a 783 ms median and remains
-under the one-second target.
+the six-worker median on the reference machine, but it avoids making startup latency
+depend on host CPU topology. The four-worker result remains under the target at a
+783 ms median.

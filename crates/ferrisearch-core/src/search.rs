@@ -136,7 +136,6 @@ impl IndexManager {
             )?;
             (r, fuzziness)
         } else {
-            // Phase 1: exact + prefix only (no fuzzy)
             let query = self.build_search_query(&parsed, options, 0.0, false);
             let mut results =
                 searcher.search(
@@ -145,9 +144,6 @@ impl IndexManager {
                 )?;
             let mut eff_fuzz = 0.0;
 
-            // Phase 2: if exact+prefix found very few results and fuzzy is enabled, retry with fuzzy.
-            // Threshold is fixed (not scaled with limit) so that raising the limit for debugging
-            // or large result sets doesn't change the query strategy.
             const FUZZY_THRESHOLD: usize = 5;
             if results.len() < FUZZY_THRESHOLD && fuzziness > 0.0 && !parsed.terms.is_empty() {
                 let query = self.build_search_query(&parsed, options, fuzziness, false);

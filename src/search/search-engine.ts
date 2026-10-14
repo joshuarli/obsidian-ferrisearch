@@ -17,10 +17,8 @@ import {
 } from '../tools/utils'
 import type { Query } from './query'
 
-// Must match NAPI_VERSION in napi/src/lib.rs
 const EXPECTED_NAPI_VERSION = 5
 
-// The napi binding types - loaded at runtime
 interface NativeModule {
   napiVersion(): number
   SearchIndex: new (indexPath: string, config?: { ignoreDiacritics?: boolean }) => NativeSearchIndex
