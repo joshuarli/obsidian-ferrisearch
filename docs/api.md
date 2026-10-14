@@ -27,6 +27,6 @@ The `offset` values are JavaScript string offsets. The query uses the active Fer
 
 `registerOnIndexed(callback)` runs the callback after initial indexing. It runs it immediately if initial indexing has already completed. Call `unregisterOnIndexed(callback)` with the same function to remove it.
 
-`refreshIndex()` is exposed, but the current API stores the `NotesIndexer` method without binding it. Awaiting `api.refreshIndex()` rejects with a `TypeError`. To rebuild all index data, use **Rebuild index** in Ferrisearch settings.
+`refreshIndex()` processes file modifications queued since the last refresh. To rebuild all index data, use **Rebuild index** in Ferrisearch settings.
 
 Ferrisearch also registers the `obsidian://ferrisearch?query=...` protocol handler. It opens vault search with the supplied query.

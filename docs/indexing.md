@@ -2,7 +2,7 @@
 
 Ferrisearch indexes vault files whose paths end in `.md`. It records each indexed path and modification time in `index-manifest.json`. On startup, it compares that manifest with the vault and adds, updates, or removes changed documents.
 
-File creation and deletion update the index immediately. File modifications are queued until the active workspace leaf changes. Opening a Ferrisearch modal does not flush this queue. The plugin API exposes `refreshIndex()`, but its method reference is unbound. Awaiting it through the API rejects with a `TypeError`.
+File creation and deletion update the index immediately. File modifications are queued until the active workspace leaf changes. Opening a Ferrisearch modal does not flush this queue. The plugin API's `refreshIndex()` method processes queued modifications.
 
 Each refresh handles the notes queued when that refresh starts. Modifications queued during document reads remain pending for the next refresh, including further modifications to the same note. If the refresh throws, its notes return to the queue alongside later modifications.
 

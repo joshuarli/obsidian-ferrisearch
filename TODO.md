@@ -1,15 +1,6 @@
 Prefix: FERR
 Next: 11
 
-### FERR-4 · P2 · Bind the exposed refresh method to its indexer
-
-- **Area:** Architecture
-- **Where:** `src/main.ts:49-62`; `src/notes-indexer.ts:17-24`; `docs/api.md`
-- **Problem:** The API stores `plugin.notesIndexer.refreshIndex` as a bare function. Calling `api.refreshIndex()` rejects with `TypeError` because `NotesIndexer.refreshIndex()` reads `this.notesToReindex` and `this.plugin`. A focused reproduction confirmed the failure, and the API docs already describe it.
-- **Recommendation:** Expose a wrapper that calls `plugin.notesIndexer.refreshIndex()`.
-- **Fix with:** api-surface-and-module-boundaries
-- **Effort:** S
-
 ### FERR-5 · P2 · Remove renamed notes when they leave the Markdown index
 
 - **Area:** Data

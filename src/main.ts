@@ -58,7 +58,7 @@ function registerAPI(plugin: FerrisearchPlugin): void {
     unregisterOnIndexed(cb: () => void): void {
       onIndexedCallbacks = onIndexedCallbacks.filter(o => o !== cb)
     },
-    refreshIndex: plugin.notesIndexer.refreshIndex,
+    refreshIndex: () => plugin.notesIndexer.refreshIndex(),
   }
 
   // @ts-expect-error
