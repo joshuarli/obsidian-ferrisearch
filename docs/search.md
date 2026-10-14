@@ -11,6 +11,7 @@ The query builder does not search aliases or tag metadata as fields. Inline tag 
 - Combine a text query with `path:fragment` to keep results whose vault-relative path contains `fragment`.
 - Combine a text query with `-path:fragment` to remove results whose path contains `fragment`.
 - Add `ext:md` to keep results whose file extension starts with `md`.
+- Add `-ext:pdf` to remove results whose file extension starts with `pdf`.
 - Add `-word` to a text query to exclude results whose note text contains `word`.
 
 Path matching ignores case. Prefix searches apply to the title, text, and headings. The search does not use Obsidian's search operators.
@@ -20,6 +21,8 @@ Path matching ignores case. Prefix searches apply to the title, text, and headin
 Fuzziness `0` searches exact terms and prefixes. For unquoted terms, levels `1` and `2` add fuzzy matches if exact and prefix searches return fewer than five results. Their fuzzy term queries search note text. Level `3` searches fuzzy matches across the four fields and skips exact and prefix queries for unquoted terms. Terms shorter than four bytes have no fuzzy edit distance.
 
 The default field boosts are 10 for displayed titles, 7 for directories, 5 for headings, and 1 for note text. The settings UI exposes alias and tag weight controls. The query builder does not search those fields, so the controls do not affect core query scores. Tag matches use a separate post-search boost.
+
+The search engine applies query filters and ranking adjustments before the result limit.
 
 The default tokenizer splits on Unicode punctuation, symbols, separators, and control characters. It emits camel-case sub-terms at the same position as the full token. Quoted phrases can therefore match across camel-case boundaries. Diacritics are ignored by default. Changing that setting requires a restart.
 

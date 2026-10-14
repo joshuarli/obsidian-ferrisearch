@@ -1,15 +1,6 @@
 Prefix: FERR
 Next: 11
 
-### FERR-1 · P1 · Apply filters and ranking boosts before limiting search results
-
-- **Area:** Search fields
-- **Where:** `src/search/search-engine.ts:322-414`; `src/search/query.ts:33-43`; `crates/ferrisearch-core/src/search.rs:123-148`
-- **Problem:** The core returns at most `resultLimit` documents before the TypeScript layer applies extension, path, quoted-term, and text exclusion filters or tag and folder boosts. A qualifying result outside that initial set is omitted, and a tag match cannot raise its score into the final results. The query parser also records `-ext:` exclusions that the search engine never applies.
-- **Recommendation:** Apply every parsed query filter and ranking adjustment before selecting the final `resultLimit` documents.
-- **Fix with:** none
-- **Effort:** M
-
 ### FERR-2 · P2 · Render note titles and paths as text before highlighting
 
 - **Area:** Security

@@ -319,6 +319,8 @@ export class SearchEngine {
 
     let results: NativeSearchResult[]
     try {
+      const candidateLimit = this.nativeIndex.documentCount()
+      if (candidateLimit === 0) return []
       results = this.nativeIndex.search(searchText, {
         fieldBoosts: {
           basename: settings.weightBasename,
@@ -332,7 +334,7 @@ export class SearchEngine {
         },
         fuzziness: settings.fuzziness,
         prefixLength: options.prefixLength,
-        limit: settings.resultLimit,
+        limit: candidateLimit,
         ...(options.singleFilePath === undefined ? {} : { singleFilePath: options.singleFilePath }),
         recencyBoost: settings.recencyBoost,
         scoreBreakdown: settings.showScoreBreakdown,
@@ -344,13 +346,17 @@ export class SearchEngine {
 
     logVerbose(`Found ${results.length} results`, results)
 
-    if (query.query.ext.length > 0) {
-      results = results.filter(r => {
-        const ext = `.${r.path.slice(r.path.lastIndexOf('.') + 1)}`
-        return query.query.ext.some(e => ext.startsWith(e.startsWith('.') ? e : `.${e}`))
-      })
+    const extensionMatches = (path: string, extensions: string[]) => {
+      const extension = `.${path.slice(path.lastIndexOf('.') + 1)}`
+      return extensions.some(e => extension.startsWith(e.startsWith('.') ? e : `.${e}`))
     }
 
+    if (query.query.ext.length > 0) {
+      results = results.filter(r => extensionMatches(r.path, query.query.ext))
+    }
+    if (query.query.exclude.ext.length > 0) {
+      results = results.filter(r => !extensionMatches(r.path, query.query.exclude.ext))
+    }
     if (query.query.path.length > 0) {
       results = results.filter(r =>
         query.query.path.some(p => r.path.toLowerCase().includes(p.toLowerCase())),
@@ -362,11 +368,29 @@ export class SearchEngine {
       )
     }
 
-    if (results.length === 0) return []
-
-    if (options.singleFilePath) {
-      return results.filter(r => r.path === options.singleFilePath)
+    const exactTerms = query.getExactTerms()
+    if (exactTerms.length > 0) {
+      logVerbose('Filtering with quoted terms:', exactTerms)
+      results = results.filter(r => {
+        const title = removeDiacritics(r.path.toLowerCase()),
+          content = stripMarkdownCharacters(removeDiacritics(r.content)).toLowerCase()
+        return exactTerms.every(q => content.includes(q) || title.includes(q))
+      })
     }
+
+    const exclusions = query.query.exclude.text
+    if (exclusions.length > 0) {
+      logVerbose('Filtering with exclusions')
+      results = results.filter(r => {
+        const content = r.content.toLowerCase()
+        return exclusions.every(q => !content.includes(q))
+      })
+    }
+    if (options.singleFilePath !== undefined) {
+      results = results.filter(r => r.path === options.singleFilePath)
+    }
+
+    if (results.length === 0) return []
 
     logVerbose('searching with downranked folders', settings.downrankedFoldersFilters)
     const tags = query.getTags(),
@@ -394,25 +418,6 @@ export class SearchEngine {
 
     logVerbose('Filtered results:', results)
 
-    const exactTerms = query.getExactTerms()
-    if (exactTerms.length > 0) {
-      logVerbose('Filtering with quoted terms:', exactTerms)
-      results = results.filter(r => {
-        const title = removeDiacritics(r.path.toLowerCase()),
-          content = stripMarkdownCharacters(removeDiacritics(r.content)).toLowerCase()
-        return exactTerms.every(q => content.includes(q) || title.includes(q))
-      })
-    }
-
-    const exclusions = query.query.exclude.text
-    if (exclusions.length > 0) {
-      logVerbose('Filtering with exclusions')
-      results = results.filter(r => {
-        const content = r.content.toLowerCase()
-        return exclusions.every(q => !content.includes(q))
-      })
-    }
-
     const seen = new Set<string>()
     results = results.filter(r => {
       if (seen.has(r.path)) return false
@@ -420,7 +425,7 @@ export class SearchEngine {
       return true
     })
 
-    return results
+    return results.slice(0, settings.resultLimit)
   }
 
   public getSuggestions(query: Query, options?: { singleFilePath?: string }): ResultNote[] {
