@@ -1,15 +1,6 @@
 Prefix: FERR
 Next: 11
 
-### FERR-2 · P2 · Render note titles and paths as text before highlighting
-
-- **Area:** Security
-- **Where:** `src/components/result-items.ts:38-46,100-103`; `src/tools/text-processing.ts:13-24`
-- **Problem:** Note titles and folder paths reach `innerHTML` without HTML escaping. A focused DOM proof showed a title containing `<img src=x onerror=...>` becomes an image element with an event-handler attribute in the result row. Obsidian's content security policy was not verified, so handler execution is unproven.
-- **Recommendation:** Build highlights with text nodes and elements, or escape note text before adding highlight markup.
-- **Fix with:** none
-- **Effort:** S
-
 ### FERR-3 · P2 · Preserve reindex requests queued during a refresh
 
 - **Area:** Concurrency

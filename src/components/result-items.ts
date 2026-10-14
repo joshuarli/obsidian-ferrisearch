@@ -1,8 +1,8 @@
 import { setIcon } from 'obsidian'
-import type { ResultNote } from '../globals'
+import type { ResultNote, SearchMatch } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { showExcerpt } from '../settings/index'
-import { getExtension, pathWithoutFilename } from '../tools/utils'
+import { escapeRegExp, getExtension, pathWithoutFilename } from '../tools/utils'
 
 export function formatRelativeTime(mtime: number): string {
   const diff = Date.now() - mtime,
@@ -23,6 +23,34 @@ export function formatRelativeTime(mtime: number): string {
 
 const unsubscribers = new WeakMap<HTMLElement, () => void>()
 
+function appendHighlightedText(
+  target: HTMLElement,
+  text: string,
+  matches: SearchMatch[],
+  highlightEnabled: boolean,
+): void {
+  const terms = matches.map(({ match }) => match).filter(Boolean)
+  if (terms.length === 0) {
+    target.textContent = text
+    return
+  }
+
+  const pattern = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'giu'),
+    parts = text.split(pattern)
+  for (const [index, part] of parts.entries()) {
+    if (index % 2 === 0) {
+      target.append(document.createTextNode(part))
+    } else {
+      const span = document.createElement('span')
+      span.className = `suggestion-highlight ferrisearch-highlight ${
+        highlightEnabled ? 'ferrisearch-default-highlight' : ''
+      }`
+      span.textContent = part
+      target.append(span)
+    }
+  }
+}
+
 export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugin): HTMLElement {
   const el = document.createElement('div')
   el.className = 'suggestion-item ferrisearch-result'
@@ -42,7 +70,7 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
   titleSpan.append(iconSpan)
 
   const titleText = document.createElement('span')
-  titleText.innerHTML = plugin.textProcessor.highlightText(title, matchesTitle)
+  appendHighlightedText(titleText, title, matchesTitle, plugin.settings.highlight)
   titleSpan.append(titleText)
 
   if (!note.displayTitle) {
@@ -99,7 +127,7 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
     folderDiv.append(folderIcon)
     const matchesPath = plugin.textProcessor.getMatches(notePath, note.foundWords),
       folderText = document.createElement('span')
-    folderText.innerHTML = plugin.textProcessor.highlightText(notePath, matchesPath)
+    appendHighlightedText(folderText, notePath, matchesPath, plugin.settings.highlight)
     folderDiv.append(folderText)
     wrapper.append(folderDiv)
   }

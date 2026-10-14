@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import '../test-utils/setup'
 import { showExcerpt } from '../settings/index'
 import { createMockPlugin } from '../test-utils/mock-plugin'
@@ -66,6 +66,27 @@ describe('createVaultResultItem', () => {
     expect(el.querySelector('.ferrisearch-result__folder-path')).not.toBeNull()
   })
 
+  it('renders titles and folder paths as text while preserving highlights', () => {
+    const plugin = createMockPlugin(),
+      title = 'title <img src=x onerror=alert(1)>',
+      path = 'folder <img src=x onerror=alert(1)>/note.md'
+    const getMatches = vi.spyOn(plugin.textProcessor, 'getMatches').mockImplementation(text => [
+      { match: text.startsWith('folder') ? 'folder' : 'title', offset: 0 },
+    ])
+    const note = createMockResultNote({ basename: title, path }),
+      el = createVaultResultItem(note, plugin),
+      titleText = el.querySelector('.ferrisearch-result__title > span:nth-of-type(2)'),
+      folderText = el.querySelector('.ferrisearch-result__folder-path > span:nth-of-type(2)')
+
+    expect(el.querySelector('.ferrisearch-result__title img')).toBeNull()
+    expect(el.querySelector('.ferrisearch-result__folder-path img')).toBeNull()
+    expect(titleText?.textContent).toBe(title)
+    expect(folderText?.textContent).toBe('folder <img src=x onerror=alert(1)>')
+    expect(titleText?.querySelector('.ferrisearch-highlight')?.textContent).toBe('title')
+    expect(folderText?.querySelector('.ferrisearch-highlight')?.textContent).toBe('folder')
+    expect(getMatches).toHaveBeenCalledTimes(2)
+  })
+
   it('does not show folder path for root-level notes', () => {
     const plugin = createMockPlugin(),
       note = createMockResultNote({ path: 'note.md' }),
@@ -111,11 +132,11 @@ describe('createVaultResultItem', () => {
     cleanupResultItem(el)
   })
 
-  it('calls textProcessor.highlightText for title', () => {
+  it('gets title matches from the text processor', () => {
     const plugin = createMockPlugin(),
       note = createMockResultNote({ basename: 'my-note' })
     createVaultResultItem(note, plugin)
-    expect(plugin.textProcessor.highlightText).toHaveBeenCalled()
+    expect(plugin.textProcessor.getMatches).toHaveBeenCalled()
   })
 
   it('calls textProcessor.makeExcerpt for body', () => {
