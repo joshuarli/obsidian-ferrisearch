@@ -22,8 +22,6 @@ pub struct IndexManager {
     pub(crate) reader: IndexReader,
     pub(crate) fields: FieldHandles,
     pub(crate) ignore_diacritics: bool,
-    /// WASM: buffer documents in memory, rebuild index on commit()
-    /// using SingleSegmentIndexWriter (no threads needed).
     #[cfg(not(feature = "filesystem"))]
     docs_buffer: Vec<DocumentInput>,
 }
@@ -72,7 +70,6 @@ impl IndexManager {
         })
     }
 
-    /// Create an in-memory index.
     #[cfg(feature = "filesystem")]
     pub fn new_in_memory(config: IndexConfig) -> Result<Self, IndexError> {
         let (schema, fields) = build_schema();
@@ -92,7 +89,6 @@ impl IndexManager {
         })
     }
 
-    /// Create an in-memory index (WASM — no threads, uses SingleSegmentIndexWriter on commit).
     #[cfg(not(feature = "filesystem"))]
     pub fn new_in_memory(config: IndexConfig) -> Result<Self, IndexError> {
         let (schema, fields) = build_schema();

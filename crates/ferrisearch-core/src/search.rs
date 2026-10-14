@@ -603,6 +603,7 @@ fn strip_diacritics_with_mapping(text: &str) -> (String, Vec<usize>) {
     (result, byte_map)
 }
 
+// The recurrence reads and writes neighboring matrix cells by index.
 #[allow(clippy::needless_range_loop)]
 fn osa_distance(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
