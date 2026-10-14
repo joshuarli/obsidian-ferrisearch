@@ -1,6 +1,6 @@
 # Development
 
-Install Deno and the pinned Rust toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml). Then install pnpm 11.0.2, as pinned in [`package.json`](../package.json), and the project packages:
+Install Deno and the pinned Rust toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml). Then install pnpm 12.13.0, as pinned in [`package.json`](../package.json), and the project packages:
 
 ```sh
 deno task bootstrap

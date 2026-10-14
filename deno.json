@@ -5,7 +5,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable", "deno.ns"]
   },
   "tasks": {
-    "bootstrap": "deno install --global --allow-all npm:pnpm@11.0.2"
+  "bootstrap": "deno install --global --allow-all npm:pnpm@12.13.0"
   },
   "lock": false
 }
