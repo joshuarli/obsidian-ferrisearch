@@ -37,6 +37,106 @@ function createResult(
 }
 
 describe('SearchEngine', () => {
+  it.each(['remove', 'remove commit', 'add', 'add commit'])(
+    'restores a queued note after a native %s failure', async failure => {
+      const plugin = createMockPlugin(),
+        search = new SearchEngine(plugin),
+        indexer = new NotesIndexer(plugin),
+        file = Object.assign(new TFile(), {
+          path: 'first.md', basename: 'first', stat: { mtime: 1 },
+        }),
+        error = new Error('native operation failed'),
+        failed = new Set<string>(),
+        commitCalls = { count: 0 },
+        nativeIndex = {
+          removeDocuments: vi.fn(() => {
+            if (failure === 'remove' && failed.size === 0) {
+              failed.add(failure)
+              throw error
+            }
+          }),
+          addDocuments: vi.fn(() => {
+            if (failure === 'add' && failed.size === 0) {
+              failed.add(failure)
+              throw error
+            }
+          }),
+          commit: vi.fn(() => {
+            commitCalls.count += 1
+            if ((failure === 'remove commit' && commitCalls.count === 1) ||
+              (failure === 'add commit' && commitCalls.count === 2)) {
+              throw error
+            }
+          }),
+        }
+      Object.assign(plugin, { searchEngine: search })
+      Object.assign(plugin.app.vault, {
+        getAbstractFileByPath: vi.fn(() => file),
+        cachedRead: vi.fn(async () => 'needle'),
+        adapter: {
+          exists: vi.fn(async () => true),
+          read: vi.fn(async () => JSON.stringify([{ path: file.path, mtime: 0 }])),
+        },
+      })
+      Object.assign(plugin.app, {
+        metadataCache: { getFileCache: vi.fn(() => null) },
+      })
+      Object.defineProperty(search, 'nativeIndex', { value: nativeIndex })
+      await search.loadSidecar()
+
+      indexer.flagNoteForReindex(file)
+      await expect(indexer.refreshIndex()).rejects.toBe(error)
+      expect(search.getDocumentsToReindex([{ path: file.path, mtime: file.stat.mtime }]))
+        .toEqual({
+          toAdd: [{ path: file.path, mtime: file.stat.mtime }],
+          toRemove: failure === 'remove' || failure === 'remove commit'
+            ? [{ path: file.path, mtime: 0 }]
+            : [],
+        })
+      await indexer.refreshIndex()
+
+      expect(nativeIndex.addDocuments).toHaveBeenCalledTimes(
+        failure === 'add' || failure === 'add commit' ? 2 : 1,
+      )
+      expect(search.getDocumentsToReindex([{ path: file.path, mtime: file.stat.mtime }]))
+        .toEqual({ toAdd: [], toRemove: [] })
+    },
+  )
+
+  it('keeps bulk document metadata pending until native commit succeeds', async () => {
+    const plugin = createMockPlugin(),
+      search = new SearchEngine(plugin),
+      file = Object.assign(new TFile(), {
+        path: 'first.md', basename: 'first', stat: { mtime: 1 },
+      }),
+      error = new Error('native commit failed'),
+      nativeIndex = {
+        addDocumentsBulk: vi.fn(),
+        commitNoMerge: vi.fn().mockImplementationOnce(() => { throw error }),
+      }
+    Object.assign(plugin.app.vault, {
+      getAbstractFileByPath: vi.fn(() => file),
+      cachedRead: vi.fn(async () => 'needle'),
+    })
+    Object.assign(plugin.app, {
+      metadataCache: { getFileCache: vi.fn(() => null) },
+    })
+    Object.defineProperty(search, 'nativeIndex', { value: nativeIndex })
+
+    await search.addFromPaths([file.path], { skipCommit: true })
+    await expect(search.getDocumentsToReindex([{ path: file.path, mtime: file.stat.mtime }]))
+      .toEqual({ toAdd: [{ path: file.path, mtime: file.stat.mtime }], toRemove: [] })
+    expect(() => search.commit()).toThrow(error)
+    expect(search.getDocumentsToReindex([{ path: file.path, mtime: file.stat.mtime }]))
+      .toEqual({ toAdd: [{ path: file.path, mtime: file.stat.mtime }], toRemove: [] })
+    expect(search.getDocumentsToReindex([])).toEqual({
+      toAdd: [], toRemove: [{ path: file.path, mtime: file.stat.mtime }],
+    })
+    search.commit()
+    expect(search.getDocumentsToReindex([{ path: file.path, mtime: file.stat.mtime }]))
+      .toEqual({ toAdd: [], toRemove: [] })
+  })
+
   it.each(['renamed', 'replaced'])('omits an already-read note %s while another batch read is pending', async scenario => {
     const plugin = createMockPlugin(),
       search = new SearchEngine(plugin),

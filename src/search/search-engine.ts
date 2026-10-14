@@ -107,10 +107,15 @@ interface DocumentRead {
   document: IndexedDocument
 }
 
+type IndexedDocumentChange =
+  | { kind: 'add'; mtime: number }
+  | { kind: 'remove' }
+
 export class SearchEngine {
   protected plugin: FerrisearchPlugin
   private nativeIndex: NativeSearchIndex | null = null
   private indexedDocuments = new Map<string, number>()
+  private pendingIndexedDocumentChanges = new Map<string, IndexedDocumentChange>()
   private isNativeEngine = false
 
   constructor(plugin: FerrisearchPlugin) {
@@ -195,13 +200,15 @@ export class SearchEngine {
   }
 
   public close(): void {
-    if (!this.nativeIndex) return
-    try {
-      this.nativeIndex.close()
-    } catch (error) {
-      console.error('Ferrisearch - Error closing index', error)
+    if (this.nativeIndex) {
+      try {
+        this.nativeIndex.close()
+      } catch (error) {
+        console.error('Ferrisearch - Error closing index', error)
+      }
+      this.nativeIndex = null
     }
-    this.nativeIndex = null
+    this.pendingIndexedDocumentChanges.clear()
   }
 
   public async clearIndex(): Promise<void> {
@@ -247,14 +254,31 @@ export class SearchEngine {
 
   getDocumentsToReindex(docs: DocumentRef[]): { toAdd: DocumentRef[]; toRemove: DocumentRef[] } {
     const docsMap = new Map(docs.map(d => [d.path, d.mtime]))
+    const toRemove = new Map(
+      [...this.indexedDocuments]
+        .filter(([path, mtime]) => !docsMap.has(path) || docsMap.get(path) !== mtime),
+    )
+    for (const [path, change] of this.pendingIndexedDocumentChanges) {
+      if (change.kind === 'add' && !docsMap.has(path)) toRemove.set(path, change.mtime)
+    }
     return {
       toAdd: docs.filter(
-        d => !this.indexedDocuments.has(d.path) || this.indexedDocuments.get(d.path) !== d.mtime,
+        d => this.pendingIndexedDocumentChanges.has(d.path) ||
+          !this.indexedDocuments.has(d.path) || this.indexedDocuments.get(d.path) !== d.mtime,
       ),
-      toRemove: [...this.indexedDocuments]
-        .filter(([path, mtime]) => !docsMap.has(path) || docsMap.get(path) !== mtime)
-        .map(([path, mtime]) => ({ path, mtime })),
+      toRemove: [...toRemove].map(([path, mtime]) => ({ path, mtime })),
     }
+  }
+
+  private applyPendingIndexedDocumentChanges(): void {
+    for (const [path, change] of this.pendingIndexedDocumentChanges) {
+      if (change.kind === 'remove') {
+        this.indexedDocuments.delete(path)
+      } else {
+        this.indexedDocuments.set(path, change.mtime)
+      }
+    }
+    this.pendingIndexedDocumentChanges.clear()
   }
 
   public async addFromPaths(paths: string[], options?: { skipCommit?: boolean }): Promise<void> {
@@ -270,42 +294,41 @@ export class SearchEngine {
       }).map(read => read.document),
       readMs = performance.now() - t0
 
-    try {
-      const t1 = performance.now()
-      if (options?.skipCommit) {
-        this.nativeIndex.addDocumentsBulk(documents)
-      } else {
-        this.nativeIndex.addDocuments(documents)
-        this.nativeIndex.commit()
-      }
-      const rustMs = performance.now() - t1
-      console.debug(
-        `Ferrisearch - addFromPaths: ${documents.length} docs, read=${readMs.toFixed(0)}ms, rust=${rustMs.toFixed(0)}ms`,
-      )
-      for (const doc of documents) this.indexedDocuments.set(doc.path, doc.mtime)
-    } catch (error) {
-      console.error('Ferrisearch - Error adding documents', error)
+    const t1 = performance.now()
+    if (options?.skipCommit) {
+      this.nativeIndex.addDocumentsBulk(documents)
+    } else {
+      this.nativeIndex.addDocuments(documents)
     }
+    for (const doc of documents) {
+      this.pendingIndexedDocumentChanges.set(doc.path, { kind: 'add', mtime: doc.mtime })
+    }
+    if (!options?.skipCommit) {
+      this.nativeIndex.commit()
+      this.applyPendingIndexedDocumentChanges()
+    }
+    const rustMs = performance.now() - t1
+    console.debug(
+      `Ferrisearch - addFromPaths: ${documents.length} docs, read=${readMs.toFixed(0)}ms, rust=${rustMs.toFixed(0)}ms`,
+    )
   }
 
   public removeFromPaths(paths: string[], options?: { skipCommit?: boolean }): void {
     if (!this.nativeIndex) return
-    for (const p of paths) this.indexedDocuments.delete(p)
-    try {
-      this.nativeIndex.removeDocuments(paths)
-      if (!options?.skipCommit) this.nativeIndex.commit()
-    } catch (error) {
-      console.error('Ferrisearch - Error removing documents', error)
+    this.nativeIndex.removeDocuments(paths)
+    for (const path of paths) {
+      this.pendingIndexedDocumentChanges.set(path, { kind: 'remove' })
+    }
+    if (!options?.skipCommit) {
+      this.nativeIndex.commit()
+      this.applyPendingIndexedDocumentChanges()
     }
   }
 
   public commit(): void {
-    if (!this.nativeIndex) return
-    try {
-      this.nativeIndex.commitNoMerge()
-    } catch (error) {
-      console.error('Ferrisearch - Error committing index', error)
-    }
+    if (!this.nativeIndex || this.pendingIndexedDocumentChanges.size === 0) return
+    this.nativeIndex.commitNoMerge()
+    this.applyPendingIndexedDocumentChanges()
   }
 
   public search(

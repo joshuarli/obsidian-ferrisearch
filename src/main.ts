@@ -139,7 +139,9 @@ export default class FerrisearchPlugin extends Plugin {
           if (!(file instanceof TFile)) return
           if (this.notesIndexer.isFileIndexable(file.path)) {
             logVerbose('Indexing new file', file.path)
-            searchEngine.addFromPaths([file.path])
+            void searchEngine.addFromPaths([file.path]).catch(error => {
+              console.error('Ferrisearch - Failed to index new file', error)
+            })
           }
         }),
       )
@@ -147,7 +149,11 @@ export default class FerrisearchPlugin extends Plugin {
         this.app.vault.on('delete', file => {
           if (!(file instanceof TFile)) return
           logVerbose('Removing file', file.path)
-          searchEngine.removeFromPaths([file.path])
+          try {
+            searchEngine.removeFromPaths([file.path])
+          } catch (error) {
+            console.error('Ferrisearch - Failed to remove deleted file', error)
+          }
         }),
       )
       this.registerEvent(
@@ -160,21 +166,32 @@ export default class FerrisearchPlugin extends Plugin {
       )
       this.registerEvent(
         this.app.workspace.on('active-leaf-change', () => {
-          this.notesIndexer.refreshIndex()
+          void this.notesIndexer.refreshIndex().catch(error => {
+            console.error('Ferrisearch - Failed to refresh modified notes', error)
+          })
         }),
       )
       this.registerEvent(
         this.app.vault.on('rename', async (file, oldPath) => {
           if (!(file instanceof TFile)) return
-          logVerbose('Renaming file', file.path)
-          searchEngine.removeFromPaths([oldPath])
-          if (this.notesIndexer.isFileIndexable(file.path)) {
-            await searchEngine.addFromPaths([file.path])
+          try {
+            logVerbose('Renaming file', file.path)
+            searchEngine.removeFromPaths([oldPath])
+            if (this.notesIndexer.isFileIndexable(file.path)) {
+              await searchEngine.addFromPaths([file.path])
+            }
+          } catch (error) {
+            console.error('Ferrisearch - Failed to update renamed file', error)
           }
         }),
       )
 
-      await this.populateIndex()
+      try {
+        await this.populateIndex()
+      } catch (error) {
+        console.error('Ferrisearch - Failed to populate vault index', error)
+        new Notice('Ferrisearch - Indexing failed. See console for details.')
+      }
     })
   }
 
@@ -224,15 +241,20 @@ export default class FerrisearchPlugin extends Plugin {
 
     const tIndex = performance.now(),
       skipCommit = { skipCommit: true }
-    searchEngine.removeFromPaths(
-      diff.toRemove.map(o => o.path),
-      skipCommit,
-    )
-    await searchEngine.addFromPaths(
-      diff.toAdd.map(o => o.path),
-      skipCommit,
-    )
-    if (diff.toRemove.length > 0 || diff.toAdd.length > 0) searchEngine.commit()
+    try {
+      searchEngine.removeFromPaths(
+        diff.toRemove.map(o => o.path),
+        skipCommit,
+      )
+      await searchEngine.addFromPaths(
+        diff.toAdd.map(o => o.path),
+        skipCommit,
+      )
+      searchEngine.commit()
+    } catch (error) {
+      indexingNotice?.hide()
+      throw error
+    }
     const indexMs = performance.now() - tIndex
 
     if (diff.toRemove.length > 0 || diff.toAdd.length > 0) {

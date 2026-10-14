@@ -61,10 +61,16 @@ export function injectSettingsDanger(
         btn.setDisabled(true)
         btn.setButtonText('Rebuilding…')
         new Notice('Ferrisearch - Rebuilding index…')
-        await plugin.searchEngine.clearIndex()
-        await plugin.populateIndex()
-        btn.setButtonText('Rebuild index')
-        btn.setDisabled(false)
+        try {
+          await plugin.searchEngine.clearIndex()
+          await plugin.populateIndex()
+        } catch (error) {
+          console.error('Ferrisearch - Failed to rebuild index', error)
+          new Notice('Ferrisearch - Rebuild failed. See console for details.')
+        } finally {
+          btn.setButtonText('Rebuild index')
+          btn.setDisabled(false)
+        }
       })
     })
 }

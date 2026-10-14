@@ -11,12 +11,3 @@ Next: 12
 - **Effort:** M
 - **Design:** [FERR-7 RFC](docs/rfc/FERR-7-result-limit.md)
 
-### FERR-11 · P2 · Propagate native index failures to refresh
-
-- **Area:** Error handling
-- **Where:** `src/search/search-engine.ts:260-299`; `src/notes-indexer.ts:18-31`
-- **Problem:** `addFromPaths()` and `removeFromPaths()` catch native mutation or commit errors, log them, and resolve normally. `NotesIndexer.refreshIndex()` therefore cannot restore its queued notes after a real native index failure.
-- **Recommendation:** Make mutation failures visible to the refresh path so it can restore queued notes, and surface failures to other callers instead of resolving successfully.
-- **Fix with:** error-model, lifecycle-concurrency
-- **Effort:** M
-
