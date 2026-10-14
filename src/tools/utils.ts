@@ -37,18 +37,14 @@ export function getTagsFromMetadata(metadata: CachedMetadata | null): string[] {
   return [...new Set(expanded)]
 }
 
-const diacriticsRegex = /(?!\u30FC|\u309A|\u3099)\p{Diacritic}/gu
+const diacriticsRegex = /(?!\u0060|\u005E|\u30FC|\u309A|\u3099)\p{Diacritic}/gu
 
 export function removeDiacritics(str: string): string {
   if (!str) return ''
   return str
-    .replaceAll('`', '\u0000B')
-    .replaceAll('^', '\u0000C')
     .normalize('NFD')
     .replace(diacriticsRegex, '')
     .normalize('NFC')
-    .replaceAll('\u0000B', '`')
-    .replaceAll('\u0000C', '^')
 }
 
 export function getCtrlKeyLabel(): 'Ctrl' | '⌘' {

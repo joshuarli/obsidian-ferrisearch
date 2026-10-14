@@ -11,11 +11,3 @@ Next: 11
 - **Effort:** M
 - **Design:** [FERR-7 RFC](docs/rfc/FERR-7-result-limit.md)
 
-### FERR-10 · P3 · Avoid sentinel collisions in diacritic removal
-
-- **Area:** Search fields
-- **Where:** `src/tools/utils.ts:42-52`
-- **Problem:** `removeDiacritics()` replaces backticks and carets with NUL-prefixed sentinels, then restores every matching sentinel. A note containing the literal sequence `NUL+B` or `NUL+C` is changed into a backtick or caret when diacritics are ignored.
-- **Recommendation:** Remove diacritics without reserving input strings as sentinels.
-- **Fix with:** comment-cleanup
-- **Effort:** S
