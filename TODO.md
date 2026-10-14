@@ -1,15 +1,6 @@
 Prefix: FERR
 Next: 11
 
-### FERR-3 · P2 · Preserve reindex requests queued during a refresh
-
-- **Area:** Concurrency
-- **Where:** `src/notes-indexer.ts:17-24`
-- **Problem:** `refreshIndex()` snapshots queued notes, awaits document reads, then clears the entire queue. A modification queued during that await is cleared without being indexed. A focused reproduction expected two reads but observed only one.
-- **Recommendation:** Remove only the entries handled by the current refresh, leaving later requests queued for the next refresh.
-- **Fix with:** lifecycle-concurrency
-- **Effort:** S
-
 ### FERR-4 · P2 · Bind the exposed refresh method to its indexer
 
 - **Area:** Architecture
