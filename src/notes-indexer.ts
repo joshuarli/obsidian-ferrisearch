@@ -11,20 +11,21 @@ export class NotesIndexer {
   }
 
   public flagNoteForReindex(note: TAbstractFile): void {
+    if (!this.isFileIndexable(note.path)) return
     this.notesToReindex.add(note)
   }
 
   public async refreshIndex(): Promise<void> {
     const notes = this.notesToReindex,
-      paths = [...notes].map(n => n.path)
-    if (paths.length === 0) return
+      paths = [...notes].map(n => n.path).filter(path => this.isFileIndexable(path))
     this.notesToReindex = new Set<TAbstractFile>()
+    if (paths.length === 0) return
     try {
       for (const path of paths) logVerbose('Updating file', path)
       this.plugin.searchEngine.removeFromPaths(paths)
       await this.plugin.searchEngine.addFromPaths(paths)
     } catch (error) {
-      for (const note of notes) this.notesToReindex.add(note)
+      for (const note of notes) this.flagNoteForReindex(note)
       throw error
     }
   }

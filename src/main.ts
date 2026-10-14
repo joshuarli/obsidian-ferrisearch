@@ -156,9 +156,9 @@ export default class FerrisearchPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on('rename', async (file, oldPath) => {
           if (!(file instanceof TFile)) return
+          logVerbose('Renaming file', file.path)
+          searchEngine.removeFromPaths([oldPath])
           if (this.notesIndexer.isFileIndexable(file.path)) {
-            logVerbose('Renaming file', file.path)
-            searchEngine.removeFromPaths([oldPath])
             await searchEngine.addFromPaths([file.path])
           }
         }),

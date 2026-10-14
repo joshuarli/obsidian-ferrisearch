@@ -17,6 +17,32 @@ function note(path: string): TAbstractFile {
 }
 
 describe('NotesIndexer.refreshIndex', () => {
+  it('discards queued notes renamed out of Markdown before refresh', async () => {
+    const { indexer, addFromPaths, removeFromPaths } = setup(),
+      renamed = note('first.md')
+    indexer.flagNoteForReindex(renamed)
+    renamed.path = 'first.txt'
+    await indexer.refreshIndex()
+    expect(removeFromPaths).not.toHaveBeenCalled()
+    expect(addFromPaths).not.toHaveBeenCalled()
+
+    renamed.path = 'first.md'
+    indexer.flagNoteForReindex(note('later.md'))
+    await indexer.refreshIndex()
+    expect(removeFromPaths.mock.calls).toEqual([[['later.md']]])
+    expect(addFromPaths.mock.calls).toEqual([[['later.md']]])
+  })
+
+  it('queues only Markdown notes', async () => {
+    const { indexer, addFromPaths, removeFromPaths } = setup(),
+      ignored = note('ignored.txt')
+    indexer.flagNoteForReindex(ignored)
+    ignored.path = 'ignored.md'
+    await indexer.refreshIndex()
+    expect(removeFromPaths).not.toHaveBeenCalled()
+    expect(addFromPaths).not.toHaveBeenCalled()
+  })
+
   it('keeps modifications queued during an awaited read, including the same note', async () => {
     const { indexer, addFromPaths, removeFromPaths } = setup(),
       first = note('first.md'),

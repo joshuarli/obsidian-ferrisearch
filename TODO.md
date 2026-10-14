@@ -1,15 +1,6 @@
 Prefix: FERR
 Next: 11
 
-### FERR-5 · P2 · Remove renamed notes when they leave the Markdown index
-
-- **Area:** Data
-- **Where:** `src/main.ts:157-163`; `src/notes-indexer.ts:27-29`
-- **Problem:** The rename handler removes the old path only when the new path ends in `.md`. Renaming an indexed Markdown note to another extension leaves its old document in the index, so searches can return a path that no longer exists.
-- **Recommendation:** Remove the old indexed path for every rename, then add the new path only when it is indexable.
-- **Fix with:** none
-- **Effort:** S
-
 ### FERR-6 · P2 · Parse query terms with the index tokenizer
 
 - **Area:** Search fields

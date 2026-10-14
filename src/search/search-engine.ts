@@ -102,6 +102,11 @@ type NativeSearchResultWithBreakdown = NativeSearchResult & {
   _tagBoost?: boolean
 }
 
+interface DocumentRead {
+  file: TFile
+  document: IndexedDocument
+}
+
 export class SearchEngine {
   protected plugin: FerrisearchPlugin
   private nativeIndex: NativeSearchIndex | null = null
@@ -258,7 +263,11 @@ export class SearchEngine {
 
     const t0 = performance.now(),
       results = await Promise.all(paths.map(p => this.getIndexedDocument(p))),
-      documents = results.filter((d): d is IndexedDocument => d !== null),
+      documents = results.filter((read): read is DocumentRead => {
+        if (read === null) return false
+        return read.file.path === read.document.path &&
+          this.plugin.app.vault.getAbstractFileByPath(read.document.path) === read.file
+      }).map(read => read.document),
       readMs = performance.now() - t0
 
     try {
@@ -524,18 +533,20 @@ export class SearchEngine {
     }
   }
 
-  private async getIndexedDocument(path: string): Promise<IndexedDocument | null> {
+  private async getIndexedDocument(path: string): Promise<DocumentRead | null> {
     try {
       path = normalizePath(path)
       const { app } = this.plugin,
         file = app.vault.getAbstractFileByPath(path)
       if (!file || !(file instanceof TFile)) return null
 
-      const content = await app.vault.cachedRead(file),
-        metadata = app.metadataCache.getFileCache(file),
+      const content = await app.vault.cachedRead(file)
+      if (file.path !== path) return null
+
+      const metadata = app.metadataCache.getFileCache(file),
         tags = getTagsFromMetadata(metadata)
 
-      return {
+      const document: IndexedDocument = {
         basename: file.basename,
         displayTitle: metadata?.headings?.find(h => h.level === 1)?.heading ?? file.basename,
         content,
@@ -552,6 +563,7 @@ export class SearchEngine {
             ].join(' ')
           : '',
       }
+      return { file, document }
     } catch (error) {
       console.warn(`Ferrisearch: Error reading "${path}"`, error)
       return null

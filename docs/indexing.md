@@ -4,7 +4,13 @@ Ferrisearch indexes vault files whose paths end in `.md`. It records each indexe
 
 File creation and deletion update the index immediately. File modifications are queued until the active workspace leaf changes. Opening a Ferrisearch modal does not flush this queue. The plugin API's `refreshIndex()` method processes queued modifications.
 
-Each refresh handles the notes queued when that refresh starts. Modifications queued during document reads remain pending for the next refresh, including further modifications to the same note. If the refresh throws, its notes return to the queue alongside later modifications.
+File renames remove the old path from the index immediately. The new path is indexed only if it ends in `.md`.
+If a file's path changes during a document read, that read is discarded.
+Before adding a batch, Ferrisearch discards documents whose paths no longer resolve to the same file that was read.
+
+The modification queue accepts only paths ending in `.md`. Refresh discards queued notes whose paths no longer end in `.md`.
+
+Each refresh handles the notes queued when that refresh starts. Modifications queued during document reads remain pending for the next refresh, including further modifications to the same note. If refresh throws, notes whose paths still end in `.md` return to the queue alongside later modifications.
 
 The event handling and file diff are implemented in [`main.ts`](../src/main.ts), [`notes-indexer.ts`](../src/notes-indexer.ts), and [`search-engine.ts`](../src/search/search-engine.ts). Tantivy index operations are in [`index.rs`](../crates/ferrisearch-core/src/index.rs).
 

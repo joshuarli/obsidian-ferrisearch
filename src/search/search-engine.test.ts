@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { TFile } from 'obsidian'
+import type { IndexedDocument } from '../globals'
+import { NotesIndexer } from '../notes-indexer'
 import { createMockPlugin } from '../test-utils/mock-plugin'
 import { Query } from './query'
 import { SearchEngine } from './search-engine'
@@ -7,6 +10,11 @@ vi.mock('../../wasm/pkg/ferrisearch_wasm.js', () => ({
   SearchIndex: class {},
   initSync: vi.fn(),
 }), { virtual: true })
+
+vi.mock('obsidian', async importOriginal => ({
+  ...await importOriginal<typeof import('obsidian')>(),
+  normalizePath: (path: string) => path,
+}))
 
 function createResult(
   path: string,
@@ -29,6 +37,98 @@ function createResult(
 }
 
 describe('SearchEngine', () => {
+  it.each(['renamed', 'replaced'])('omits an already-read note %s while another batch read is pending', async scenario => {
+    const plugin = createMockPlugin(),
+      search = new SearchEngine(plugin),
+      indexer = new NotesIndexer(plugin),
+      first = Object.assign(new TFile(), {
+        path: 'first.md', basename: 'first', stat: { mtime: 1 },
+      }),
+      second = Object.assign(new TFile(), {
+        path: 'second.md', basename: 'second', stat: { mtime: 2 },
+      }),
+      files = new Map([[first.path, first], [second.path, second]]),
+      indexedPaths = new Set(files.keys()),
+      firstRead = Promise.resolve('first needle'),
+      nativeIndex = {
+        removeDocuments: vi.fn((paths: string[]) => {
+          for (const path of paths) indexedPaths.delete(path)
+        }),
+        addDocuments: vi.fn((documents: IndexedDocument[]) => {
+          for (const document of documents) indexedPaths.add(document.path)
+        }),
+        commit: vi.fn(),
+      }
+    let finishSecondRead!: (content: string) => void
+    Object.assign(plugin, { searchEngine: search })
+    Object.assign(plugin.app.vault, {
+      getAbstractFileByPath: vi.fn((path: string) => files.get(path) ?? null),
+      cachedRead: vi.fn((file: TFile) => file === first
+        ? firstRead
+        : new Promise<string>(resolve => { finishSecondRead = resolve })),
+    })
+    Object.assign(plugin.app, {
+      metadataCache: { getFileCache: vi.fn(() => null) },
+    })
+    Object.defineProperty(search, 'nativeIndex', { value: nativeIndex })
+
+    indexer.flagNoteForReindex(first)
+    indexer.flagNoteForReindex(second)
+    const refreshing = indexer.refreshIndex()
+    await firstRead
+    expect(nativeIndex.addDocuments).not.toHaveBeenCalled()
+    files.delete(first.path)
+    first.path = 'first.txt'
+    files.set(first.path, first)
+    if (scenario === 'replaced') {
+      files.set('first.md', Object.assign(new TFile(), {
+        path: 'first.md', basename: 'first', stat: { mtime: 3 },
+      }))
+    }
+    search.removeFromPaths(['first.md'])
+    finishSecondRead('second needle')
+    await refreshing
+
+    expect([...indexedPaths]).toEqual(['second.md'])
+    expect(search.getDocumentsToReindex([])).toEqual({
+      toAdd: [], toRemove: [{ path: 'second.md', mtime: 2 }],
+    })
+  })
+
+  it('discards a document renamed out of Markdown during its read', async () => {
+    const plugin = createMockPlugin(),
+      search = new SearchEngine(plugin),
+      indexer = new NotesIndexer(plugin),
+      file = Object.assign(new TFile(), {
+        path: 'first.md', basename: 'first', stat: { mtime: 1 },
+      }),
+      nativeIndex = {
+        removeDocuments: vi.fn(),
+        addDocuments: vi.fn(),
+        commit: vi.fn(),
+      }
+    let finishRead!: (content: string) => void
+    Object.assign(plugin, { searchEngine: search })
+    Object.assign(plugin.app.vault, {
+      getAbstractFileByPath: vi.fn(() => file),
+      cachedRead: vi.fn(() => new Promise<string>(resolve => { finishRead = resolve })),
+    })
+    Object.assign(plugin.app, {
+      metadataCache: { getFileCache: vi.fn(() => null) },
+    })
+    Object.defineProperty(search, 'nativeIndex', { value: nativeIndex })
+
+    indexer.flagNoteForReindex(file)
+    const refreshing = indexer.refreshIndex()
+    file.path = 'first.txt'
+    search.removeFromPaths(['first.md'])
+    finishRead('needle')
+    await refreshing
+
+    expect(nativeIndex.addDocuments).toHaveBeenCalledWith([])
+    expect(search.getDocumentsToReindex([])).toEqual({ toAdd: [], toRemove: [] })
+  })
+
   it('filters and reranks every candidate before applying the result limit', () => {
     const candidates = [
         createResult('keep/first.pdf', 100, 'needle exact phrase'),
