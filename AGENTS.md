@@ -149,8 +149,6 @@ Query parsing (`parse_query`) splits input into individual terms and quoted phra
 - `pnpm run build`: Production build → `dist/main.js` (CJS, minified, tree-shaken)
 - `pnpm run dev`: Watch mode build
 - `pnpm run test`: Run TypeScript tests (56 tests across 4 files)
-- `pnpm run fmt:check`: Check formatting with Oxfmt
-- `pnpm run fmt`: Apply formatting with Oxfmt
 - `pnpm run lint:check`: Check lint with Oxlint
 - `pnpm run lint`: Apply Oxlint fixes
 - `pnpm run typecheck`: Run TypeScript 7 and Deno type checks
@@ -172,12 +170,12 @@ artifact, and publishes it as a GitHub prerelease asset.
 
 - **Build tool:** Rolldown via Deno (`build.ts`). Output is CJS targeting browser. Obsidian and CodeMirror packages are externalized. Native `.node` files are also externalized. WASM glue JS is bundled into `main.js` (~23KB); the `.wasm` binary is copied to `dist/` separately.
 - **Test runner:** Vitest with `happy-dom` for DOM APIs. The `obsidian` module is aliased to its local mock. `IntersectionObserver` is mocked to fire immediately.
-- **Linter/Formatter:** Oxfmt and Oxlint (TS/JS), cargo clippy + cargo fmt (Rust), shfmt + shellcheck (shell).
+- **Linters:** Oxlint (TS/JS), cargo clippy (Rust), shellcheck (shell).
 
 ## Dependencies
 
 - **Runtime:** None (zero runtime dependencies). Query parsing is a custom ~50-line function in `query.ts`.
-- **Dev:** pnpm, Deno, TypeScript 7, Vitest, Oxfmt, Oxlint, Rolldown, `happy-dom`, `@types/node`, `obsidian`
+- **Dev:** pnpm, Deno, TypeScript 7, Vitest, Oxlint, Rolldown, `happy-dom`, `@types/node`, `obsidian`
 - **TypeScript compatibility:** `tsconfig.json` skips library declaration checking because Obsidian 1.13.1 currently contains internal `HistoryHandler` declaration errors under TypeScript 7; project sources remain strictly checked.
 - **Native:** Rust crate `ferrisearch-core` using Tantivy 0.26 for full-text search, exposed via `napi-rs` (darwin-arm64 only) and `wasm-bindgen` (all other platforms). Custom tokenizer splits on Unicode punctuation/symbols/separators/control chars, emits camelCase sub-tokens at shared positions, and optionally strips diacritics via NFD decomposition.
 - **WASM:** `wasm-bindgen` 0.2.128, `serde-wasm-bindgen` 0.6, `js-sys` 0.3 (for `Date::now()` on wasm32). Built with `cargo build --target wasm32-unknown-unknown` + `wasm-bindgen --target web`. The `wasm-bindgen-cli` version (currently 0.2.128) must match the resolved crate version in `Cargo.lock`.
