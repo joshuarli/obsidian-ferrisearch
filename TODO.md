@@ -11,15 +11,6 @@ Next: 11
 - **Effort:** M
 - **Design:** [FERR-7 RFC](docs/rfc/FERR-7-result-limit.md)
 
-### FERR-8 · P2 · Run checks before publishing prereleases
-
-- **Area:** Build
-- **Where:** `.github/workflows/build.yml:1-28`; `Makefile:16,35-38`; `package.json:10-20`
-- **Problem:** The prerelease workflow runs `make package`, which builds the plugin through `pnpm run build:plugin`; that path skips `prebuild`, tests, and type checking. A broken release can therefore be published even though the repository defines checks for those failures.
-- **Recommendation:** Run the focused lint, typecheck, and test commands before packaging and publishing.
-- **Fix with:** none
-- **Effort:** S
-
 ### FERR-9 · P3 · Declare the global plugin API in TypeScript
 
 - **Area:** Types

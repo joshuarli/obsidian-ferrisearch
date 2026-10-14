@@ -1,6 +1,6 @@
 # Releases
 
-The manual [GitHub Actions workflow](../.github/workflows/build.yml) builds a prerelease on a macOS 26 arm64 runner. Run **Build prerelease** with `workflow_dispatch`. The workflow publishes `ferrisearch.zip` as a prerelease asset.
+The manual [GitHub Actions workflow](../.github/workflows/build.yml) checks lint, types, and TypeScript tests before packaging a prerelease on a macOS 26 arm64 runner. Run **Build prerelease** with `workflow_dispatch`. The workflow publishes `ferrisearch.zip` as a prerelease asset.
 
 On macOS arm64, build and install into a vault with:
 
