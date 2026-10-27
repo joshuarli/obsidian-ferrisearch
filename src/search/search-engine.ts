@@ -16,7 +16,7 @@ import {
 } from '../tools/utils'
 import type { Query } from './query'
 
-const EXPECTED_NAPI_VERSION = 5
+const EXPECTED_NAPI_VERSION = 6
 
 interface NativeModule {
   napiVersion(): number
@@ -166,7 +166,7 @@ export class SearchEngine {
     try {
       if (this.shouldUseNative()) {
         try {
-          this.initializeNative()
+          await this.initializeNative()
           this.isNativeEngine = true
           return
         } catch (error) {
@@ -201,7 +201,7 @@ export class SearchEngine {
     }
   }
 
-  private initializeNative(): void {
+  private async initializeNative(): Promise<void> {
     const module = this.loadNativeModule(),
       // Detect stale native binary cached by dlopen after a plugin update
       version = typeof module.napiVersion === 'function' ? module.napiVersion() : 0
@@ -212,10 +212,55 @@ export class SearchEngine {
       )
     }
 
+    await this.ensureNativeIndexVersion(version)
+
     this.nativeIndex = new module.SearchIndex(this.getIndexPath(), {
       ignoreDiacritics: this.plugin.settings.ignoreDiacritics,
     })
     console.log('Ferrisearch - Native search index initialized')
+  }
+
+  private getNativeVersionPath(): string {
+    return `${this.plugin.app.vault.configDir}/plugins/ferrisearch/native-index-version`
+  }
+
+  /**
+   * Drop a native index written by an older engine before it is opened: the
+   * on-disk Tantivy format is an internal cache detail, and opening it with
+   * an incompatible engine must rebuild from vault files instead of serving
+   * an empty or unreadable index.
+   */
+  private async ensureNativeIndexVersion(version: number): Promise<void> {
+    const adapter = this.plugin.app.vault.adapter,
+      sentinel = this.getNativeVersionPath()
+    let current: string | null = null
+    try {
+      if (await adapter.exists(sentinel)) current = (await adapter.read(sentinel)).trim()
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to read native index version', error)
+    }
+    if (current === String(version)) return
+
+    console.log(`Ferrisearch - Resetting native index for engine version ${version}`)
+    try {
+      const indexDir = this.getIndexPath()
+      if (await adapter.exists(indexDir)) await adapter.rmdir(indexDir, true)
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to remove stale native index', error)
+    }
+    try {
+      const sidecar = this.getSidecarPath()
+      if (await adapter.exists(sidecar)) await adapter.remove(sidecar)
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to remove stale native manifest', error)
+    }
+    this.indexedDocuments.clear()
+    this.persistedCache = null
+    try {
+      await adapter.write(sentinel, String(version))
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to record native index version', error)
+    }
   }
 
   private async initializeWasm(): Promise<void> {

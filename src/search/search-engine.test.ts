@@ -63,6 +63,17 @@ describe('SearchEngine', () => {
   it('uses the native engine when the native module version matches', async () => {
     const plugin = createMockPlugin(),
       search = new SearchEngine(plugin)
+    Object.assign(plugin.app.vault, {
+      configDir: 'drafts',
+      adapter: {
+        exists: vi.fn(async () => false),
+        read: vi.fn(async () => ''),
+        write: vi.fn(async () => {}),
+        remove: vi.fn(async () => {}),
+        rmdir: vi.fn(async () => {}),
+        readBinary: vi.fn(async () => new ArrayBuffer(8)),
+      },
+    })
     vi.spyOn(
       search as unknown as { shouldUseNative(): boolean },
       'shouldUseNative',
@@ -71,7 +82,7 @@ describe('SearchEngine', () => {
       search as unknown as { loadNativeModule(): unknown },
       'loadNativeModule',
     ).mockReturnValue({
-      napiVersion: () => 5,
+      napiVersion: () => 6,
       SearchIndex: class {},
     })
     vi.spyOn(
@@ -82,6 +93,101 @@ describe('SearchEngine', () => {
     await search.initialize()
 
     expect(search.isNative).toBe(true)
+  })
+
+  it('resets the native index when the engine version changed', async () => {
+    const files = new Map<string, string>([
+        ['drafts/plugins/ferrisearch/native-index-version', '5'],
+        ['drafts/plugins/ferrisearch/index-manifest.json', '[]'],
+      ]),
+      plugin = createMockPlugin(),
+      search = new SearchEngine(plugin)
+    Object.assign(plugin.app.vault, {
+      configDir: 'drafts',
+      adapter: {
+        exists: vi.fn(async (path: string) => files.has(path)),
+        read: vi.fn(async (path: string) => files.get(path) ?? ''),
+        write: vi.fn(async (path: string, data: string) => {
+          files.set(path, data)
+        }),
+        remove: vi.fn(async (path: string) => {
+          files.delete(path)
+        }),
+        rmdir: vi.fn(async (path: string) => {
+          const condemned: string[] = []
+          for (const key of files.keys()) {
+            if (key.startsWith(path)) condemned.push(key)
+          }
+          for (const key of condemned) files.delete(key)
+        }),
+        readBinary: vi.fn(async () => new ArrayBuffer(8)),
+      },
+    })
+    vi.spyOn(
+      search as unknown as { shouldUseNative(): boolean },
+      'shouldUseNative',
+    ).mockReturnValue(true)
+    vi.spyOn(
+      search as unknown as { loadNativeModule(): unknown },
+      'loadNativeModule',
+    ).mockReturnValue({
+      napiVersion: () => 6,
+      SearchIndex: class {},
+    })
+    vi.spyOn(
+      search as unknown as { getIndexPath(): string },
+      'getIndexPath',
+    ).mockReturnValue('/tmp/ferrisearch-test-index')
+
+    await search.initialize()
+
+    expect(search.isNative).toBe(true)
+    expect(files.get('drafts/plugins/ferrisearch/native-index-version')).toBe('6')
+    expect(files.has('drafts/plugins/ferrisearch/index-manifest.json')).toBe(false)
+  })
+
+  it('keeps the native index when the engine version matches', async () => {
+    const files = new Map<string, string>([
+        ['drafts/plugins/ferrisearch/native-index-version', '6'],
+        ['drafts/plugins/ferrisearch/index-manifest.json', '[]'],
+      ]),
+      plugin = createMockPlugin(),
+      search = new SearchEngine(plugin),
+      adapter = {
+        exists: vi.fn(async (path: string) => files.has(path)),
+        read: vi.fn(async (path: string) => files.get(path) ?? ''),
+        write: vi.fn(async (path: string, data: string) => {
+          files.set(path, data)
+        }),
+        remove: vi.fn(async (path: string) => {
+          files.delete(path)
+        }),
+        rmdir: vi.fn(async () => {}),
+        readBinary: vi.fn(async () => new ArrayBuffer(8)),
+      }
+    Object.assign(plugin.app.vault, { configDir: 'drafts', adapter })
+    vi.spyOn(
+      search as unknown as { shouldUseNative(): boolean },
+      'shouldUseNative',
+    ).mockReturnValue(true)
+    vi.spyOn(
+      search as unknown as { loadNativeModule(): unknown },
+      'loadNativeModule',
+    ).mockReturnValue({
+      napiVersion: () => 6,
+      SearchIndex: class {},
+    })
+    vi.spyOn(
+      search as unknown as { getIndexPath(): string },
+      'getIndexPath',
+    ).mockReturnValue('/tmp/ferrisearch-test-index')
+
+    await search.initialize()
+
+    expect(search.isNative).toBe(true)
+    expect(adapter.rmdir).not.toHaveBeenCalled()
+    expect(adapter.remove).not.toHaveBeenCalled()
+    expect(files.has('drafts/plugins/ferrisearch/index-manifest.json')).toBe(true)
   })
 
   it('fails explicitly when both native and WASM initialization fail', async () => {

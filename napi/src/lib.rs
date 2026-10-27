@@ -4,7 +4,7 @@ use napi_derive::napi;
 use ferrisearch_core::index::IndexManager;
 use ferrisearch_core::types;
 
-const NAPI_VERSION: u32 = 5;
+const NAPI_VERSION: u32 = 6;
 
 #[napi]
 pub fn napi_version() -> u32 {

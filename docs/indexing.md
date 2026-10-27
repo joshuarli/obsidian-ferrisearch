@@ -21,6 +21,7 @@ Ferrisearch keeps plugin data under `<vault>/<configDir>/plugins/ferrisearch/`.
 | File or directory | Engine | Purpose |
 | --- | --- | --- |
 | `tantivy-index` | Native | Tantivy index files |
+| `native-index-version` | Native | Engine version guard; a mismatch drops the index directory and manifest so the new engine rebuilds from vault files |
 | `index-manifest.json` | Both | Indexed paths and modification times |
 | `index-blob.bin` | WASM | Serialized in-memory index |
 | `search-history.txt` | Both | Up to ten recent vault queries |
