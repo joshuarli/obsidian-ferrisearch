@@ -26,19 +26,65 @@ pub struct IndexManager {
     docs_buffer: Vec<DocumentInput>,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum IndexError {
-    #[error("Tantivy error: {0}")]
-    Tantivy(#[from] tantivy::TantivyError),
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Tantivy(tantivy::TantivyError),
+    Io(std::io::Error),
     #[cfg(feature = "filesystem")]
-    #[error("Directory open error: {0}")]
-    DirectoryOpen(#[from] tantivy::directory::error::OpenDirectoryError),
-    #[error("Directory read error: {0}")]
-    DirectoryRead(#[from] tantivy::directory::error::OpenReadError),
-    #[error("Blob error: {0}")]
+    DirectoryOpen(tantivy::directory::error::OpenDirectoryError),
+    DirectoryRead(tantivy::directory::error::OpenReadError),
     Blob(String),
+}
+
+impl std::fmt::Display for IndexError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Tantivy(error) => write!(f, "Tantivy error: {error}"),
+            Self::Io(error) => write!(f, "IO error: {error}"),
+            #[cfg(feature = "filesystem")]
+            Self::DirectoryOpen(error) => write!(f, "Directory open error: {error}"),
+            Self::DirectoryRead(error) => write!(f, "Directory read error: {error}"),
+            Self::Blob(message) => write!(f, "Blob error: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for IndexError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Tantivy(error) => Some(error),
+            Self::Io(error) => Some(error),
+            #[cfg(feature = "filesystem")]
+            Self::DirectoryOpen(error) => Some(error),
+            Self::DirectoryRead(error) => Some(error),
+            Self::Blob(_) => None,
+        }
+    }
+}
+
+impl From<tantivy::TantivyError> for IndexError {
+    fn from(error: tantivy::TantivyError) -> Self {
+        Self::Tantivy(error)
+    }
+}
+
+impl From<std::io::Error> for IndexError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+#[cfg(feature = "filesystem")]
+impl From<tantivy::directory::error::OpenDirectoryError> for IndexError {
+    fn from(error: tantivy::directory::error::OpenDirectoryError) -> Self {
+        Self::DirectoryOpen(error)
+    }
+}
+
+impl From<tantivy::directory::error::OpenReadError> for IndexError {
+    fn from(error: tantivy::directory::error::OpenReadError) -> Self {
+        Self::DirectoryRead(error)
+    }
 }
 
 impl IndexManager {
@@ -239,30 +285,41 @@ impl IndexManager {
         self.commit()
     }
 
-    /// Rebuild the entire index from the docs buffer using SingleSegmentIndexWriter
-    /// (no background threads — safe for WASM).
+    #[cfg(not(feature = "filesystem"))]
+    fn build_tokenizer_manager(ignore_diacritics: bool) -> tantivy::tokenizer::TokenizerManager {
+        let tokenizers = tantivy::tokenizer::TokenizerManager::default();
+        if ignore_diacritics {
+            tokenizers.register(
+                "ferrisearch",
+                DiacriticFilter.transform(FerrisearchTokenizer::new()),
+            );
+        } else {
+            tokenizers.register("ferrisearch", FerrisearchTokenizer::new());
+        }
+        tokenizers
+    }
+
+    /// Rebuild the entire index from the docs buffer using a single-segment
+    /// writer (no background threads — safe for WASM).
     #[cfg(not(feature = "filesystem"))]
     pub fn commit(&mut self) -> Result<(), IndexError> {
-        use tantivy::SingleSegmentIndexWriter;
-
         let (schema, fields) = build_schema();
         let settings = tantivy::IndexSettings {
             docstore_compress_dedicated_thread: false,
             ..Default::default()
         };
-        let index = Index::create(tantivy::directory::RamDirectory::create(), schema, settings)?;
-        Self::register_tokenizer(
-            &index,
-            &IndexConfig {
-                ignore_diacritics: self.ignore_diacritics,
-            },
-        );
-
-        let mut writer = SingleSegmentIndexWriter::new(index.clone(), 15_000_000)?;
+        let mut writer = tantivy::Index::builder()
+            .schema(schema)
+            .settings(settings)
+            .tokenizers(Self::build_tokenizer_manager(self.ignore_diacritics))
+            .single_segment_index_writer(
+                tantivy::directory::RamDirectory::create(),
+                15_000_000,
+            )?;
         for doc in &self.docs_buffer {
             writer.add_document(Self::build_tantivy_doc(&fields, doc))?;
         }
-        writer.finalize()?;
+        let index = writer.finalize()?;
 
         self.reader = index
             .reader_builder()
@@ -291,7 +348,17 @@ impl IndexManager {
 
         let metas = self.index.searchable_segment_metas()?;
         for meta in &metas {
-            for file_path in meta.list_files() {
+            for component in [
+                tantivy::index::SegmentComponent::Postings,
+                tantivy::index::SegmentComponent::Positions,
+                tantivy::index::SegmentComponent::FastFields,
+                tantivy::index::SegmentComponent::FieldNorms,
+                tantivy::index::SegmentComponent::Terms,
+                tantivy::index::SegmentComponent::Store,
+                tantivy::index::SegmentComponent::TempStore,
+                tantivy::index::SegmentComponent::Delete,
+            ] {
+                let file_path = meta.relative_path(component);
                 match dir.atomic_read(&file_path) {
                     Ok(data) => {
                         files.push((file_path.to_string_lossy().into_owned(), data));

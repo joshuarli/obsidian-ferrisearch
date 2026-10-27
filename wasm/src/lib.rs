@@ -12,12 +12,19 @@ fn map_err(e: ferrisearch_core::index::IndexError) -> JsError {
     JsError::new(&e.to_string())
 }
 
-fn from_js<T: serde::de::DeserializeOwned>(val: JsValue) -> Result<T, JsError> {
-    serde_wasm_bindgen::from_value(val).map_err(|e| JsError::new(&e.to_string()))
+fn from_js<T: miniserde::Deserialize>(val: JsValue) -> Result<T, JsError> {
+    let json = js_sys::JSON::stringify(&val)
+        .map_err(|_| JsError::new("Ferrisearch - Failed to serialize JS value"))?;
+    let text = json
+        .as_string()
+        .ok_or_else(|| JsError::new("Ferrisearch - Expected a JSON-serializable value"))?;
+    miniserde::json::from_str(&text)
+        .map_err(|_| JsError::new("Ferrisearch - Invalid search input"))
 }
 
-fn to_js<T: serde::Serialize>(val: &T) -> Result<JsValue, JsError> {
-    serde_wasm_bindgen::to_value(val).map_err(|e| JsError::new(&e.to_string()))
+fn to_js<T: miniserde::Serialize>(val: &T) -> Result<JsValue, JsError> {
+    let text = miniserde::json::to_string(val);
+    js_sys::JSON::parse(&text).map_err(|_| JsError::new("Ferrisearch - Failed to build JS value"))
 }
 
 #[wasm_bindgen]
@@ -27,7 +34,7 @@ impl SearchIndex {
         let cfg: types::IndexConfig = if config.is_undefined() || config.is_null() {
             types::IndexConfig::default()
         } else {
-            from_js(config)?
+            from_js::<types::PartialIndexConfig>(config).map(types::IndexConfig::from)?
         };
         let inner = IndexManager::new_in_memory(cfg).map_err(map_err)?;
         Ok(Self { inner: Some(inner) })
@@ -97,7 +104,7 @@ impl SearchIndex {
         let opts: types::SearchOptions = if options.is_undefined() || options.is_null() {
             types::SearchOptions::default()
         } else {
-            from_js(options)?
+            from_js::<types::PartialSearchOptions>(options).map(types::SearchOptions::from)?
         };
         let results = self.inner()?.search(query, &opts).map_err(map_err)?;
         to_js(&results)
@@ -113,7 +120,7 @@ impl SearchIndex {
         let cfg: types::IndexConfig = if config.is_undefined() || config.is_null() {
             types::IndexConfig::default()
         } else {
-            from_js(config)?
+            from_js::<types::PartialIndexConfig>(config).map(types::IndexConfig::from)?
         };
         let mut inner = IndexManager::load_from_blob(blob, cfg).map_err(map_err)?;
         inner.reconstruct_docs_buffer().map_err(map_err)?;
