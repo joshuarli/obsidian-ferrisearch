@@ -14,3 +14,7 @@ The plugin tries the native module only on desktop macOS arm64. If loading it th
 If the native module reports an unexpected NAPI version, Ferrisearch shows a restart notice and throws, so initialization falls back to WASM instead of running with no index. Restart Obsidian before searching.
 
 The manual release archive contains the WASM engine and a macOS arm64 native module. The release workflow is described in [releases](releases.md).
+
+## Search UI
+
+The vault and in-file modals are handwritten against `Modal`, not `SuggestModal`. `SuggestModal` exposes no selected-item accessor or selection-change hook, so Tab-to-switch, background open, and insert-link for the highlighted (not yet chosen) row would depend on undocumented DOM classes. It also renders every suggestion up to its limit, while the custom list windows rows through an `IntersectionObserver`. Keep the custom modals.
