@@ -102,6 +102,36 @@ type NativeSearchResultWithBreakdown = NativeSearchResult & {
   _tagBoost?: boolean
 }
 
+interface SidecarDoc {
+  path: string
+  mtime: number
+}
+
+interface SidecarManifestV1 {
+  format: 1
+  generation: string
+  blobLength: number | null
+  savedAt: number
+  docs: SidecarDoc[]
+}
+
+function isSidecarManifestV1(raw: unknown): raw is SidecarManifestV1 {
+  if (typeof raw !== 'object' || raw === null) return false
+  const record = raw as Record<string, unknown>
+  if (record['format'] !== 1 || typeof record['generation'] !== 'string') return false
+  if (record['blobLength'] !== null && typeof record['blobLength'] !== 'number') return false
+  if (!Array.isArray(record['docs'])) return false
+  return record['docs'].every((doc: unknown): doc is SidecarDoc => {
+    if (typeof doc !== 'object' || doc === null) return false
+    const entry = doc as Record<string, unknown>
+    return typeof entry['path'] === 'string' && typeof entry['mtime'] === 'number'
+  })
+}
+
+function createCacheGeneration(): string {
+  return `${Date.now().toString(36)}-${Math.floor(Math.random() * 0x7fffffff).toString(36)}`
+}
+
 interface DocumentRead {
   file: TFile
   document: IndexedDocument
@@ -116,6 +146,7 @@ export class SearchEngine {
   private nativeIndex: NativeSearchIndex | null = null
   private indexedDocuments = new Map<string, number>()
   private pendingIndexedDocumentChanges = new Map<string, IndexedDocumentChange>()
+  private persistedCache: { generation: string; blobLength: number } | null = null
   private isNativeEngine = false
 
   constructor(plugin: FerrisearchPlugin) {
@@ -165,6 +196,7 @@ export class SearchEngine {
           10_000,
         )
       }
+      throw error
     }
   }
 
@@ -174,7 +206,9 @@ export class SearchEngine {
       version = typeof module.napiVersion === 'function' ? module.napiVersion() : 0
     if (version !== EXPECTED_NAPI_VERSION) {
       new Notice('Ferrisearch: native module outdated — please restart Obsidian.', 0)
-      return
+      throw new Error(
+        `Ferrisearch - Native module version ${version} does not match expected ${EXPECTED_NAPI_VERSION}`,
+      )
     }
 
     this.nativeIndex = new module.SearchIndex(this.getIndexPath(), {
@@ -214,6 +248,7 @@ export class SearchEngine {
   public async clearIndex(): Promise<void> {
     this.close()
     this.indexedDocuments.clear()
+    this.persistedCache = null
 
     const adapter = this.plugin.app.vault.adapter,
       sidecar = this.getSidecarPath()
@@ -233,9 +268,21 @@ export class SearchEngine {
       const adapter = this.plugin.app.vault.adapter,
         path = this.getSidecarPath()
       if (await adapter.exists(path)) {
-        const manifest: { path: string; mtime: number }[] = JSON.parse(await adapter.read(path))
-        this.indexedDocuments = new Map(manifest.map(o => [o.path, o.mtime]))
-        return true
+        const raw: unknown = JSON.parse(await adapter.read(path))
+        if (Array.isArray(raw)) {
+          const manifest = raw as SidecarDoc[]
+          this.indexedDocuments = new Map(manifest.map(o => [o.path, o.mtime]))
+          this.persistedCache = null
+          return true
+        }
+        if (isSidecarManifestV1(raw)) {
+          this.indexedDocuments = new Map(raw.docs.map(o => [o.path, o.mtime]))
+          this.persistedCache = typeof raw.blobLength === 'number'
+            ? { generation: raw.generation, blobLength: raw.blobLength }
+            : null
+          return true
+        }
+        console.warn('Ferrisearch - Ignoring unrecognized sidecar manifest format')
       }
     } catch (error) {
       console.warn('Ferrisearch - Failed to load sidecar manifest', error)
@@ -243,12 +290,74 @@ export class SearchEngine {
     return false
   }
 
-  async saveSidecar(): Promise<void> {
+  async saveSidecar(cache?: { generation: string; blobLength: number | null }): Promise<void> {
     try {
-      const data = [...this.indexedDocuments].map(([path, mtime]) => ({ path, mtime }))
-      await this.plugin.app.vault.adapter.write(this.getSidecarPath(), JSON.stringify(data))
+      const manifest: SidecarManifestV1 = {
+        format: 1,
+        generation: cache?.generation ?? createCacheGeneration(),
+        blobLength: cache?.blobLength ?? null,
+        savedAt: Date.now(),
+        docs: [...this.indexedDocuments].map(([path, mtime]) => ({ path, mtime })),
+      }
+      await this.atomicWriteText(this.getSidecarPath(), JSON.stringify(manifest))
     } catch (error) {
       console.error('Ferrisearch - Failed to save sidecar manifest', error)
+    }
+  }
+
+  async validatePersistedCache(): Promise<boolean> {
+    const cache = this.persistedCache
+    if (!cache) return true
+    try {
+      const blobStat = await this.plugin.app.vault.adapter.stat(this.getBlobPath())
+      if (blobStat && blobStat.size === cache.blobLength) return true
+      console.warn('Ferrisearch - Persisted index blob does not match manifest, rebuilding')
+    } catch (error) {
+      console.warn('Ferrisearch - Failed to validate persisted index blob, rebuilding', error)
+    }
+    this.indexedDocuments.clear()
+    this.persistedCache = null
+    return false
+  }
+
+  async persistIndexCache(): Promise<void> {
+    if (this.isNativeEngine || !this.nativeIndex) {
+      await this.saveSidecar()
+      return
+    }
+    const cache = await this.saveIndexBlob()
+    if (cache) {
+      await this.saveSidecar(cache)
+    }
+  }
+
+  private async atomicWriteText(path: string, data: string): Promise<void> {
+    const adapter = this.plugin.app.vault.adapter,
+      tmp = `${path}.tmp`
+    await adapter.write(tmp, data)
+    try {
+      await adapter.rename(tmp, path)
+    } catch {
+      await adapter.write(path, data)
+      try {
+        await adapter.remove(tmp)
+      } catch {
+      }
+    }
+  }
+
+  private async atomicWriteBinary(path: string, data: ArrayBuffer): Promise<void> {
+    const adapter = this.plugin.app.vault.adapter,
+      tmp = `${path}.tmp`
+    await adapter.writeBinary(tmp, data)
+    try {
+      await adapter.rename(tmp, path)
+    } catch {
+      await adapter.writeBinary(path, data)
+      try {
+        await adapter.remove(tmp)
+      } catch {
+      }
     }
   }
 
@@ -513,19 +622,22 @@ export class SearchEngine {
   /**
    * Serialize the WASM index to a binary blob and save it to disk.
    * Only applicable when using the WASM engine. No-op with native engine.
+   * Writes the blob before the caller saves the manifest so an interrupted
+   * save leaves both files at their last good state. Returns the cache
+   * identity for the manifest, or null when the blob was not saved.
    */
-  async saveIndexBlob(): Promise<void> {
-    if (this.isNativeEngine || !this.nativeIndex) return
+  async saveIndexBlob(): Promise<{ generation: string; blobLength: number } | null> {
+    if (this.isNativeEngine || !this.nativeIndex) return null
     try {
-      const wasmIndex = this.nativeIndex as unknown as WasmSearchIndex,
+      const generation = createCacheGeneration(),
+        wasmIndex = this.nativeIndex as unknown as WasmSearchIndex,
         blob = wasmIndex.serializeIndex()
-      await this.plugin.app.vault.adapter.writeBinary(
-        this.getBlobPath(),
-        blob.buffer as ArrayBuffer,
-      )
+      await this.atomicWriteBinary(this.getBlobPath(), blob.buffer as ArrayBuffer)
       console.log(`Ferrisearch - Saved index blob (${(blob.length / 1024).toFixed(0)} KB)`)
+      return { generation, blobLength: blob.length }
     } catch (error) {
       console.error('Ferrisearch - Failed to save index blob', error)
+      return null
     }
   }
 

@@ -198,8 +198,7 @@ export default class FerrisearchPlugin extends Plugin {
   override async onunload(): Promise<void> {
     Reflect.deleteProperty(globalThis, 'ferrisearch')
 
-    await this.searchEngine.saveSidecar()
-    await this.searchEngine.saveIndexBlob()
+    await this.searchEngine.persistIndexCache()
     this.searchEngine.close()
   }
 
@@ -217,6 +216,7 @@ export default class FerrisearchPlugin extends Plugin {
       hasCache = await searchEngine.loadIndexBlob()
       if (hasCache) {
         await searchEngine.loadSidecar()
+        hasCache = await searchEngine.validatePersistedCache()
       }
     }
     if (hasCache) {
@@ -259,8 +259,7 @@ export default class FerrisearchPlugin extends Plugin {
 
     if (diff.toRemove.length > 0 || diff.toAdd.length > 0) {
       const tSave = performance.now()
-      await searchEngine.saveSidecar()
-      await searchEngine.saveIndexBlob()
+      await searchEngine.persistIndexCache()
       console.debug(`Ferrisearch - Saved cache in ${(performance.now() - tSave).toFixed(0)}ms`)
     }
 

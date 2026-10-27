@@ -37,6 +37,155 @@ function createResult(
 }
 
 describe('SearchEngine', () => {
+  it('falls back to WASM when the native module version mismatches', async () => {
+    const plugin = createMockPlugin(),
+      search = new SearchEngine(plugin)
+    Object.assign(plugin.app.vault, {
+      adapter: { readBinary: vi.fn(async () => new ArrayBuffer(8)) },
+    })
+    vi.spyOn(
+      search as unknown as { shouldUseNative(): boolean },
+      'shouldUseNative',
+    ).mockReturnValue(true)
+    vi.spyOn(
+      search as unknown as { loadNativeModule(): unknown },
+      'loadNativeModule',
+    ).mockReturnValue({
+      napiVersion: () => 4,
+      SearchIndex: class {},
+    })
+
+    await search.initialize()
+
+    expect(search.isNative).toBe(false)
+  })
+
+  it('uses the native engine when the native module version matches', async () => {
+    const plugin = createMockPlugin(),
+      search = new SearchEngine(plugin)
+    vi.spyOn(
+      search as unknown as { shouldUseNative(): boolean },
+      'shouldUseNative',
+    ).mockReturnValue(true)
+    vi.spyOn(
+      search as unknown as { loadNativeModule(): unknown },
+      'loadNativeModule',
+    ).mockReturnValue({
+      napiVersion: () => 5,
+      SearchIndex: class {},
+    })
+    vi.spyOn(
+      search as unknown as { getIndexPath(): string },
+      'getIndexPath',
+    ).mockReturnValue('/tmp/ferrisearch-test-index')
+
+    await search.initialize()
+
+    expect(search.isNative).toBe(true)
+  })
+
+  it('fails explicitly when both native and WASM initialization fail', async () => {
+    const plugin = createMockPlugin(),
+      search = new SearchEngine(plugin)
+    Object.assign(plugin.app.vault, {
+      adapter: {
+        readBinary: vi.fn(async () => {
+          throw new Error('missing wasm runtime')
+        }),
+      },
+    })
+    vi.spyOn(
+      search as unknown as { shouldUseNative(): boolean },
+      'shouldUseNative',
+    ).mockReturnValue(false)
+
+    await expect(search.initialize()).rejects.toThrow('missing wasm runtime')
+    expect(search.isNative).toBe(false)
+  })
+
+  it('round-trips the versioned sidecar manifest and validates the blob', async () => {
+    const files = new Map<string, string | ArrayBuffer>(),
+      adapter = {
+        exists: vi.fn(async (path: string) => files.has(path)),
+        read: vi.fn(async (path: string) => {
+          const data = files.get(path)
+          if (typeof data !== 'string') throw new Error(`missing text file: ${path}`)
+          return data
+        }),
+        write: vi.fn(async (path: string, data: string) => {
+          files.set(path, data)
+        }),
+        writeBinary: vi.fn(async (path: string, data: ArrayBuffer) => {
+          files.set(path, data)
+        }),
+        readBinary: vi.fn(async (path: string) => {
+          const data = files.get(path)
+          if (!(data instanceof ArrayBuffer)) throw new Error(`missing binary: ${path}`)
+          return data
+        }),
+        rename: vi.fn(async (oldPath: string, newPath: string) => {
+          const data = files.get(oldPath)
+          if (data === undefined) throw new Error(`missing rename source: ${oldPath}`)
+          files.set(newPath, data)
+          files.delete(oldPath)
+        }),
+        remove: vi.fn(async (path: string) => {
+          files.delete(path)
+        }),
+        stat: vi.fn(async (path: string) => {
+          const data = files.get(path)
+          if (data === undefined) return null
+          const size = typeof data === 'string' ? data.length : data.byteLength
+          return { type: 'file', size, ctime: 0, mtime: 0 }
+        }),
+      },
+      plugin = createMockPlugin()
+    Object.assign(plugin.app.vault, { configDir: 'drafts', adapter })
+    const search = new SearchEngine(plugin)
+    Object.defineProperty(search, 'nativeIndex', {
+      value: { serializeIndex: () => new Uint8Array([1, 2, 3, 4]) },
+    })
+
+    files.set(
+      'drafts/plugins/ferrisearch/index-manifest.json',
+      JSON.stringify([{ path: 'first.md', mtime: 7 }]),
+    )
+    expect(await search.loadSidecar()).toBe(true)
+    const cache = await search.saveIndexBlob()
+    expect(cache).not.toBeNull()
+    await search.saveSidecar(cache ?? undefined)
+
+    const reloaded = new SearchEngine(plugin)
+    expect(await reloaded.loadSidecar()).toBe(true)
+    expect(reloaded.getDocumentsToReindex([{ path: 'first.md', mtime: 7 }])).toEqual({
+      toAdd: [],
+      toRemove: [],
+    })
+    expect(await reloaded.validatePersistedCache()).toBe(true)
+
+    files.set('drafts/plugins/ferrisearch/index-blob.bin', new Uint8Array([9]).buffer as ArrayBuffer)
+    expect(await reloaded.validatePersistedCache()).toBe(false)
+    expect(reloaded.getDocumentsToReindex([])).toEqual({ toAdd: [], toRemove: [] })
+  })
+
+  it('loads a legacy array sidecar manifest', async () => {
+    const plugin = createMockPlugin(),
+      search = new SearchEngine(plugin)
+    Object.assign(plugin.app.vault, {
+      adapter: {
+        exists: vi.fn(async () => true),
+        read: vi.fn(async () => JSON.stringify([{ path: 'first.md', mtime: 7 }])),
+      },
+    })
+
+    expect(await search.loadSidecar()).toBe(true)
+    expect(search.getDocumentsToReindex([{ path: 'first.md', mtime: 7 }])).toEqual({
+      toAdd: [],
+      toRemove: [],
+    })
+    expect(await search.validatePersistedCache()).toBe(true)
+  })
+
   it.each(['remove', 'remove commit', 'add', 'add commit'])(
     'restores a queued note after a native %s failure', async failure => {
       const plugin = createMockPlugin(),
