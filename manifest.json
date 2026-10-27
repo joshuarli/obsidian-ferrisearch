@@ -2,7 +2,7 @@
   "id": "ferrisearch",
   "name": "Ferrisearch",
   "version": "0.1.0",
-  "minAppVersion": "1.11.7",
+  "minAppVersion": "1.13.0",
   "description": "warp speed fuzzy text-only search",
   "author": "joshuarli",
   "isDesktopOnly": false

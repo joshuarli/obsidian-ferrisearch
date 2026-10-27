@@ -16,7 +16,25 @@ export class Modal {
   close() {}
 }
 export class Plugin {}
-export class PluginSettingTab {}
+export class PluginSettingTab {
+  app: App
+  plugin: Plugin
+  constructor(app: App, plugin: Plugin) {
+    this.app = app
+    this.plugin = plugin
+  }
+  getControlValue(key: string): unknown {
+    return (this.plugin as unknown as { settings: Record<string, unknown> }).settings[key]
+  }
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    const target = this.plugin as unknown as {
+      settings: Record<string, unknown>
+      saveData?: (data: unknown) => Promise<void>
+    }
+    target.settings[key] = value
+    await target.saveData?.(target.settings)
+  }
+}
 export class Setting {
   setName() {
     return this

@@ -2,16 +2,6 @@ import type { App, Plugin } from 'obsidian'
 import { K_DISABLE_FERRISEARCH, type RecencyCutoff } from '../globals'
 import { settings } from './index'
 
-export function htmlDescription(innerHTML: string): DocumentFragment {
-  const desc = new DocumentFragment()
-  desc.createSpan({}, span => {
-    span.innerHTML = innerHTML
-  })
-  return desc
-}
-
-export const needsARestart = `<strong style="color: var(--text-accent)">Needs a restart to fully take effect.</strong>`
-
 export interface WeightingSettings {
   weightBasename: number
   weightDirectory: number
@@ -48,4 +38,6 @@ export interface FerrisearchSettings extends WeightingSettings {
   resultLimit: number
   /** Show score breakdown in search results */
   showScoreBreakdown: boolean
+  /** Move the cursor to the first match when opening a result */
+  jumpToMatch: boolean
 }

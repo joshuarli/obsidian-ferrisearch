@@ -1,7 +1,7 @@
 # Ferrisearch
 
 Ferrisearch searches Markdown notes in your Obsidian vault with fuzzy text search.
-It works on desktop and mobile and requires Obsidian 1.11.7 or later.
+It works on desktop and mobile and requires Obsidian 1.13.0 or later.
 
 ## Install
 
@@ -34,6 +34,7 @@ Ferrisearch saves its settings through Obsidian. Defaults include:
 | --- | --- |
 | Minimum query length | 3 characters |
 | Maximum results | 10 |
+| Jump to matching text | On |
 | Fuzziness | Slightly fuzzy |
 | Folders to downrank | None |
 | Show excerpts | On |
