@@ -9,8 +9,8 @@ Ferrisearch uses a TypeScript Obsidian plugin and a Rust search engine. The Type
 | Desktop macOS arm64 | NAPI native module when it loads | Tantivy mmap index on disk |
 | Every other platform | WASM | In-memory Tantivy index |
 
-The plugin tries the native module only on desktop macOS arm64. If loading it throws, the plugin initializes WASM. Mobile and other desktop platforms use WASM directly. The plugin loads the WASM binary through Obsidian's vault adapter.
+The plugin tries the native module only on desktop macOS arm64. If loading it throws, the plugin initializes WASM. Mobile and other desktop platforms use WASM directly. The production bundle embeds the WASM binary; development builds load it from the plugin folder through Obsidian's vault adapter as a fallback.
 
-If the native module reports an unexpected NAPI version, Ferrisearch shows a restart notice. The initializer returns without creating a native index. The caller still marks the engine native, so it does not fall back to WASM. Restart Obsidian before searching.
+If the native module reports an unexpected NAPI version, Ferrisearch shows a restart notice and throws, so initialization falls back to WASM instead of running with no index. Restart Obsidian before searching.
 
 The manual release archive contains the WASM engine and a macOS arm64 native module. The release workflow is described in [releases](releases.md).

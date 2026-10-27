@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { build } from 'rolldown'
 
 const prod = process.argv.includes('production'),
@@ -44,10 +44,22 @@ mkdirSync('./dist', { recursive: true })
 copyFileSync('manifest.json', 'dist/manifest.json')
 copyFileSync('assets/styles.css', 'dist/styles.css')
 
-const wasmBinary = 'wasm/pkg/ferrisearch_wasm_bg.wasm'
+const wasmBinary = 'wasm/pkg/ferrisearch_wasm_bg.wasm',
+  wasmMarker = '__FERRISEARCH_WASM_B64__'
 if (existsSync(wasmBinary)) {
   copyFileSync(wasmBinary, 'dist/ferrisearch_wasm_bg.wasm')
   console.log('Copied WASM binary to dist/')
+  if (prod) {
+    const payload = readFileSync(wasmBinary).toString('base64'),
+      mainPath = './dist/main.js',
+      bundled = readFileSync(mainPath, 'utf8').split(wasmMarker).join(payload)
+    writeFileSync(mainPath, bundled)
+    console.log(
+      `Embedded WASM payload (${(payload.length / 1024).toFixed(0)} KB base64) into dist/main.js`,
+    )
+  }
+} else {
+  console.warn('WASM binary not found, dist/main.js will load it from the plugin folder at runtime')
 }
 
 console.log(`Built dist/main.js (${prod ? 'production' : 'development'})`)

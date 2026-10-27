@@ -5,6 +5,7 @@ import {
 } from '../../wasm/pkg/ferrisearch_wasm.js'
 import type { DocumentRef, IndexedDocument, ResultNote, ScoreBreakdown } from '../globals'
 import type FerrisearchPlugin from '../main'
+import { getEmbeddedWasmBytes } from '../wasm-payload'
 import {
   extractHeadingsFromCache,
   getAliasesFromMetadata,
@@ -218,9 +219,10 @@ export class SearchEngine {
   }
 
   private async initializeWasm(): Promise<void> {
-    const adapter = this.plugin.app.vault.adapter,
-      wasmPath = `${this.plugin.app.vault.configDir}/plugins/ferrisearch/ferrisearch_wasm_bg.wasm`,
-      wasmBytes = await adapter.readBinary(wasmPath)
+    const embedded = getEmbeddedWasmBytes(),
+      wasmBytes = embedded ?? await this.plugin.app.vault.adapter.readBinary(
+        `${this.plugin.app.vault.configDir}/plugins/ferrisearch/ferrisearch_wasm_bg.wasm`,
+      )
 
     wasmInitSync(wasmBytes)
     this.nativeIndex = new WasmSearchIndex({
