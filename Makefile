@@ -1,7 +1,7 @@
 .PHONY: build build-native ensure-wasm-bindgen build-wasm build-plugin package install install-remote
 
 PROFILE ?= release
-VAULT_PLUGIN ?= /Users/josh/iCloud~md~obsidian/Documents/Notes/.obsidian/plugins/ferrisearch
+VAULTS_ROOT ?= /Users/josh/Library/Mobile Documents/iCloud~md~obsidian/Documents
 
 NATIVE_FILE := ferrisearch.darwin-arm64.node
 NATIVE_BINARY := target/$(PROFILE)/libferrisearch_napi.dylib
@@ -40,10 +40,16 @@ package: build
 	zip -j "$(PACKAGE)" $(PACKAGE_FILES)
 
 install: build
-	mkdir -p "$(VAULT_PLUGIN)"
-	cp dist/main.js dist/manifest.json dist/styles.css "$(VAULT_PLUGIN)/"
-	cp "$(NATIVE_FILE)" dist/ferrisearch_wasm_bg.wasm "$(VAULT_PLUGIN)/"
-	ls -lh "$(VAULT_PLUGIN)"
+	@set -eu; \
+	for vault in "$(VAULTS_ROOT)"/*/; do \
+		[ -d "$${vault}.obsidian" ] || continue; \
+		dest="$${vault}.obsidian/plugins/ferrisearch"; \
+		mkdir -p "$$dest"; \
+		cp dist/main.js dist/manifest.json dist/styles.css "$$dest/"; \
+		cp "$(NATIVE_FILE)" dist/ferrisearch_wasm_bg.wasm "$$dest/"; \
+		echo "Installed to $$dest:"; \
+		ls -lh "$$dest"; \
+	done
 
 install-remote:
 	@set -eu; \
@@ -56,6 +62,11 @@ install-remote:
 	echo "Downloading Ferrisearch $$tag..."; \
 	gh release download "$$tag" --pattern "$(PACKAGE)" --dir "$$remote_dir"; \
 	unzip -q "$$remote_dir/$(PACKAGE)" -d "$$remote_dir/plugin"; \
-	mkdir -p "$(VAULT_PLUGIN)"; \
-	cp "$$remote_dir/plugin/main.js" "$$remote_dir/plugin/manifest.json" "$$remote_dir/plugin/styles.css" "$$remote_dir/plugin/ferrisearch_wasm_bg.wasm" "$$remote_dir/plugin/$(NATIVE_FILE)" "$(VAULT_PLUGIN)/"; \
-	ls -lh "$(VAULT_PLUGIN)"
+	for vault in "$(VAULTS_ROOT)"/*/; do \
+		[ -d "$${vault}.obsidian" ] || continue; \
+		dest="$${vault}.obsidian/plugins/ferrisearch"; \
+		mkdir -p "$$dest"; \
+		cp "$$remote_dir/plugin/main.js" "$$remote_dir/plugin/manifest.json" "$$remote_dir/plugin/styles.css" "$$remote_dir/plugin/ferrisearch_wasm_bg.wasm" "$$remote_dir/plugin/$(NATIVE_FILE)" "$$dest/"; \
+		echo "Installed to $$dest:"; \
+		ls -lh "$$dest"; \
+	done
