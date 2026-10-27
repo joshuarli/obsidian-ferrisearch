@@ -2,6 +2,7 @@ import { setIcon } from 'obsidian'
 import type { ResultNote, SearchMatch } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { showExcerpt } from '../settings/index'
+import { preferredExcerptOffset } from '../tools/text-processing'
 import { escapeRegExp, getExtension, pathWithoutFilename } from '../tools/utils'
 
 export function formatRelativeTime(mtime: number): string {
@@ -135,7 +136,10 @@ export function createVaultResultItem(note: ResultNote, plugin: FerrisearchPlugi
   const bodyDiv = document.createElement('div')
   bodyDiv.className = 'ferrisearch-result__body'
   bodyDiv.innerHTML = plugin.textProcessor.highlightText(
-    plugin.textProcessor.makeExcerpt(note.content, note.matches[0]?.offset ?? -1),
+    plugin.textProcessor.makeExcerpt(
+      note.content,
+      preferredExcerptOffset(note.content, note.matches),
+    ),
     note.matches,
   )
 

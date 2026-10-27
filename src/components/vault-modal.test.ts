@@ -256,6 +256,73 @@ describe('renderVaultModal', () => {
   })
 
   describe('actions', () => {
+    it('meta-click opens the selected note in a new pane', async () => {
+      const notes = [createMockResultNote({ path: 'a.md', basename: 'a' })],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
+      input.value = 'test'
+      input.dispatchEvent(new Event('input'))
+      await flush()
+
+      const item = container.querySelector('.ferrisearch-result')
+      expect(item).not.toBeNull()
+      item!.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }))
+      await flush(50)
+      expect(modal.close).toHaveBeenCalled()
+      handle.destroy()
+    })
+
+    it('long-press opens the selected note in a new pane', async () => {
+      const notes = [createMockResultNote({ path: 'a.md', basename: 'a' })],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
+      input.value = 'test'
+      input.dispatchEvent(new Event('input'))
+      await flush()
+
+      const item = container.querySelector('.ferrisearch-result')
+      expect(item).not.toBeNull()
+      item!.dispatchEvent(new Event('touchstart'))
+      await flush(700)
+      expect(modal.close).toHaveBeenCalled()
+      handle.destroy()
+    })
+
+    it('a quick tap does not trigger the long-press action', async () => {
+      const notes = [createMockResultNote({ path: 'a.md', basename: 'a' })],
+        { container, modal, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
+      input.value = 'test'
+      input.dispatchEvent(new Event('input'))
+      await flush()
+
+      const item = container.querySelector('.ferrisearch-result')
+      expect(item).not.toBeNull()
+      item!.dispatchEvent(new Event('touchstart'))
+      item!.dispatchEvent(new Event('touchend'))
+      await flush(700)
+      expect(modal.close).not.toHaveBeenCalled()
+      handle.destroy()
+    })
+
+    it('shows an in-file search button on mobile only', async () => {
+      const { Platform } = await import('obsidian')
+      const wasMobile = Platform.isMobileApp
+      try {
+        Platform.isMobileApp = false
+        const desktop = setup()
+        expect(desktop.container.querySelector('.ferrisearch-mobile-infile')).toBeNull()
+        desktop.handle.destroy()
+
+        Platform.isMobileApp = true
+        const mobile = setup()
+        expect(mobile.container.querySelector('.ferrisearch-mobile-infile')).not.toBeNull()
+        mobile.handle.destroy()
+      } finally {
+        Platform.isMobileApp = wasMobile
+      }
+    })
+
     it('Enter closes modal when results exist', async () => {
       const notes = [createMockResultNote()],
         { container, modal, handle } = setup({ searchResults: notes }),

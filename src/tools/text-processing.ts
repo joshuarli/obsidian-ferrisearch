@@ -96,6 +96,22 @@ export class TextProcessor {
   }
 }
 
+const frontmatterFence = /^---[ \t]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/
+
+export function preferredExcerptOffset(
+  content: string,
+  matches: readonly { offset: number }[],
+): number {
+  if (matches.length === 0) return -1
+  const fence = content.match(frontmatterFence)
+  if (fence?.index === 0) {
+    const bodyStart = fence.index + fence[0].length,
+      bodyMatch = matches.find(m => m.offset >= bodyStart)
+    if (bodyMatch) return bodyMatch.offset
+  }
+  return matches[0]?.offset ?? -1
+}
+
 function escapeHTML(html: string): string {
   return html
     .replaceAll('&', '&amp;')

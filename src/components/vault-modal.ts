@@ -1,10 +1,17 @@
-import { MarkdownView, Notice, setIcon, TFile } from 'obsidian'
+import { MarkdownView, Notice, Platform, setIcon, TFile } from 'obsidian'
 import { Action, type ResultNote } from '../globals'
 import type FerrisearchPlugin from '../main'
 import { Query } from '../search/query'
 import { openNote } from '../tools/notes'
 import { getAltKeyLabel, getCtrlKeyLabel, getExtension, loopIndex } from '../tools/utils'
-import { createInstructions, createResultsContainer, createSearchInput } from './modal-helpers'
+import {
+  addLongPress,
+  cancelLongPress,
+  consumeLongPress,
+  createInstructions,
+  createResultsContainer,
+  createSearchInput,
+} from './modal-helpers'
 import { FerrisearchInFileModal, type ModalHandle } from './modals'
 import { cleanupResultItem, createVaultResultItem, updateSelection } from './result-items'
 
@@ -45,6 +52,14 @@ export function renderVaultModal(
     [`${altKey} ↵`, 'to insert a link'],
     ['Esc', 'to close'],
   ])
+  if (Platform.isMobileApp) {
+    const inFileButton = document.createElement('button')
+    inFileButton.className = 'ferrisearch-mobile-infile'
+    inFileButton.type = 'button'
+    inFileButton.textContent = 'In-file search'
+    inFileButton.addEventListener('click', () => switchToInFileModal())
+    container.append(inFileButton)
+  }
 
   function onQueryChange() {
     if (!searchQuery) {
@@ -108,7 +123,10 @@ export function renderVaultModal(
   }
 
   function renderResults() {
-    for (const el of resultEls) cleanupResultItem(el)
+    for (const el of resultEls) {
+      cancelLongPress(el)
+      cleanupResultItem(el)
+    }
     resultEls = []
     resultsDiv.innerHTML = ''
     currentObserver?.disconnect()
@@ -133,7 +151,12 @@ export function renderVaultModal(
 
         updateSelection(item, i === selectedIndex)
         item.addEventListener('mousemove', () => setSelectedIndex(i))
+        addLongPress(item, () => {
+          setSelectedIndex(i)
+          selectHistoryItem(i)
+        })
         item.addEventListener('click', () => {
+          if (consumeLongPress(item)) return
           setSelectedIndex(i)
           selectHistoryItem(i)
         })
@@ -157,7 +180,12 @@ export function renderVaultModal(
             const item = createVaultResultItem(note, plugin)
             updateSelection(item, idx === selectedIndex)
             item.addEventListener('mousemove', () => setSelectedIndex(idx))
+            addLongPress(item, () => {
+              setSelectedIndex(idx)
+              openNoteInNewPane()
+            })
             item.addEventListener('click', evt => {
+              if (consumeLongPress(item)) return
               setSelectedIndex(idx)
               onClick(evt)
             })
@@ -241,13 +269,14 @@ export function renderVaultModal(
 
   function openSearchResult(note: ResultNote, newPane = false, newLeaf = false) {
     saveCurrentQuery()
-    openNote(plugin.app, note, note.matches?.[0]?.offset ?? 0, newPane, newLeaf)
+    const offset = plugin.settings.jumpToMatch ? note.matches[0]?.offset ?? 0 : 0
+    openNote(plugin.app, note, offset, newPane, newLeaf, plugin.settings.jumpToMatch)
   }
 
   function onClick(evt?: MouseEvent) {
     const note = getSelectedNote()
     if (!note) return
-    if (evt?.ctrlKey) {
+    if (evt?.ctrlKey || evt?.metaKey) {
       openNoteInNewPane()
     } else {
       openNoteAndCloseModal()

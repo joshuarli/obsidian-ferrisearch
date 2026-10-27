@@ -7,6 +7,7 @@ export async function openNote(
   offset = 0,
   newPane = false,
   newLeaf = false,
+  jumpToMatch = true,
 ): Promise<void> {
   let handled = false
   if (!newPane) {
@@ -24,8 +25,10 @@ export async function openNote(
   }
 
   if (!handled) {
-    await app.workspace.openLinkText(item.path, '', newLeaf ? 'split' : newPane)
+    await app.workspace.openLinkText(item.path, '', newLeaf ? 'split' : newPane ? 'tab' : false)
   }
+
+  if (!jumpToMatch) return
 
   const view = app.workspace.getActiveViewOfType(MarkdownView)
   if (!view) return

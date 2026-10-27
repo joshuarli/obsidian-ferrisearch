@@ -7,7 +7,7 @@ import { SearchEngine } from './search/search-engine'
 import { createSearchHistory, type SearchHistory } from './search/search-history'
 import { getDefaultSettings, loadSettings, SettingsTab } from './settings'
 import { type FerrisearchSettings, isPluginDisabled } from './settings/utils'
-import { TextProcessor } from './tools/text-processing'
+import { preferredExcerptOffset, TextProcessor } from './tools/text-processing'
 import { logVerbose } from './tools/utils'
 
 
@@ -43,7 +43,7 @@ function mapApiResults(plugin: FerrisearchPlugin, results: ResultNote[]): Result
     basename,
     foundWords,
     matches: matches.map(({ match, offset }) => ({ match, offset })),
-    excerpt: plugin.textProcessor.makeExcerpt(content, matches[0]?.offset ?? -1),
+    excerpt: plugin.textProcessor.makeExcerpt(content, preferredExcerptOffset(content, matches)),
   }))
 }
 

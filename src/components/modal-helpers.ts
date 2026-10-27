@@ -36,6 +36,53 @@ export function createSearchInput(
   return input
 }
 
+const longPressTimers = new WeakMap<HTMLElement, number>(),
+  longPressFired = new WeakSet<HTMLElement>(),
+  longPressInstrumented = new WeakSet<HTMLElement>()
+
+export function addLongPress(
+  el: HTMLElement,
+  onLongPress: () => void,
+  delay = 500,
+): void {
+  cancelLongPress(el)
+  if (longPressInstrumented.has(el)) return
+  longPressInstrumented.add(el)
+  const start = () => {
+    longPressFired.delete(el)
+    cancelLongPress(el)
+    longPressTimers.set(
+      el,
+      window.setTimeout(() => {
+        longPressTimers.delete(el)
+        longPressFired.add(el)
+        onLongPress()
+      }, delay),
+    )
+  }
+  el.addEventListener('touchstart', start, { passive: true })
+  el.addEventListener('touchmove', () => cancelLongPress(el), { passive: true })
+  el.addEventListener('touchend', () => cancelLongPress(el))
+  el.addEventListener('touchcancel', () => cancelLongPress(el))
+}
+
+export function cancelLongPress(el: HTMLElement): void {
+  const timer = longPressTimers.get(el)
+  if (timer !== undefined) {
+    clearTimeout(timer)
+    longPressTimers.delete(el)
+  }
+}
+
+export function consumeLongPress(el: HTMLElement): boolean {
+  cancelLongPress(el)
+  if (longPressFired.has(el)) {
+    longPressFired.delete(el)
+    return true
+  }
+  return false
+}
+
 export function createResultsContainer(container: HTMLElement): HTMLElement {
   const resultsDiv = document.createElement('div')
   resultsDiv.className = 'prompt-results'

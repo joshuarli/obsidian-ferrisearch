@@ -265,6 +265,26 @@ describe('renderInFileModal', () => {
       handle.destroy()
     })
 
+    it('meta-click opens the match in a new tab', async () => {
+      const note = createMockResultNote({
+          path: 'test.md',
+          matches: [{ match: 'a', offset: 10 }],
+        }),
+        { container, plugin, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement
+      input.value = 'test'
+      input.dispatchEvent(new Event('input'))
+      await flush()
+
+      const item = container.querySelector('.ferrisearch-result')
+      expect(item).not.toBeNull()
+      item!.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }))
+      await flush(50)
+
+      expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith('test.md', '', 'tab')
+      handle.destroy()
+    })
+
     it('positions the cursor at the match offset instead of the line start', async () => {
       const note = createMockResultNote({
           content: '0123456789abc0123456789',

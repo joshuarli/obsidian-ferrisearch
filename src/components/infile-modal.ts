@@ -4,7 +4,14 @@ import type FerrisearchPlugin from '../main'
 import { Query } from '../search/query'
 import { openNote } from '../tools/notes'
 import { getCtrlKeyLabel, loopIndex } from '../tools/utils'
-import { createInstructions, createResultsContainer, createSearchInput } from './modal-helpers'
+import {
+  addLongPress,
+  cancelLongPress,
+  consumeLongPress,
+  createInstructions,
+  createResultsContainer,
+  createSearchInput,
+} from './modal-helpers'
 import { FerrisearchVaultModal, type ModalHandle } from './modals'
 import { createInFileResultItem, updateSelection } from './result-items'
 
@@ -93,6 +100,7 @@ export function renderInFileModal(
   }
 
   function renderResults() {
+    for (const child of resultsDiv.children) cancelLongPress(child as HTMLElement)
     resultsDiv.innerHTML = ''
 
     if (groupedOffsets.length > 0 && note) {
@@ -100,9 +108,14 @@ export function renderInFileModal(
         const item = createInFileResultItem(note, plugin, groupedOffsets[i]!, i)
         updateSelection(item, i === selectedIndex)
         item.addEventListener('mousemove', () => setSelectedIndex(i))
-        item.addEventListener('click', evt => {
+        addLongPress(item, () => {
           setSelectedIndex(i)
-          openSelection(evt.ctrlKey)
+          openSelection(true)
+        })
+        item.addEventListener('click', evt => {
+          if (consumeLongPress(item)) return
+          setSelectedIndex(i)
+          openSelection(evt.ctrlKey || evt.metaKey)
         })
         item.addEventListener('auxclick', evt => {
           if (evt.button === 1) {
@@ -156,7 +169,9 @@ export function renderInFileModal(
     modal.close()
     if (parent) parent.close()
 
-    await openNote(plugin.app, note, offset, newTab)
+    await openNote(plugin.app, note, offset, newTab, false, plugin.settings.jumpToMatch)
+
+    if (!plugin.settings.jumpToMatch) return
 
     const view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
     if (!view) return
