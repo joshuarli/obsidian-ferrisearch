@@ -85,6 +85,12 @@ describe('renderVaultModal', () => {
   })
 
   describe('search behavior', () => {
+    it('flushes pending modifications when opened', async () => {
+      const { plugin, handle } = setup()
+      expect(plugin.notesIndexer.refreshIndex).toHaveBeenCalled()
+      handle.destroy()
+    })
+
     it('calls getSuggestions after debounce when input changes', async () => {
       const { container, plugin, handle } = setup(),
         input = container.querySelector('input.prompt-input') as HTMLInputElement
@@ -126,6 +132,83 @@ describe('renderVaultModal', () => {
       const results = container.querySelectorAll('.ferrisearch-result')
       expect(results.length).toBe(0)
       handle.destroy()
+    })
+
+    it('discards an in-flight search when the query is cleared', async () => {
+      const notes = [createMockResultNote()],
+        { container, plugin, handle } = setup()
+      let resolveSearch!: (results: unknown[]) => void
+      plugin.searchEngine.getSuggestions = vi.fn(
+        () => new Promise<unknown[]>(resolve => { resolveSearch = resolve }),
+      ) as typeof plugin.searchEngine.getSuggestions
+      const input = container.querySelector('input.prompt-input') as HTMLInputElement
+      input.value = 'test'
+      input.dispatchEvent(new Event('input'))
+      await flush(0)
+
+      input.value = ''
+      input.dispatchEvent(new Event('input'))
+      resolveSearch(notes)
+      await flush()
+
+      expect(container.querySelectorAll('.ferrisearch-result').length).toBe(0)
+      handle.destroy()
+    })
+
+    it('disconnects the previous observer when rerendering', async () => {
+      const notes = [createMockResultNote()],
+        { container, handle } = setup({ searchResults: notes }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement,
+        disconnect = vi.spyOn(globalThis.IntersectionObserver.prototype, 'disconnect')
+      try {
+        input.value = 'test'
+        input.dispatchEvent(new Event('input'))
+        await flush()
+
+        input.value = 'test2'
+        input.dispatchEvent(new Event('input'))
+        await flush()
+
+        expect(disconnect).toHaveBeenCalled()
+      } finally {
+        disconnect.mockRestore()
+      }
+      handle.destroy()
+    })
+
+    it('scrolls the placeholder wrapper instead of the lazily rendered item', async () => {
+      const manualObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+        realObserver = globalThis.IntersectionObserver
+      globalThis.IntersectionObserver = manualObserver as unknown as typeof IntersectionObserver
+      const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView')
+      try {
+        const notes = [
+            createMockResultNote({ path: 'a.md', basename: 'a' }),
+            createMockResultNote({ path: 'b.md', basename: 'b' }),
+          ],
+          { container, modal, handle } = setup({ searchResults: notes }),
+          input = container.querySelector('input.prompt-input') as HTMLInputElement
+        input.value = 'test'
+        input.dispatchEvent(new Event('input'))
+        await flush()
+
+        expect(container.querySelector('.ferrisearch-result')).toBeNull()
+        scrollIntoView.mockClear()
+
+        modal.dispatch(Action.ArrowDown)
+
+        expect(scrollIntoView).toHaveBeenCalled()
+        const scrolled = scrollIntoView.mock.instances[0] as HTMLElement
+        expect(scrolled.dataset['lazyIdx']).toBe('1')
+        handle.destroy()
+      } finally {
+        scrollIntoView.mockRestore()
+        globalThis.IntersectionObserver = realObserver
+      }
     })
   })
 

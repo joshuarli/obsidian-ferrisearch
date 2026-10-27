@@ -24,6 +24,8 @@ export function renderVaultModal(
     searching = true,
     resultEls: HTMLElement[] = [],
     currentObserver: IntersectionObserver | null = null,
+    currentSearchId = 0,
+    destroyed = false,
     historyItems: string[] = []
 
   const input = createSearchInput(container, 'Ferrisearch - Vault', previousQuery, value => {
@@ -46,10 +48,12 @@ export function renderVaultModal(
 
   function onQueryChange() {
     if (!searchQuery) {
+      currentSearchId += 1
       searching = false
       resultNotes = []
       loadHistory()
     } else if (searchQuery.length < plugin.settings.minQueryLength) {
+      currentSearchId += 1
       searching = false
       resultNotes = []
       renderResults()
@@ -58,8 +62,6 @@ export function renderVaultModal(
     }
   }
 
-  let currentSearchId = 0
-
   async function updateResults() {
     searching = true
     renderStatusMessage()
@@ -67,14 +69,14 @@ export function renderVaultModal(
       query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics })
     try {
       const results = await plugin.searchEngine.getSuggestions(query)
-      if (searchId !== currentSearchId) return
+      if (destroyed || searchId !== currentSearchId) return
       resultNotes = results
       selectedIndex = 0
       searching = false
       renderResults()
       scrollIntoView()
     } catch {
-      if (searchId !== currentSearchId) return
+      if (destroyed || searchId !== currentSearchId) return
       searching = false
       renderResults()
     }
@@ -89,7 +91,9 @@ export function renderVaultModal(
   }
 
   async function loadHistory() {
-    historyItems = (await plugin.searchHistory.getHistory()).filter(Boolean).slice(0, 10)
+    const history = (await plugin.searchHistory.getHistory()).filter(Boolean).slice(0, 10)
+    if (destroyed) return
+    historyItems = history
     selectedIndex = 0
     renderResults()
   }
@@ -107,6 +111,8 @@ export function renderVaultModal(
     for (const el of resultEls) cleanupResultItem(el)
     resultEls = []
     resultsDiv.innerHTML = ''
+    currentObserver?.disconnect()
+    currentObserver = null
 
     if (isShowingHistory()) {
       for (let i = 0; i < historyItems.length; i++) {
@@ -224,12 +230,9 @@ export function renderVaultModal(
   }
 
   function scrollIntoView() {
-    const note = getSelectedNote()
-    if (note) {
-      resultsDiv
-        .querySelector(`[data-result-id="${CSS.escape(note.path)}"]`)
-        ?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
-    }
+    resultsDiv
+      .querySelector(`[data-lazy-idx="${selectedIndex}"]`)
+      ?.scrollIntoView({ behavior: 'auto', block: 'nearest' })
   }
 
   function saveCurrentQuery() {
@@ -356,15 +359,24 @@ export function renderVaultModal(
   modal.on(Action.OpenInNewLeaf, openNoteInNewLeaf)
 
   plugin.searchEngine.warmUp()
-  if (searchQuery) {
-    updateResults()
-  } else {
-    searching = false
-    loadHistory()
-  }
+  void (async () => {
+    try {
+      await plugin.notesIndexer.refreshIndex()
+    } catch (error) {
+      console.error('Ferrisearch - Failed to refresh modified notes', error)
+    }
+    if (destroyed) return
+    if (searchQuery) {
+      updateResults()
+    } else {
+      searching = false
+      loadHistory()
+    }
+  })()
 
   return {
     destroy() {
+      destroyed = true
       modal.off()
       currentObserver?.disconnect()
       for (const el of resultEls) cleanupResultItem(el)
