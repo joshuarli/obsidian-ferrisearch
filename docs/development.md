@@ -1,10 +1,9 @@
 # Development
 
-Install Deno and the pinned Rust toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml). Then install pnpm 12.13.0, as pinned in [`package.json`](../package.json), and the project packages:
+Install Node.js 26 and pnpm 12.13.0, as pinned in [`package.json`](../package.json), plus the pinned Rust toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml). Then install the project packages:
 
 ```sh
-deno task bootstrap
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 ## Build and check
@@ -19,7 +18,7 @@ pnpm install
 | `pnpm run test` | TypeScript tests |
 | `cargo test` | Rust tests |
 | `pnpm run lint:check` | Oxlint check |
-| `pnpm run typecheck` | TypeScript and Deno checks |
+| `pnpm run typecheck` | TypeScript check |
 | `cargo clippy --all-targets --all-features -- -D warnings` | Rust lint check |
 
 `pnpm run build` does not build Rust or WASM artifacts. Use `pnpm run build:all` when you need all three plugin components. The `pnpm run build:wasm` script expects the matching `wasm-bindgen` CLI on `PATH`. `make build-wasm` installs the locked version if needed. The build scripts are defined in [`package.json`](../package.json) and [`build.ts`](../build.ts).

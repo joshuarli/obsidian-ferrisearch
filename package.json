@@ -5,19 +5,19 @@
   "type": "module",
   "packageManager": "pnpm@12.13.0",
   "scripts": {
-    "typecheck": "tsc --noEmit && deno check --unstable-sloppy-imports build.ts scripts/test-search.ts src/obsidian-ex.d.ts",
+    "typecheck": "tsc --noEmit",
     "lint": "oxlint --fix",
     "lint:check": "oxlint",
     "prebuild": "pnpm run lint:check && pnpm run typecheck",
-    "dev": "deno run -A --watch build.ts",
-    "build:plugin": "deno run -A build.ts production",
+    "dev": "node --watch build.ts",
+    "build:plugin": "node build.ts production",
     "build": "pnpm run prebuild && pnpm run build:plugin",
     "build:rust": "cd napi && napi build --release",
     "build:wasm": "cargo build --release -p ferrisearch-wasm --target wasm32-unknown-unknown && wasm-bindgen --target web --out-dir wasm/pkg target/wasm32-unknown-unknown/release/ferrisearch_wasm.wasm",
     "build:all": "pnpm run build:rust && pnpm run build:wasm && pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test-search": "deno run --allow-ffi --allow-read --allow-run --allow-write scripts/test-search.ts"
+    "test-search": "node scripts/test-search.ts"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.1",

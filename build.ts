@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { build } from 'rolldown'
 
-const prod = Deno.args.includes('production'),
+const prod = process.argv.includes('production'),
   staticExternals = new Set([
     'obsidian',
     'electron',
@@ -37,7 +37,7 @@ try {
   })
 } catch (error) {
   console.error(error)
-  Deno.exit(1)
+  process.exit(1)
 }
 
 mkdirSync('./dist', { recursive: true })

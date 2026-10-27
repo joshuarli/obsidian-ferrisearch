@@ -40,6 +40,6 @@
     "relative-url-style": "off",
     "prefer-destructuring": "off"
   },
-  "ignorePatterns": ["dist/**", "wasm/pkg/**", "scripts/**"],
+  "ignorePatterns": ["dist/**", "wasm/pkg/**"],
   "env": { "builtin": true }
 }
