@@ -264,6 +264,32 @@ describe('renderInFileModal', () => {
 
       handle.destroy()
     })
+
+    it('positions the cursor at the match offset instead of the line start', async () => {
+      const note = createMockResultNote({
+          content: '0123456789abc0123456789',
+          matches: [{ match: 'abc', offset: 10 }],
+        }),
+        { container, modal, plugin, handle } = setup({ searchResults: [note] }),
+        input = container.querySelector('input.prompt-input') as HTMLInputElement,
+        editor = {
+          offsetToPos: vi.fn((offset: number) => ({ line: 5, ch: offset })),
+          setCursor: vi.fn(() => {}),
+          setSelection: vi.fn(() => {}),
+          scrollIntoView: vi.fn(() => {}),
+        }
+      plugin.app.workspace.getActiveViewOfType = vi.fn(() => ({ editor })) as unknown as typeof plugin.app.workspace.getActiveViewOfType
+      input.value = 'test'
+      input.dispatchEvent(new Event('input'))
+      await flush()
+
+      modal.dispatch(Action.Enter)
+      await flush(50)
+
+      expect(editor.setCursor).toHaveBeenCalledWith({ line: 5, ch: 10 })
+      expect(editor.setSelection).toHaveBeenCalledWith({ line: 5, ch: 10 }, { line: 5, ch: 13 })
+      handle.destroy()
+    })
   })
 
   describe('destroy()', () => {

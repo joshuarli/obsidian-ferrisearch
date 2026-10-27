@@ -22,7 +22,9 @@ export function renderInFileModal(
 ): { destroy(): void } {
   let searchQuery = previousQuery ?? '',
     groupedOffsets: number[] = [],
+    groupedLengths: number[] = [],
     selectedIndex = 0,
+    destroyed = false,
     note: ResultNote | undefined
 
   createSearchInput(container, 'Ferrisearch - File', previousQuery, value => {
@@ -44,6 +46,7 @@ export function renderInFileModal(
     if (!searchQuery || searchQuery.length < plugin.settings.minQueryLength) {
       note = undefined
       groupedOffsets = []
+      groupedLengths = []
       selectedIndex = 0
       renderResults()
       return
@@ -51,6 +54,7 @@ export function renderInFileModal(
 
     const query = new Query(searchQuery, { ignoreDiacritics: plugin.settings.ignoreDiacritics }),
       results = await plugin.searchEngine.getSuggestions(query, { singleFilePath })
+    if (destroyed) return
     note = results[0]
 
     if (note) {
@@ -62,8 +66,10 @@ export function renderInFileModal(
         )
       }
       groupedOffsets = groups.map(g => Math.round(g[0]!.offset))
+      groupedLengths = groups.map(g => g[0]!.match.length)
     } else {
       groupedOffsets = []
+      groupedLengths = []
     }
 
     selectedIndex = 0
@@ -135,6 +141,7 @@ export function renderInFileModal(
   }
 
   function moveIndex(dir: 1 | -1) {
+    if (groupedOffsets.length === 0) return
     const prev = selectedIndex
     selectedIndex = loopIndex(selectedIndex + dir, groupedOffsets.length)
     updateSelectionForIndex(prev, false)
@@ -144,20 +151,22 @@ export function renderInFileModal(
 
   async function openSelection(newTab = false) {
     if (!note) return
+    const offset = groupedOffsets[selectedIndex] ?? 0,
+      length = groupedLengths[selectedIndex] ?? 0
     modal.close()
     if (parent) parent.close()
 
-    const reg = plugin.textProcessor.stringsToRegex(note.foundWords)
-    reg.exec(note.content)
-    await openNote(plugin.app, note, reg.lastIndex, newTab)
+    await openNote(plugin.app, note, offset, newTab)
 
     const view = plugin.app.workspace.getActiveViewOfType(MarkdownView)
     if (!view) return
 
-    const offset = groupedOffsets[selectedIndex] ?? 0,
-      pos = view.editor.offsetToPos(offset)
-    pos.ch = 0
-    view.editor.setCursor(pos)
+    const pos = view.editor.offsetToPos(offset)
+    if (length > 0) {
+      view.editor.setSelection(pos, view.editor.offsetToPos(offset + length))
+    } else {
+      view.editor.setCursor(pos)
+    }
     view.editor.scrollIntoView({
       from: { line: pos.line - 10, ch: 0 },
       to: { line: pos.line + 10, ch: 0 },
@@ -183,6 +192,7 @@ export function renderInFileModal(
 
   return {
     destroy() {
+      destroyed = true
       modal.off()
     },
   }
