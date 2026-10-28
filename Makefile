@@ -1,4 +1,4 @@
-.PHONY: build build-native ensure-wasm-bindgen build-wasm build-plugin package install install-remote
+.PHONY: build build-native ensure-wasm-bindgen build-wasm build-plugin package install install-remote lint
 
 PROFILE ?= release
 VAULTS_ROOT ?= /Users/josh/Library/Mobile Documents/iCloud~md~obsidian/Documents
@@ -34,6 +34,10 @@ build-wasm: ensure-wasm-bindgen
 
 build-plugin: build-wasm
 	pnpm run build:plugin
+
+lint:
+	cargo clippy --workspace --all-targets -- --deny warnings
+	pnpm run lint:check
 
 package: build
 	rm -f "$(PACKAGE)"
