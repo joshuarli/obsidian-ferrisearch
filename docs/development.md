@@ -1,6 +1,6 @@
 # Development
 
-Install Node.js 26 and pnpm 12.13.0, as pinned in [`package.json`](../package.json), plus the pinned Rust toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml). Then install the project packages:
+Install Node.js 26.12.1 or newer and pnpm 12.15.0, as pinned in [`package.json`](../package.json), plus the pinned Rust toolchain in [`rust-toolchain.toml`](../rust-toolchain.toml). Then install the project packages:
 
 ```sh
 pnpm install --frozen-lockfile
