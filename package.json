@@ -24,15 +24,15 @@
     "test-search": "node scripts/test-search.ts"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "21.0.1",
-    "@napi-rs/cli": "3.10.8",
-    "@types/node": "26.6.5",
-    "happy-dom": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
+    "@napi-rs/cli": "3.10.9",
+    "@types/node": "26.6.6",
+    "happy-dom": "21.0.4",
     "obsidian": "1.14.4",
-    "oxlint": "1.87.0",
+    "oxlint": "1.90.0",
     "oxlint-tsgolint": "7.0.2005",
-    "rolldown": "1.2.13",
+    "rolldown": "1.2.16",
     "typescript": "7.0.2",
-    "vitest": "5.0.4"
+    "vitest": "5.0.5"
   }
 }
