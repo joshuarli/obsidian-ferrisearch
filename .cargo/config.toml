@@ -3,3 +3,9 @@ runner = "wasm-bindgen-test-runner"
 # tantivy 0.27 pulls getrandom 0.3 via rand; WebAssembly needs its wasm_js
 # backend selected explicitly (https://docs.rs/getrandom/latest/#webassembly-support).
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
+
+[source.crates-io]
+replace-with = "stuff"
+
+[source.stuff]
+registry = "sparse+https://crates.17166969.xyz/current/crates-io/"
