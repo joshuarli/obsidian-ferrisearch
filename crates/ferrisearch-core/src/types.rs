@@ -337,4 +337,57 @@ mod tests {
         assert_eq!(boosts.for_field("content"), 6.0);
         assert_eq!(boosts.for_field("unknown"), 1.0);
     }
+
+    #[test]
+    fn test_wire_text_is_exact() {
+        let result = SearchResult {
+            path: "a \"b\".md".into(),
+            score: 1.5,
+            recency_multiplier: 1.0,
+            field_scores: Some(FieldScoreBreakdown {
+                display_title: 0.25,
+                directory: 0.0,
+                content: 2.0,
+                headings: 1e-7,
+            }),
+            matched_terms: vec!["needle".into(), "é😀".into()],
+            basename: "a".into(),
+            display_title: "A\n".into(),
+            content: "tab\there".into(),
+            mtime: 1730000000000.0,
+            tags: vec!["#t".into()],
+            matches: vec![MatchInfo {
+                match_text: "needle".into(),
+                offset: 7,
+            }],
+        };
+        assert_eq!(
+            json::to_string(&result),
+            r##"{"path":"a \"b\".md","score":1.5,"recencyMultiplier":1.0,"fieldScores":{"displayTitle":0.25,"directory":0.0,"content":2.0,"headings":1e-7},"matchedTerms":["needle","é😀"],"basename":"a","displayTitle":"A\n","content":"tab\there","mtime":1730000000000.0,"tags":["#t"],"matches":[{"matchText":"needle","offset":7}]}"##
+        );
+        assert_eq!(json::to_string(&test_boosts()), r##"{"basename":2.0,"displayTitle":3.0,"aliases":4.0,"directory":5.0,"content":6.0,"headings":7.0,"tagsText":8.0,"unmarkedTags":9.0}"##);
+        assert_eq!(json::to_string(&<SearchOptions as Default>::default()), r##"{"fieldBoosts":{"basename":10.0,"displayTitle":10.0,"aliases":10.0,"directory":7.0,"content":1.0,"headings":5.0,"tagsText":2.0,"unmarkedTags":2.0},"fuzziness":"1","prefixLength":1.0,"limit":10.0,"singleFilePath":null,"recencyBoost":"0","scoreBreakdown":false}"##);
+        assert_eq!(json::to_string(&<IndexConfig as Default>::default()), r##"{"ignoreDiacritics":true}"##);
+    }
+
+    #[test]
+    fn test_partial_wire_input_from_json_stringify() {
+        let opts: SearchOptions = json::from_str::<PartialSearchOptions>(
+            r#"{"fieldBoosts":{"basename":20,"tagsText":0.5},"singleFilePath":null,"limit":5,"unknown":[1,{"a":2}]}"#,
+        )
+        .map(SearchOptions::from)
+        .unwrap();
+        assert_eq!(opts.field_boosts.basename, 20.0);
+        assert_eq!(opts.field_boosts.tags_text, 0.5);
+        assert_eq!(opts.field_boosts.content, 1.0);
+        assert_eq!(opts.single_file_path, None);
+        assert_eq!(opts.limit, 5.0);
+
+        let docs: Vec<DocumentInput> = json::from_str(
+            r#"[{"path":"p.md","basename":"p","displayTitle":"P","aliases":"","content":"c","headings":"","tags":[],"unmarkedTags":["x"],"mtime":1730000000000}]"#,
+        )
+        .unwrap();
+        assert_eq!(docs[0].unmarked_tags, vec!["x"]);
+        assert_eq!(docs[0].mtime, 1730000000000.0);
+    }
 }
