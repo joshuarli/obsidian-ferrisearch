@@ -12,18 +12,19 @@ fn map_err(e: ferrisearch_core::index::IndexError) -> JsError {
     JsError::new(&e.to_string())
 }
 
-fn from_js<T: miniserde::Deserialize>(val: JsValue) -> Result<T, JsError> {
+fn from_js<T: deser::de::DeserializeOwned>(val: JsValue) -> Result<T, JsError> {
     let json = js_sys::JSON::stringify(&val)
         .map_err(|_| JsError::new("Ferrisearch - Failed to serialize JS value"))?;
     let text = json
         .as_string()
         .ok_or_else(|| JsError::new("Ferrisearch - Expected a JSON-serializable value"))?;
-    miniserde::json::from_str(&text)
+    deser_json::from_str(&text)
         .map_err(|_| JsError::new("Ferrisearch - Invalid search input"))
 }
 
-fn to_js<T: miniserde::Serialize>(val: &T) -> Result<JsValue, JsError> {
-    let text = miniserde::json::to_string(val);
+fn to_js<T: deser::Serialize>(val: &T) -> Result<JsValue, JsError> {
+    let text = deser_json::to_string(val)
+        .map_err(|_| JsError::new("Ferrisearch - Failed to serialize result"))?;
     js_sys::JSON::parse(&text).map_err(|_| JsError::new("Ferrisearch - Failed to build JS value"))
 }
 

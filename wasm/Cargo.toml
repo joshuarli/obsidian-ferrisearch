@@ -8,7 +8,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ferrisearch-core = { path = "../crates/ferrisearch-core", default-features = false }
-miniserde = "0.1"
+deser = { version = "0.10", default-features = false }
+deser-json = { version = "0.10", default-features = false, features = ["speedups"] }
 js-sys = "0.3"
 wasm-bindgen = "0.2.128"
 uuid = { version = "1", features = ["js"] }

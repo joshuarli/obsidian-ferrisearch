@@ -235,6 +235,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "deser"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d76d6df21374422dad94c9ee880dcb7b7038fa853d8c98677cc6d17b01866945"
+dependencies = [
+ "deser-core",
+ "deser-derive",
+]
+
+[[package]]
+name = "deser-core"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02f55809b557fd7b0edb219ea51b4368ed8bc03794d4850ffc20c7152139e7b0"
+
+[[package]]
+name = "deser-derive"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27b603a9e0a47996eb048e2e3a74cf505c283e94fa9f4bcb6efa9bc7824dd879"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
+name = "deser-json"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b2e6b0b2ca4daf985f1de5554bf586290e2eab7f954858cf6a98466e942ba27"
+dependencies = [
+ "deser-core",
+ "itoa",
+ "simdutf8",
+ "zmij",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -283,8 +322,9 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 name = "ferrisearch-core"
 version = "0.1.0"
 dependencies = [
+ "deser",
+ "deser-json",
  "js-sys",
- "miniserde",
  "regex",
  "tantivy",
  "tempfile",
@@ -305,10 +345,11 @@ dependencies = [
 name = "ferrisearch-wasm"
 version = "0.1.0"
 dependencies = [
+ "deser",
+ "deser-json",
  "ferrisearch-core",
  "getrandom 0.3.4",
  "js-sys",
- "miniserde",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-test",
@@ -591,17 +632,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mini-internal"
-version = "0.1.46"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34dea53b00d87f21b1535cbef93765c75f159dbbfeef16152f0b6b3bf28f3bb6"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.9",
-]
-
-[[package]]
 name = "minicov"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -616,17 +646,6 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
-name = "miniserde"
-version = "0.1.46"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8f82621301d3b99a1542736de96e5df69865b235987d6470b28c7aa670cfeb1"
-dependencies = [
- "itoa",
- "mini-internal",
- "zmij",
-]
 
 [[package]]
 name = "murmurhash32"
@@ -1005,6 +1024,12 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "simdutf8"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "sketches-ddsketch"

@@ -1,16 +1,16 @@
-use miniserde::{Deserialize, Serialize};
+use deser::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentInput {
     pub path: String,
     pub basename: String,
-    #[serde(rename = "displayTitle")]
+    #[deser(rename = "displayTitle")]
     pub display_title: String,
     pub aliases: String,
     pub content: String,
     pub headings: String,
     pub tags: Vec<String>,
-    #[serde(rename = "unmarkedTags")]
+    #[deser(rename = "unmarkedTags")]
     pub unmarked_tags: Vec<String>,
     /// Modification time as Unix epoch milliseconds.
     pub mtime: f64,
@@ -18,7 +18,7 @@ pub struct DocumentInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchInfo {
-    #[serde(rename = "matchText")]
+    #[deser(rename = "matchText")]
     pub match_text: String,
     /// UTF-16 code unit offset (for JavaScript string indexing)
     pub offset: u32,
@@ -26,7 +26,7 @@ pub struct MatchInfo {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FieldScoreBreakdown {
-    #[serde(rename = "displayTitle")]
+    #[deser(rename = "displayTitle")]
     pub display_title: f64,
     pub directory: f64,
     pub content: f64,
@@ -37,14 +37,14 @@ pub struct FieldScoreBreakdown {
 pub struct SearchResult {
     pub path: String,
     pub score: f64,
-    #[serde(rename = "recencyMultiplier")]
+    #[deser(rename = "recencyMultiplier")]
     pub recency_multiplier: f64,
-    #[serde(rename = "fieldScores")]
+    #[deser(rename = "fieldScores")]
     pub field_scores: Option<FieldScoreBreakdown>,
-    #[serde(rename = "matchedTerms")]
+    #[deser(rename = "matchedTerms")]
     pub matched_terms: Vec<String>,
     pub basename: String,
-    #[serde(rename = "displayTitle")]
+    #[deser(rename = "displayTitle")]
     pub display_title: String,
     pub content: String,
     pub mtime: f64,
@@ -54,7 +54,7 @@ pub struct SearchResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexConfig {
-    #[serde(rename = "ignoreDiacritics")]
+    #[deser(rename = "ignoreDiacritics")]
     pub ignore_diacritics: bool,
 }
 
@@ -70,7 +70,7 @@ impl Default for IndexConfig {
 /// may send `{}` or omit the config entirely.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PartialIndexConfig {
-    #[serde(rename = "ignoreDiacritics")]
+    #[deser(rename = "ignoreDiacritics")]
     pub ignore_diacritics: Option<bool>,
 }
 
@@ -84,17 +84,17 @@ impl From<PartialIndexConfig> for IndexConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchOptions {
-    #[serde(rename = "fieldBoosts")]
+    #[deser(rename = "fieldBoosts")]
     pub field_boosts: FieldBoosts,
     pub fuzziness: String,
-    #[serde(rename = "prefixLength")]
+    #[deser(rename = "prefixLength")]
     pub prefix_length: f64,
     pub limit: f64,
-    #[serde(rename = "singleFilePath")]
+    #[deser(rename = "singleFilePath")]
     pub single_file_path: Option<String>,
-    #[serde(rename = "recencyBoost")]
+    #[deser(rename = "recencyBoost")]
     pub recency_boost: String,
-    #[serde(rename = "scoreBreakdown")]
+    #[deser(rename = "scoreBreakdown")]
     pub score_breakdown: bool,
 }
 
@@ -116,17 +116,17 @@ impl Default for SearchOptions {
 /// fields they set, so every field is optional here.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PartialSearchOptions {
-    #[serde(rename = "fieldBoosts")]
+    #[deser(rename = "fieldBoosts")]
     pub field_boosts: Option<PartialFieldBoosts>,
     pub fuzziness: Option<String>,
-    #[serde(rename = "prefixLength")]
+    #[deser(rename = "prefixLength")]
     pub prefix_length: Option<f64>,
     pub limit: Option<f64>,
-    #[serde(rename = "singleFilePath")]
+    #[deser(rename = "singleFilePath")]
     pub single_file_path: Option<String>,
-    #[serde(rename = "recencyBoost")]
+    #[deser(rename = "recencyBoost")]
     pub recency_boost: Option<String>,
-    #[serde(rename = "scoreBreakdown")]
+    #[deser(rename = "scoreBreakdown")]
     pub score_breakdown: Option<bool>,
 }
 
@@ -148,15 +148,15 @@ impl From<PartialSearchOptions> for SearchOptions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldBoosts {
     pub basename: f32,
-    #[serde(rename = "displayTitle")]
+    #[deser(rename = "displayTitle")]
     pub display_title: f32,
     pub aliases: f32,
     pub directory: f32,
     pub content: f32,
     pub headings: f32,
-    #[serde(rename = "tagsText")]
+    #[deser(rename = "tagsText")]
     pub tags_text: f32,
-    #[serde(rename = "unmarkedTags")]
+    #[deser(rename = "unmarkedTags")]
     pub unmarked_tags: f32,
 }
 
@@ -179,15 +179,15 @@ impl Default for FieldBoosts {
 #[derive(Debug, Clone, Deserialize)]
 pub struct PartialFieldBoosts {
     pub basename: Option<f32>,
-    #[serde(rename = "displayTitle")]
+    #[deser(rename = "displayTitle")]
     pub display_title: Option<f32>,
     pub aliases: Option<f32>,
     pub directory: Option<f32>,
     pub content: Option<f32>,
     pub headings: Option<f32>,
-    #[serde(rename = "tagsText")]
+    #[deser(rename = "tagsText")]
     pub tags_text: Option<f32>,
-    #[serde(rename = "unmarkedTags")]
+    #[deser(rename = "unmarkedTags")]
     pub unmarked_tags: Option<f32>,
 }
 
@@ -226,7 +226,7 @@ impl FieldBoosts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use miniserde::json;
+    use deser_json as json;
 
     fn test_boosts() -> FieldBoosts {
         FieldBoosts {
@@ -295,7 +295,7 @@ mod tests {
             unmarked_tags: vec![],
             mtime: 1000.0,
         };
-        let text = json::to_string(&doc);
+        let text = json::to_string(&doc).unwrap();
         assert!(text.contains(r#""displayTitle":"Test""#));
         assert!(text.contains(r#""unmarkedTags":[]"#));
         let back: DocumentInput = json::from_str(&text).unwrap();
@@ -322,7 +322,7 @@ mod tests {
                 offset: 0,
             }],
         };
-        let text = json::to_string(&result);
+        let text = json::to_string(&result).unwrap();
         assert!(text.contains(r#""recencyMultiplier":1"#));
         assert!(text.contains(r#""fieldScores":null"#));
         assert!(text.contains(r#""matchedTerms":["needle"]"#));
@@ -362,12 +362,12 @@ mod tests {
             }],
         };
         assert_eq!(
-            json::to_string(&result),
+            json::to_string(&result).unwrap(),
             r##"{"path":"a \"b\".md","score":1.5,"recencyMultiplier":1.0,"fieldScores":{"displayTitle":0.25,"directory":0.0,"content":2.0,"headings":1e-7},"matchedTerms":["needle","é😀"],"basename":"a","displayTitle":"A\n","content":"tab\there","mtime":1730000000000.0,"tags":["#t"],"matches":[{"matchText":"needle","offset":7}]}"##
         );
-        assert_eq!(json::to_string(&test_boosts()), r##"{"basename":2.0,"displayTitle":3.0,"aliases":4.0,"directory":5.0,"content":6.0,"headings":7.0,"tagsText":8.0,"unmarkedTags":9.0}"##);
-        assert_eq!(json::to_string(&<SearchOptions as Default>::default()), r##"{"fieldBoosts":{"basename":10.0,"displayTitle":10.0,"aliases":10.0,"directory":7.0,"content":1.0,"headings":5.0,"tagsText":2.0,"unmarkedTags":2.0},"fuzziness":"1","prefixLength":1.0,"limit":10.0,"singleFilePath":null,"recencyBoost":"0","scoreBreakdown":false}"##);
-        assert_eq!(json::to_string(&<IndexConfig as Default>::default()), r##"{"ignoreDiacritics":true}"##);
+        assert_eq!(json::to_string(&test_boosts()).unwrap(), r##"{"basename":2.0,"displayTitle":3.0,"aliases":4.0,"directory":5.0,"content":6.0,"headings":7.0,"tagsText":8.0,"unmarkedTags":9.0}"##);
+        assert_eq!(json::to_string(&<SearchOptions as Default>::default()).unwrap(), r##"{"fieldBoosts":{"basename":10.0,"displayTitle":10.0,"aliases":10.0,"directory":7.0,"content":1.0,"headings":5.0,"tagsText":2.0,"unmarkedTags":2.0},"fuzziness":"1","prefixLength":1.0,"limit":10.0,"singleFilePath":null,"recencyBoost":"0","scoreBreakdown":false}"##);
+        assert_eq!(json::to_string(&<IndexConfig as Default>::default()).unwrap(), r##"{"ignoreDiacritics":true}"##);
     }
 
     #[test]
