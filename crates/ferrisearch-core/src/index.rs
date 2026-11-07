@@ -171,7 +171,6 @@ impl IndexManager {
     }
 
     fn build_tantivy_doc(fields: &FieldHandles, doc: &DocumentInput) -> tantivy::TantivyDocument {
-        use std::collections::BTreeMap;
         use tantivy::schema::OwnedValue;
 
         let mut d = tantivy::TantivyDocument::new();
@@ -190,9 +189,12 @@ impl IndexManager {
             .iter()
             .map(|t| OwnedValue::Str(t.clone()))
             .collect();
-        d.add_object(
+        // `OwnedValue::Object` is the document object representation and holds
+        // its pairs in a `Vec`, so the stored `tags` object has no ordering
+        // requirement and needs no ordered map.
+        d.add_field_value(
             fields.tags_stored,
-            BTreeMap::from([("tags".into(), OwnedValue::Array(tags_array))]),
+            &OwnedValue::Object(vec![("tags".to_string(), OwnedValue::Array(tags_array))]),
         );
 
         d.add_u64(fields.mtime, doc.mtime as u64);
